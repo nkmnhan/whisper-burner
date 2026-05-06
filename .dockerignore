@@ -1,0 +1,10 @@
+.git
+models
+videos
+*.cmd
+*.ps1
+*.md
+*.MD
+LICENSE
+docker-compose.yml
+translate_srt.py

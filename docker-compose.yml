@@ -1,0 +1,37 @@
+services:
+  whisper-gpu:
+    build:
+      context: .
+      args:
+        VARIANT: gpu
+    profiles:
+      - gpu
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ./models:/root/.cache/whisper
+      - ./videos:/app
+      - ./translate_srt.py:/opt/translate_srt.py:ro
+
+  whisper-cpu:
+    build:
+      context: .
+      args:
+        VARIANT: cpu
+    profiles:
+      - cpu
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      - ./models:/root/.cache/whisper
+      - ./videos:/app
+      - ./translate_srt.py:/opt/translate_srt.py:ro

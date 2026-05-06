@@ -1,0 +1,26 @@
+# Model cache
+/models/*
+!/models/.gitkeep
+
+# Video source files
+/videos/*.wmv
+/videos/*.avi
+/videos/*.mov
+/videos/*.mp4
+/videos/*.mkv
+/videos/*.webm
+/videos/*.ts
+/videos/*.m2ts
+/videos/*.3gp
+/videos/*.flac
+/videos/*.mp3
+/videos/*.wav
+/videos/*.m4a
+/videos/*.ogg
+
+# Generated outputs
+/videos/output/
+/videos/*.srt
+
+# Keep videos folder in Git
+!/videos/.gitkeep
