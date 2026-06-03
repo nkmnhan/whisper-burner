@@ -24,3 +24,34 @@
 
 # Keep videos folder in Git
 !/videos/.gitkeep
+
+# .NET / C# build outputs
+bin/
+obj/
+publish/
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.rsuser
+
+# Rider
+.idea/
+
+# Windows App SDK / MSIX packaging
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+*.msixupload
+*.appxupload
+*.cer

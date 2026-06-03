@@ -1,0 +1,59 @@
+<Window
+    x:Class="WhisperBurner.WinUI.Overlay.RegionSelectorWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Select Region">
+    <Grid
+        x:Name="RootGrid"
+        Background="Transparent"
+        IsTabStop="True"
+        TabIndex="0"
+        KeyDown="RootGrid_KeyDown"
+        PointerPressed="RootGrid_PointerPressed"
+        PointerMoved="RootGrid_PointerMoved"
+        PointerReleased="RootGrid_PointerReleased">
+
+        <!-- Frozen screenshot of the desktop -->
+        <Image x:Name="ScreenshotBg" Stretch="Fill" IsHitTestVisible="False" />
+
+        <!-- Dark dim overlay so the selection stands out -->
+        <Rectangle Fill="#66000000" IsHitTestVisible="False" />
+
+        <!-- Crosshair lines -->
+        <Canvas x:Name="CrosshairCanvas" IsHitTestVisible="False">
+            <Line x:Name="HLine" Stroke="White" StrokeThickness="1" Opacity="0.5"
+                  X1="0" Y1="0" X2="0" Y2="0" />
+            <Line x:Name="VLine" Stroke="White" StrokeThickness="1" Opacity="0.5"
+                  X1="0" Y1="0" X2="0" Y2="0" />
+        </Canvas>
+
+        <!-- Selection rectangle drawn on top -->
+        <Canvas
+            x:Name="OverlayCanvas"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+            <Rectangle
+                x:Name="SelectionRect"
+                Stroke="White"
+                StrokeThickness="2"
+                StrokeDashArray="6 3"
+                Fill="#30FFFFFF"
+                Visibility="Collapsed" />
+        </Canvas>
+
+        <!-- Top instruction -->
+        <Border Background="#CC000000" HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,20" Padding="16,8" CornerRadius="4" IsHitTestVisible="False">
+            <TextBlock
+                Text="Click and drag to select a region  ·  Esc to cancel"
+                Foreground="White" FontSize="15" />
+        </Border>
+
+        <!-- Bottom coordinate label -->
+        <Border x:Name="CoordBorder" Background="#CC000000" HorizontalAlignment="Center"
+                VerticalAlignment="Bottom" Margin="0,0,0,20" Padding="12,6"
+                CornerRadius="4" IsHitTestVisible="False">
+            <TextBlock x:Name="CoordLabel" Foreground="White" FontSize="13" />
+        </Border>
+    </Grid>
+</Window>

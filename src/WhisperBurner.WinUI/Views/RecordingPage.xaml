@@ -1,0 +1,68 @@
+<Page
+    x:Class="WhisperBurner.WinUI.Views.RecordingPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:WhisperBurner.WinUI.Views"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <Grid Padding="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Title + API health indicator -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Record" Style="{StaticResource TitleTextBlockStyle}" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Ellipse x:Name="ApiDot" Width="10" Height="10" Fill="Gray" />
+                <TextBlock x:Name="ApiStatusLabel" Text="Checking…" FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Region selection -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+            <Button x:Name="SelectRegionButton" Content="Select Region"
+                    Click="SelectRegionButton_Click" />
+            <TextBlock x:Name="RegionLabel" Text="No region selected"
+                       VerticalAlignment="Center"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </StackPanel>
+
+        <!-- Status text -->
+        <TextBlock Grid.Row="2" x:Name="StatusText"
+                   Text="Select a region to begin."
+                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,12" />
+
+        <!-- Mode info -->
+        <InfoBar Grid.Row="3"
+                 IsOpen="True"
+                 IsClosable="False"
+                 Severity="Informational"
+                 Message="Mode: Live subtitles only — captures system audio and transcribes in real time. Screen recording coming in a future update."
+                 Margin="0,0,0,12" />
+
+        <!-- Action buttons -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8">
+            <Button x:Name="StartButton"
+                    Content="Start Recording"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Click="StartButton_Click"
+                    IsEnabled="False" />
+            <Button x:Name="StopButton"
+                    Content="■ Stop Recording"
+                    Click="StopButton_Click"
+                    Visibility="Collapsed" />
+        </StackPanel>
+    </Grid>
+</Page>

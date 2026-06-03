@@ -16,11 +16,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     if [ "$VARIANT" = "gpu" ]; then \
         uv pip install --system \
             --extra-index-url https://download.pytorch.org/whl/cu124 \
-            torch openai-whisper deep-translator; \
+            torch openai-whisper deep-translator fastapi "uvicorn[standard]" python-multipart; \
     else \
         uv pip install --system \
             --extra-index-url https://download.pytorch.org/whl/cpu \
-            torch openai-whisper deep-translator; \
+            torch openai-whisper deep-translator fastapi "uvicorn[standard]" python-multipart; \
     fi
 
 WORKDIR /app

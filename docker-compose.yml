@@ -35,3 +35,44 @@ services:
       - ./models:/root/.cache/whisper
       - ./videos:/app
       - ./translate_srt.py:/opt/translate_srt.py:ro
+
+  whisper-api-gpu:
+    build:
+      context: .
+      args:
+        VARIANT: gpu
+    profiles:
+      - api-gpu
+    command: uvicorn api_server:app --host 0.0.0.0 --port 5000
+    ports:
+      - "5000:5000"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ./models:/root/.cache/whisper
+      - ./api_server.py:/app/api_server.py:ro
+
+  whisper-api-cpu:
+    build:
+      context: .
+      args:
+        VARIANT: cpu
+    profiles:
+      - api-cpu
+    command: uvicorn api_server:app --host 0.0.0.0 --port 5000
+    ports:
+      - "5000:5000"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      - ./models:/root/.cache/whisper
+      - ./api_server.py:/app/api_server.py:ro

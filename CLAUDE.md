@@ -2,6 +2,8 @@
 
 Containerized OpenAI Whisper ASR with GPU/CPU Docker profiles. Batch-processes videos from `videos/` into SRT transcripts and burnt-in MP4s saved to `videos/output/`.
 
+Also contains a **WinUI 3 desktop app scaffold** (`src/WhisperBurner.WinUI/`) for screen-region recording, live subtitle overlay, session review, and optional burn-in. The desktop app is in Phase 0 (scaffold/review) and does not yet replace the Docker workflow.
+
 ## Architecture
 
 - `Dockerfile` — Python 3.12-slim base, ffmpeg, openai-whisper
@@ -9,6 +11,12 @@ Containerized OpenAI Whisper ASR with GPU/CPU Docker profiles. Batch-processes v
 - `process-videos.ps1` — batch transcription + subtitle burn script
 - `process-videos-gpu.cmd` / `process-videos-cpu.cmd` — double-click launchers
 - `videos/` — source files (any format); `videos/output/` — SRT + MP4 outputs
+- `src/WhisperBurner.WinUI/` — WinUI 3 desktop app (C# / Windows App SDK 1.5)
+  - `Models/` — `CaptureRegion`, `RecordingOptions`, `SubtitleSegment`, `SessionManifest`, `SessionArtifact`, `BurnRequest`
+  - `Services/` — service interfaces (no implementations yet)
+  - `Views/` — `RecordingPage`, `SessionReviewPage`, `SettingsPage`
+  - `Overlay/` — `SubtitleOverlayWindow` (always-on-top floating subtitle box)
+  - `Docs/` — `ARCHITECTURE.md`, `API_CONTRACT.md`, `DECISION_MATRIX.md`, `IMPLEMENTATION_PHASES.md`
 
 ## Quick Start
 
@@ -62,9 +70,17 @@ docker compose --profile cpu build
 - ffmpeg subtitle burn: escape `,` and `:` in filenames for `-vf subtitles=`
 - WMV corrupt frame warnings are non-fatal — use `-fflags +discardcorrupt -err_detect ignore_err`
 
+### C# / WinUI 3
+- Target framework: `net10.0-windows10.0.19041.0`; Windows App SDK 2.1 unpackaged
+- PascalCase everywhere; `async`/`await` on all I/O paths; nullable enabled
+- Keep interface and model files under 60 lines — one type per file
+- Never implement directly in a `Page` or `Window` — delegate to a service
+- Original session `recording.mp4` must never be overwritten
+
 ## Agent Behaviour
 
 - Always use `-LiteralPath` in PowerShell when handling files in `videos/`
 - Run `docker compose --profile gpu build --no-cache` when Dockerfile changes
 - Never modify files in `videos/output/` — they are generated artifacts
 - Skip already-processed files (SRT/MP4 exist checks) before running docker
+- Never implement WinUI 3 features beyond the current phase without user approval
