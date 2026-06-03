@@ -17,11 +17,11 @@ public sealed partial class RegionSelectorWindow : Window
     private bool _dragging;
     private readonly AppWindow _appWindow;
 
-    public RegionSelectorWindow(WriteableBitmap screenshot)
+    public RegionSelectorWindow(BitmapImage screenshot)
     {
         InitializeComponent();
 
-        // Synchronous — no async load, no black flash
+        // Image is already decoded before this constructor is called — no flash
         ScreenshotBg.Source = screenshot;
 
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);

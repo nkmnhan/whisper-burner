@@ -47,8 +47,21 @@ public sealed partial class RecordingPage : Page
 
     private async void SelectRegionButton_Click(object sender, RoutedEventArgs e)
     {
+        SelectRegionButton.IsEnabled = false; // prevent double-click
         AppLogger.Info("Region selection started");
-        var region = await _regionService.SelectRegionAsync();
+        CaptureRegion? region;
+        try
+        {
+            region = await _regionService.SelectRegionAsync();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Region selection threw", ex);
+            StatusText.Text = $"Region selector failed: {ex.Message}";
+            SelectRegionButton.IsEnabled = true;
+            return;
+        }
+        SelectRegionButton.IsEnabled = true;
         if (region is null)
         {
             AppLogger.Info("Region selection cancelled");

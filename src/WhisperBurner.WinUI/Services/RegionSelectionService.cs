@@ -1,8 +1,6 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.WindowsRuntime;
-using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml.Media.Imaging;
 using WhisperBurner.WinUI.Infrastructure;
 using WhisperBurner.WinUI.Models;
@@ -12,15 +10,35 @@ namespace WhisperBurner.WinUI.Services;
 
 public class RegionSelectionService : IRegionSelectionService
 {
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int n);
+    private const int SM_XVIRTUALSCREEN = 76;
+    private const int SM_YVIRTUALSCREEN = 77;
+    private const int SM_CXVIRTUALSCREEN = 78;
+    private const int SM_CYVIRTUALSCREEN = 79;
+
     public CaptureRegion? LastSelectedRegion { get; private set; }
 
-    public Task<CaptureRegion?> SelectRegionAsync()
+    public async Task<CaptureRegion?> SelectRegionAsync()
     {
-        var screenshot = CaptureScreenToWriteableBitmap();
-        AppLogger.Info($"Screenshot captured: {screenshot.PixelWidth}×{screenshot.PixelHeight}");
+        // 1. Take screenshot to a temp file (fast on SSD, ~50 ms)
+        AppLogger.Info("Screenshot: capturing screen...");
+        var path = CaptureScreen();
+        AppLogger.Info($"Screenshot: saved to {path}");
 
+        // 2. Load image via StorageFile + SetSourceAsync.
+        //    BitmapImage(Uri) with file:/// does NOT work in unpackaged WinUI 3 apps.
+        //    StorageFile API is the correct path for local files.
+        AppLogger.Info("Screenshot: loading via StorageFile...");
+        var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+        using var fileStream = await storageFile.OpenReadAsync();
+        var bitmapImage = new BitmapImage();
+        await bitmapImage.SetSourceAsync(fileStream);
+        try { File.Delete(path); } catch { }
+        AppLogger.Info($"Screenshot: BitmapImage ready ({bitmapImage.PixelWidth}×{bitmapImage.PixelHeight}) — opening selector");
+
+        // 3. Create window with already-decoded image — shows instantly, no flash
         var tcs = new TaskCompletionSource<CaptureRegion?>();
-        var window = new RegionSelectorWindow(screenshot);
+        var window = new RegionSelectorWindow(bitmapImage);
 
         window.RegionSelected += (_, region) =>
         {
@@ -31,48 +49,22 @@ public class RegionSelectionService : IRegionSelectionService
         window.Closed += (_, _) => tcs.TrySetResult(null);
 
         window.Activate();
-        return tcs.Task;
+        return await tcs.Task;
     }
 
-    private static WriteableBitmap CaptureScreenToWriteableBitmap()
+    private static string CaptureScreen()
     {
-        // Use DisplayArea.FindAll() — Windows App SDK API, no P/Invoke GetSystemMetrics
-        var displays = DisplayArea.FindAll();
-        int sx, sy, sw, sh;
-        if (displays.Count > 0)
-        {
-            sx = displays.Min(d => d.OuterBounds.X);
-            sy = displays.Min(d => d.OuterBounds.Y);
-            sw = displays.Max(d => d.OuterBounds.X + d.OuterBounds.Width) - sx;
-            sh = displays.Max(d => d.OuterBounds.Y + d.OuterBounds.Height) - sy;
-        }
-        else
-        {
-            var b = DisplayArea.Primary.OuterBounds;
-            (sx, sy, sw, sh) = (b.X, b.Y, b.Width, b.Height);
-        }
-
-        // System.Drawing.CopyFromScreen has no WinUI equivalent without the capture consent dialog
-        using var bmp = new Bitmap(sw, sh);
+        int x = GetSystemMetrics(SM_XVIRTUALSCREEN);
+        int y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        int w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+        int h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        AppLogger.Info($"Screenshot: virtual screen ({x},{y}) {w}×{h}");
+        using var bmp = new Bitmap(w, h);
         using (var g = Graphics.FromImage(bmp))
-            g.CopyFromScreen(sx, sy, 0, 0, new Size(sw, sh));
-
-        var wb = new WriteableBitmap(sw, sh);
-        var bmpData = bmp.LockBits(
-            new Rectangle(0, 0, sw, sh),
-            ImageLockMode.ReadOnly,
-            PixelFormat.Format32bppArgb);
-        try
-        {
-            var bytes = new byte[Math.Abs(bmpData.Stride) * sh];
-            Marshal.Copy(bmpData.Scan0, bytes, 0, bytes.Length);
-            using var stream = wb.PixelBuffer.AsStream();
-            stream.Write(bytes, 0, bytes.Length);
-        }
-        finally
-        {
-            bmp.UnlockBits(bmpData);
-        }
-        return wb;
+            g.CopyFromScreen(x, y, 0, 0, new Size(w, h));
+        Directory.CreateDirectory(AppSettings.TempRoot);
+        var path = Path.Combine(AppSettings.TempRoot, $"snap_{Guid.NewGuid():N}.png");
+        bmp.Save(path, ImageFormat.Png);
+        return path;
     }
 }
