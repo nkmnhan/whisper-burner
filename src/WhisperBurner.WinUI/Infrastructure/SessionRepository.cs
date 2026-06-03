@@ -18,7 +18,7 @@ public class SessionRepository : ISessionRepository
 
     public Task<SessionManifest> CreateSessionAsync(CaptureRegion region, RecordingOptions options)
     {
-        var id = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+        var id = $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{Guid.NewGuid().ToString("N")[..4]}";
         var dir = GetSessionDirectory(id);
         Directory.CreateDirectory(dir);
 

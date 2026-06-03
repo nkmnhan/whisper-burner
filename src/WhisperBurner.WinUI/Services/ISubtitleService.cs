@@ -9,6 +9,8 @@ public interface ISubtitleService
     // Raised after each batch of new segments is merged in.
     event EventHandler<SubtitleSegment>? SegmentAdded;
 
+    void StartSession(string ndjsonPath);
+    void EndSession();
     void AppendSegments(IEnumerable<SubtitleSegment> segments);
     Task WriteSrtAsync(string outputPath);
     void Clear();

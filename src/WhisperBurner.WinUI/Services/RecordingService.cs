@@ -15,14 +15,16 @@ public class RecordingService : IRecordingService
 
     // Bounded channel: if transcription falls behind, oldest chunks are dropped
     // to keep subtitles close to real-time rather than accumulating lag
-    private Channel<string>? _channel;
+    private Channel<AudioChunkInfo>? _channel;
     private Task? _consumerTask;
+    private long _flushedBytes;  // cumulative PCM bytes before each chunk — used for timestamp offset
 
     public bool IsRecording { get; private set; }
-    public event EventHandler<string>? AudioChunkReady;
+    public event EventHandler<AudioChunkInfo>? AudioChunkReady;
 
-    public Task StartAsync(CaptureRegion region, RecordingOptions options, string outputMp4Path)
+    public Task StartAsync(CaptureRegion region, RecordingOptions options)
     {
+        if (IsRecording) return Task.CompletedTask;
         Directory.CreateDirectory(AppSettings.TempRoot);
 
         _capture = AppSettings.Current.CaptureSystemAudio
@@ -38,13 +40,14 @@ public class RecordingService : IRecordingService
                        $"{_captureFormat.Channels}ch {_captureFormat.Encoding} | " +
                        $"chunkSize={_chunkSizeBytes:N0} bytes ({AppSettings.Current.ChunkDurationSeconds}s)");
 
-        _channel = Channel.CreateBounded<string>(new BoundedChannelOptions(5)
+        _channel = Channel.CreateBounded<AudioChunkInfo>(new BoundedChannelOptions(5)
         {
             FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true
         });
 
         _buffer = new MemoryStream();
+        _flushedBytes = 0;
         _dataEventCount = 0;
         _capture.DataAvailable += OnDataAvailable;
         _capture.StartRecording();
@@ -105,19 +108,23 @@ public class RecordingService : IRecordingService
     private void FlushChunk(byte[] pcm)
     {
         if (_captureFormat == null || _channel == null) return;
+        var offsetSeconds = (double)_flushedBytes / _captureFormat.AverageBytesPerSecond;
+        _flushedBytes += pcm.Length;
+
         var path = Path.Combine(AppSettings.TempRoot, $"chunk_{Guid.NewGuid():N}.wav");
         using (var writer = new WaveFileWriter(path, _captureFormat))
             writer.Write(pcm, 0, pcm.Length);
 
-        if (!_channel.Writer.TryWrite(path))
+        var info = new AudioChunkInfo(path, offsetSeconds);
+        if (!_channel.Writer.TryWrite(info))
             AppLogger.Warn($"Channel full — chunk dropped to prevent lag: {Path.GetFileName(path)}");
     }
 
     private async Task ConsumeChunksAsync()
     {
         if (_channel == null) return;
-        await foreach (var path in _channel.Reader.ReadAllAsync())
-            AudioChunkReady?.Invoke(this, path);
+        await foreach (var info in _channel.Reader.ReadAllAsync())
+            AudioChunkReady?.Invoke(this, info);
         AppLogger.Info("Consumer task completed");
     }
 

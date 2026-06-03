@@ -33,6 +33,7 @@ public sealed partial class RecordingPage : Page
         {
             _recordingService.AudioChunkReady -= OnAudioChunkReady;
             _subtitleService.SegmentAdded -= OnSegmentAdded;
+            _subtitleService.EndSession();
         };
     }
 
@@ -69,7 +70,14 @@ public sealed partial class RecordingPage : Page
         }
         AppLogger.Info($"Region selected: {region.Width}×{region.Height} at ({region.X},{region.Y})");
         RegionLabel.Text = $"{region.Width} × {region.Height}  at ({region.X}, {region.Y})";
-        await RefreshApiStatusAsync();
+        try
+        {
+            await RefreshApiStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("API status refresh failed after region selection", ex);
+        }
         StatusText.Text = StartButton.IsEnabled
             ? "Region selected — press Start Recording."
             : "Region selected — start the Docker API first.";
@@ -106,6 +114,9 @@ public sealed partial class RecordingPage : Page
         _currentSession = await _sessionRepository.CreateSessionAsync(region, options);
         AppLogger.Info($"Session created: {_currentSession.Id}");
 
+        var sessionDir = _sessionRepository.GetSessionDirectory(_currentSession.Id);
+        _subtitleService.StartSession(Path.Combine(sessionDir, "subtitles.ndjson"));
+
         _overlay = new SubtitleOverlayWindow(region);
         _overlay.StopRequested += async (_, _) => await StopRecordingAsync();
         _overlay.Activate();
@@ -117,7 +128,7 @@ public sealed partial class RecordingPage : Page
 
         try
         {
-            await _recordingService.StartAsync(region, options, outputMp4Path: string.Empty);
+            await _recordingService.StartAsync(region, options);
             AppLogger.Info("Recording started successfully");
         }
         catch (Exception ex)
@@ -157,6 +168,8 @@ public sealed partial class RecordingPage : Page
         AppLogger.Info($"Recording stopped — {_chunksSent} chunks sent, {count} segments");
         StatusText.Text = $"Done — {count} subtitle segment{(count == 1 ? "" : "s")} captured.";
 
+        _subtitleService.EndSession();
+
         if (_currentSession is not null && count > 0)
         {
             var dir = _sessionRepository.GetSessionDirectory(_currentSession.Id);
@@ -170,24 +183,30 @@ public sealed partial class RecordingPage : Page
         await RefreshApiStatusAsync();
     }
 
-    private async void OnAudioChunkReady(object? sender, string chunkPath)
+    private async void OnAudioChunkReady(object? sender, AudioChunkInfo chunkInfo)
     {
         _chunksSent++;
-        var fileSize = new FileInfo(chunkPath).Length;
-        AppLogger.Info($"Chunk #{_chunksSent} ready: {Path.GetFileName(chunkPath)} ({fileSize:N0} bytes) — sending to API");
+        var fileSize = new FileInfo(chunkInfo.Path).Length;
+        AppLogger.Info($"Chunk #{_chunksSent} ready: {Path.GetFileName(chunkInfo.Path)} " +
+                       $"({fileSize:N0} bytes, offset={chunkInfo.OffsetSeconds:F1}s) — sending to API");
 
         try
         {
-            using var stream = File.OpenRead(chunkPath);
+            using var stream = File.OpenRead(chunkInfo.Path);
             var segments = await _transcriptionClient.TranscribeChunkAsync(
                 stream, AppSettings.Current.Model, AppSettings.Current.Language);
 
-            AppLogger.Info($"Chunk #{_chunksSent} transcribed: {segments.Count} segments, " +
-                           $"text=\"{string.Join(" / ", segments.Select(s => s.Text.Trim()))}\"");
+            // Shift chunk-relative timestamps to session-relative
+            var offset = chunkInfo.OffsetSeconds;
+            var offsetSegments = segments
+                .Select(s => s with { Start = s.Start + offset, End = s.End + offset })
+                .ToList();
 
-            _subtitleService.AppendSegments(segments);
-            DispatcherQueue.TryEnqueue(() =>
-                _overlay?.SetListening());
+            AppLogger.Info($"Chunk #{_chunksSent} transcribed: {offsetSegments.Count} segments, " +
+                           $"text=\"{string.Join(" / ", offsetSegments.Select(s => s.Text.Trim()))}\"");
+
+            _subtitleService.AppendSegments(offsetSegments);
+            DispatcherQueue.TryEnqueue(() => _overlay?.SetListening());
         }
         catch (Exception ex)
         {
@@ -197,7 +216,7 @@ public sealed partial class RecordingPage : Page
         }
         finally
         {
-            try { File.Delete(chunkPath); } catch { }
+            try { File.Delete(chunkInfo.Path); } catch { }
         }
     }
 
