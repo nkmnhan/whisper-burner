@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using WhisperBurner.WinUI.Infrastructure;
 using WhisperBurner.WinUI.Models;
-using WhisperBurner.WinUI.Services;
 
-namespace WhisperBurner.WinUI.Infrastructure;
+namespace WhisperBurner.WinUI.Services.Video;
 
 public class SessionRepository : ISessionRepository
 {
@@ -16,7 +16,7 @@ public class SessionRepository : ISessionRepository
     public string GetSessionDirectory(string sessionId) =>
         Path.Combine(AppSettings.SessionsRoot, sessionId);
 
-    public Task<SessionManifest> CreateSessionAsync(CaptureRegion region, RecordingOptions options)
+    public Task<SessionManifest> CreateSessionAsync(CaptureRegion? region, RecordingOptions options)
     {
         var id = $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{Guid.NewGuid().ToString("N")[..4]}";
         var dir = GetSessionDirectory(id);

@@ -1,6 +1,6 @@
 using WhisperBurner.WinUI.Models;
 
-namespace WhisperBurner.WinUI.Services;
+namespace WhisperBurner.WinUI.Services.Video;
 
 public interface IRegionSelectionService
 {

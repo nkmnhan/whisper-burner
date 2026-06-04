@@ -6,7 +6,7 @@ using WhisperBurner.WinUI.Infrastructure;
 using WhisperBurner.WinUI.Models;
 using WhisperBurner.WinUI.Overlay;
 
-namespace WhisperBurner.WinUI.Services;
+namespace WhisperBurner.WinUI.Services.Video;
 
 public class RegionSelectionService : IRegionSelectionService
 {

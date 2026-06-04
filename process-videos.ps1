@@ -63,6 +63,7 @@ foreach ($file in $videos) {
         $whisperArgs = @("whisper", $file.Name, "--model", $Model, "--task", $Task,
                          "--output_dir", "/app/output", "--output_format", $OutputFormat)
         if ($Language) { $whisperArgs += "--language", $Language }
+        if (-not $Gpu)  { $whisperArgs += "--fp16", "False" }
 
         Invoke-Whisper $whisperArgs
         if ($LASTEXITCODE -ne 0) { Write-Warning "whisper failed for '$($file.Name)'"; continue }

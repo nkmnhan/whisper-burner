@@ -1,15 +1,14 @@
 import os
 import tempfile
+from contextlib import asynccontextmanager
 
 import torch
 import whisper
 from fastapi import FastAPI, Form, UploadFile
 from fastapi.responses import JSONResponse
 
-app = FastAPI()
-
 _AVAILABLE_MODELS = ["tiny", "base", "small", "medium", "large-v3", "turbo"]
-_DEFAULT_MODEL = "small"
+_DEFAULT_MODEL = os.environ.get("WHISPER_MODEL", "small")
 _loaded: dict = {}
 
 
@@ -19,9 +18,25 @@ def _get_model(name: str):
     return _loaded[name]
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print(f"[startup] pre-loading model '{_DEFAULT_MODEL}'…", flush=True)
+    _get_model(_DEFAULT_MODEL)
+    print(f"[startup] model ready", flush=True)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "engine": "whisper", "gpu": torch.cuda.is_available()}
+    return {
+        "status": "ok",
+        "engine": "whisper",
+        "gpu": torch.cuda.is_available(),
+        "loaded_models": list(_loaded.keys()),
+    }
 
 
 @app.get("/models")

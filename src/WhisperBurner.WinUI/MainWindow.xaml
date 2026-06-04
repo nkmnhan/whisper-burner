@@ -5,19 +5,16 @@
     xmlns:local="using:WhisperBurner.WinUI"
     Title="Whisper Burner">
     <Grid>
-        <NavigationView
-            x:Name="NavView"
-            IsBackButtonVisible="Collapsed"
-            IsSettingsVisible="False"
-            SelectionChanged="NavView_SelectionChanged">
-            <NavigationView.MenuItems>
-                <NavigationViewItem Tag="Recording" Content="Record" Icon="Video" />
-                <NavigationViewItem Tag="SessionReview" Content="Sessions" Icon="List" />
-            </NavigationView.MenuItems>
-            <NavigationView.FooterMenuItems>
-                <NavigationViewItem Tag="Settings" Content="Settings" Icon="Setting" />
-            </NavigationView.FooterMenuItems>
-            <Frame x:Name="ContentFrame" />
-        </NavigationView>
+        <Pivot x:Name="MainPivot" SelectionChanged="MainPivot_SelectionChanged">
+            <PivotItem x:Name="RecordingTab" Header="Record">
+                <Frame x:Name="RecordingFrame" />
+            </PivotItem>
+            <PivotItem x:Name="SessionsTab" Header="Sessions">
+                <Frame x:Name="SessionsFrame" />
+            </PivotItem>
+            <PivotItem x:Name="SettingsTab" Header="Settings">
+                <Frame x:Name="SettingsFrame" />
+            </PivotItem>
+        </Pivot>
     </Grid>
 </Window>

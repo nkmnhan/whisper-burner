@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Microsoft.Build.AppxPackage</AssemblyName>
+    <RootNamespace>Microsoft.Build.AppxPackage</RootNamespace>
+    <Nullable>enable</Nullable>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Framework" Version="18.0.2" />
+  </ItemGroup>
+</Project>

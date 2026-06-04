@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using WhisperBurner.WinUI.Models;
 
-namespace WhisperBurner.WinUI.Services;
+namespace WhisperBurner.WinUI.Services.Audio;
 
 public class SubtitleService : ISubtitleService
 {

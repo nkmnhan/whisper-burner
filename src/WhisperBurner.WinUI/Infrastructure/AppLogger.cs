@@ -1,15 +1,27 @@
-using WhisperBurner.WinUI.Infrastructure;
-
 namespace WhisperBurner.WinUI.Infrastructure;
 
-public static class AppLogger
+public sealed class AppLogger : IAppLogger
 {
     private static readonly string _logPath = Path.Combine(AppSettings.DataRoot, "app.log");
     private static readonly object _lock = new();
 
-    public static void Log(string category, string message)
+    public static readonly AppLogger Instance = new();
+
+    // Static convenience methods — existing call sites unchanged
+    public static void Info(string message) => Write("INFO ", message);
+    public static void Warn(string message) => Write("WARN ", message);
+    public static void Error(string message, Exception? ex = null) =>
+        Write("ERROR", ex is null ? message : $"{message}\n{ex}");
+    public static void Clear() { try { File.Delete(_logPath); } catch { } }
+
+    // IAppLogger explicit implementation
+    void IAppLogger.Info(string message) => Info(message);
+    void IAppLogger.Warn(string message) => Warn(message);
+    void IAppLogger.Error(string message, Exception? ex) => Error(message, ex);
+
+    private static void Write(string level, string message)
     {
-        var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{category}] {message}";
+        var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message}";
         try
         {
             lock (_lock)
@@ -19,15 +31,5 @@ public static class AppLogger
             }
         }
         catch { }
-    }
-
-    public static void Info(string message) => Log("INFO", message);
-    public static void Error(string message, Exception? ex = null) =>
-        Log("ERROR", ex == null ? message : $"{message} — {ex.GetType().Name}: {ex.Message}");
-    public static void Warn(string message) => Log("WARN", message);
-
-    public static void Clear()
-    {
-        try { File.Delete(_logPath); } catch { }
     }
 }

@@ -18,6 +18,7 @@ public sealed class AppSettings
     public string Model { get; set; } = "small";
     public string Language { get; set; } = "en";
     public int ChunkDurationSeconds { get; set; } = 3;
+    public int TranscribeTimeoutSeconds { get; set; } = 120;  // CPU can be slow
     public bool CaptureSystemAudio { get; set; } = true;
 
     public void Save()

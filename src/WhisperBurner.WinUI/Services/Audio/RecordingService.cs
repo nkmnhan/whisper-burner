@@ -3,7 +3,7 @@ using System.Threading.Channels;
 using WhisperBurner.WinUI.Infrastructure;
 using WhisperBurner.WinUI.Models;
 
-namespace WhisperBurner.WinUI.Services;
+namespace WhisperBurner.WinUI.Services.Audio;
 
 public class RecordingService : IRecordingService
 {
@@ -22,7 +22,7 @@ public class RecordingService : IRecordingService
     public bool IsRecording { get; private set; }
     public event EventHandler<AudioChunkInfo>? AudioChunkReady;
 
-    public Task StartAsync(CaptureRegion region, RecordingOptions options)
+    public Task StartAsync(CaptureRegion? region, RecordingOptions options)
     {
         if (IsRecording) return Task.CompletedTask;
         Directory.CreateDirectory(AppSettings.TempRoot);

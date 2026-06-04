@@ -1,13 +1,14 @@
 using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using WhisperBurner.WinUI.Infrastructure;
 using WhisperBurner.WinUI.Models;
 
-namespace WhisperBurner.WinUI.Services;
+namespace WhisperBurner.WinUI.Services.Audio;
 
 public class TranscriptionClient : ITranscriptionClient
 {
-    // Shared HttpClient — avoids socket exhaustion from per-request instances
-    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    // Shared HttpClient with no timeout — each call sets its own via CancellationToken
+    private static readonly HttpClient _http = new() { Timeout = Timeout.InfiniteTimeSpan };
 
     private string BaseUrl => AppSettings.Current.ApiUrl.TrimEnd('/');
 
@@ -19,6 +20,17 @@ public class TranscriptionClient : ITranscriptionClient
             return r.IsSuccessStatusCode;
         }
         catch { return false; }
+    }
+
+    public async Task<ApiHealthInfo> GetHealthAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var dto = await _http.GetFromJsonAsync<HealthDto>($"{BaseUrl}/health", cancellationToken);
+            if (dto == null) return new ApiHealthInfo(false);
+            return new ApiHealthInfo(true, dto.LoadedModels?.FirstOrDefault());
+        }
+        catch { return new ApiHealthInfo(false); }
     }
 
     public async Task<IReadOnlyList<string>> GetAvailableModelsAsync(CancellationToken cancellationToken = default)
@@ -38,17 +50,24 @@ public class TranscriptionClient : ITranscriptionClient
         form.Add(new StringContent(model), "model");
         form.Add(new StringContent(language), "language");
 
-        var response = await _http.PostAsync($"{BaseUrl}/transcribe", form, cancellationToken);
+        // Per-request timeout: honour caller token OR TranscribeTimeoutSeconds, whichever fires first
+        var timeoutSecs = AppSettings.Current.TranscribeTimeoutSeconds;
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(timeoutSecs));
+
+        var response = await _http.PostAsync($"{BaseUrl}/transcribe", form, cts.Token);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<TranscribeDto>(
-            cancellationToken: cancellationToken);
+            cancellationToken: cts.Token);
 
         return result?.Segments?
             .Select(s => new SubtitleSegment(s.Id, s.Start, s.End, s.Text))
             .ToList() ?? [];
     }
 
+    private record HealthDto(string Status, bool Gpu,
+        [property: JsonPropertyName("loaded_models")] List<string>? LoadedModels);
     private record ModelsDto(List<string> Available, string Default);
     private record TranscribeDto(string Text, List<SegmentDto> Segments);
     private record SegmentDto(int Id, double Start, double End, string Text);
