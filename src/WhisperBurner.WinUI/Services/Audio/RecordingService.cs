@@ -20,25 +20,25 @@ public class RecordingService : IRecordingService
     private long _flushedBytes;  // cumulative PCM bytes before each chunk — used for timestamp offset
 
     public bool IsRecording { get; private set; }
-    public event EventHandler<AudioChunkInfo>? AudioChunkReady;
+    public Func<AudioChunkInfo, Task>? AudioChunkReady { get; set; }
 
     public Task StartAsync(CaptureRegion? region, RecordingOptions options)
     {
         if (IsRecording) return Task.CompletedTask;
         Directory.CreateDirectory(AppSettings.TempRoot);
 
-        _capture = AppSettings.Current.CaptureSystemAudio
+        _capture = options.CaptureSystemAudio
             ? new WasapiLoopbackCapture()
             : new WaveInEvent { WaveFormat = new WaveFormat(16000, 16, 1) };
 
         _captureFormat = _capture.WaveFormat;
         _chunkSizeBytes = (long)(_captureFormat.AverageBytesPerSecond
-            * AppSettings.Current.ChunkDurationSeconds);
+            * options.ChunkDurationSeconds);
 
         AppLogger.Info($"Audio capture: {_capture.GetType().Name} | " +
                        $"format={_captureFormat.SampleRate}Hz {_captureFormat.BitsPerSample}bit " +
                        $"{_captureFormat.Channels}ch {_captureFormat.Encoding} | " +
-                       $"chunkSize={_chunkSizeBytes:N0} bytes ({AppSettings.Current.ChunkDurationSeconds}s)");
+                       $"chunkSize={_chunkSizeBytes:N0} bytes ({options.ChunkDurationSeconds}s)");
 
         _channel = Channel.CreateBounded<AudioChunkInfo>(new BoundedChannelOptions(5)
         {
@@ -124,7 +124,8 @@ public class RecordingService : IRecordingService
     {
         if (_channel == null) return;
         await foreach (var info in _channel.Reader.ReadAllAsync())
-            AudioChunkReady?.Invoke(this, info);
+            if (AudioChunkReady != null)
+                await AudioChunkReady(info);
         AppLogger.Info("Consumer task completed");
     }
 

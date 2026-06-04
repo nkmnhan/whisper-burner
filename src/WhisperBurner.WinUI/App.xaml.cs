@@ -1,10 +1,17 @@
 using Microsoft.UI.Xaml;
+using WhisperBurner.WinUI.Services.Audio;
+using WhisperBurner.WinUI.Services.Video;
 
 namespace WhisperBurner.WinUI;
 
 public partial class App : Application
 {
     public static MainWindow? MainWindow { get; private set; }
+
+    public IRecordingService    RecordingService    { get; } = new RecordingService();
+    public ITranscriptionClient TranscriptionClient { get; } = new TranscriptionClient();
+    public ISubtitleService     SubtitleService     { get; } = new SubtitleService();
+    public ISessionRepository   SessionRepository   { get; } = new SessionRepository();
 
     public App()
     {

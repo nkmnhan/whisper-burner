@@ -47,6 +47,7 @@ public class SubtitleService : ISubtitleService
     {
         List<SubtitleSegment> snapshot;
         lock (_lock) { snapshot = [.. _segments]; }
+        snapshot.Sort((a, b) => a.Start.CompareTo(b.Start));
         var lines = snapshot.Select((s, i) =>
             $"{i + 1}\n{Fmt(s.StartTime)} --> {Fmt(s.EndTime)}\n{s.Text}\n");
         await File.WriteAllTextAsync(outputPath, string.Join("\n", lines));

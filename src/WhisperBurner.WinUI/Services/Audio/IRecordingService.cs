@@ -6,7 +6,7 @@ public interface IRecordingService
 {
     bool IsRecording { get; }
 
-    event EventHandler<AudioChunkInfo>? AudioChunkReady;
+    Func<AudioChunkInfo, Task>? AudioChunkReady { get; set; }
 
     Task StartAsync(CaptureRegion? region, RecordingOptions options);
     Task StopAsync();

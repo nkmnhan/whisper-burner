@@ -15,10 +15,10 @@ namespace WhisperBurner.WinUI.Views;
 
 public sealed partial class RecordingPage : Page
 {
-    private readonly IRecordingService      _recordingService      = new RecordingService();
-    private readonly ITranscriptionClient   _transcriptionClient   = new TranscriptionClient();
-    private readonly ISubtitleService       _subtitleService       = new SubtitleService();
-    private readonly ISessionRepository     _sessionRepository     = new SessionRepository();
+    private readonly IRecordingService      _recordingService;
+    private readonly ITranscriptionClient   _transcriptionClient;
+    private readonly ISubtitleService       _subtitleService;
+    private readonly ISessionRepository     _sessionRepository;
 
     private SessionManifest? _currentSession;
     private string?          _savedSessionDir;
@@ -27,16 +27,23 @@ public sealed partial class RecordingPage : Page
     private SubtitleOverlayWindow? _overlay;
     private Storyboard?      _waveformStoryboard;
     private Storyboard?      _pulseDotStoryboard;
+    private CancellationTokenSource? _sessionCts;
     private readonly ObservableCollection<SubtitleSegment> _transcriptItems = new();
     private const int MaxTranscriptLines = 10;
 
     public RecordingPage()
     {
         InitializeComponent();
+        var app = (App)Application.Current;
+        _recordingService    = app.RecordingService;
+        _transcriptionClient = app.TranscriptionClient;
+        _subtitleService     = app.SubtitleService;
+        _sessionRepository   = app.SessionRepository;
+
         TranscriptRepeater.ItemsSource = _transcriptItems;
         AppLogger.Clear();
         AppLogger.Info("App started");
-        _recordingService.AudioChunkReady += OnAudioChunkReady;
+        _recordingService.AudioChunkReady = OnAudioChunkReady;
         // SegmentAdded registered per-session in StartRecordingAsync to avoid race on stop
         Loaded += async (_, _) =>
         {
@@ -54,9 +61,11 @@ public sealed partial class RecordingPage : Page
         };
         Unloaded += (_, _) =>
         {
-            _recordingService.AudioChunkReady -= OnAudioChunkReady;
-            _subtitleService.SegmentAdded     -= OnSegmentAdded;
+            _recordingService.AudioChunkReady = null;
+            _subtitleService.SegmentAdded    -= OnSegmentAdded;
             _subtitleService.EndSession();
+            _sessionCts?.Cancel();
+            _sessionCts?.Dispose();
         };
     }
 
@@ -101,6 +110,8 @@ public sealed partial class RecordingPage : Page
 
         _chunksSent = 0;
         _isStopped  = false;
+        _sessionCts?.Dispose();
+        _sessionCts = new CancellationTokenSource();
         _subtitleService.SegmentAdded += OnSegmentAdded;  // re-register for this session
         _subtitleService.Clear();
         _transcriptItems.Clear();
@@ -156,6 +167,7 @@ public sealed partial class RecordingPage : Page
     {
         if (!_recordingService.IsRecording) return;
         _isStopped = true;                        // guard: no more segment UI updates
+        _sessionCts?.Cancel();
         _subtitleService.SegmentAdded -= OnSegmentAdded;  // unregister before stopping
         await _recordingService.StopAsync();
         ResetToIdleState();
@@ -216,20 +228,22 @@ public sealed partial class RecordingPage : Page
         StartButton.IsEnabled     = true;
     }
 
-    private async void OnAudioChunkReady(object? sender, AudioChunkInfo chunkInfo)
+    private async Task OnAudioChunkReady(AudioChunkInfo chunkInfo)
     {
         _chunksSent++;
+        var ct = _sessionCts?.Token ?? CancellationToken.None;
         try
         {
-            using var stream  = File.OpenRead(chunkInfo.Path);
-            var segments      = await _transcriptionClient.TranscribeChunkAsync(
-                stream, AppSettings.Current.Model, AppSettings.Current.Language);
-            var offset        = chunkInfo.OffsetSeconds;
+            using var stream   = File.OpenRead(chunkInfo.Path);
+            var segments       = await _transcriptionClient.TranscribeChunkAsync(
+                stream, AppSettings.Current.Model, AppSettings.Current.Language, ct);
+            var offset         = chunkInfo.OffsetSeconds;
             var offsetSegments = segments
                 .Select(s => s with { Start = s.Start + offset, End = s.End + offset })
                 .ToList();
             _subtitleService.AppendSegments(offsetSegments);
         }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             AppLogger.Error("Chunk transcription failed", ex);

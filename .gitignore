@@ -45,6 +45,9 @@ packages/
 # Rider
 .idea/
 
+# Vendored build tool DLLs (checked-in only as a workaround; prefer NuGet restore)
+src/WhisperBurner.WinUI/.tools/AppxPackage/*.dll
+
 # Windows App SDK / MSIX packaging
 AppPackages/
 BundleArtifacts/
