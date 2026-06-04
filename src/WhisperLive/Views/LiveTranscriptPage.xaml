@@ -1,0 +1,218 @@
+<Page
+    x:Class="WhisperLive.Views.LiveTranscriptPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Page.Resources>
+        <!-- Waveform storyboard — 5 bars staggered by 80 ms each -->
+        <Storyboard x:Name="WaveformStoryboard">
+            <!-- Bar 1 -->
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.000"
+                Duration="0:0:0.6"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="Bar1Scale"
+                Storyboard.TargetProperty="ScaleY"
+                From="0.25" To="1.0" />
+            <!-- Bar 2 -->
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.080"
+                Duration="0:0:0.6"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="Bar2Scale"
+                Storyboard.TargetProperty="ScaleY"
+                From="0.25" To="1.0" />
+            <!-- Bar 3 -->
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.160"
+                Duration="0:0:0.6"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="Bar3Scale"
+                Storyboard.TargetProperty="ScaleY"
+                From="0.25" To="1.0" />
+            <!-- Bar 4 -->
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.240"
+                Duration="0:0:0.6"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="Bar4Scale"
+                Storyboard.TargetProperty="ScaleY"
+                From="0.25" To="1.0" />
+            <!-- Bar 5 -->
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.320"
+                Duration="0:0:0.6"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="Bar5Scale"
+                Storyboard.TargetProperty="ScaleY"
+                From="0.25" To="1.0" />
+        </Storyboard>
+
+        <!-- Recording dot pulse -->
+        <Storyboard x:Name="DotPulseStoryboard">
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.000"
+                Duration="0:0:0.45"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="StatusDotScale"
+                Storyboard.TargetProperty="ScaleX"
+                From="1.0" To="1.5" />
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.000"
+                Duration="0:0:0.45"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="StatusDotScale"
+                Storyboard.TargetProperty="ScaleY"
+                From="1.0" To="1.5" />
+        </Storyboard>
+    </Page.Resources>
+
+    <Grid Padding="24,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Row 0: Status bar -->
+        <StackPanel
+            Grid.Row="0"
+            Orientation="Horizontal"
+            Spacing="8">
+            <Ellipse
+                x:Name="StatusDot"
+                Width="8"
+                Height="8"
+                VerticalAlignment="Center"
+                Fill="{ThemeResource SystemFillColorCautionBrush}">
+                <Ellipse.RenderTransform>
+                    <ScaleTransform x:Name="StatusDotScale" CenterX="4" CenterY="4" />
+                </Ellipse.RenderTransform>
+            </Ellipse>
+            <TextBlock
+                x:Name="StatusLabel"
+                VerticalAlignment="Center"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Checking API…" />
+        </StackPanel>
+
+        <!-- Row 1: Idle mic / Recording waveform -->
+        <Grid Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+
+            <!-- Idle: large mic icon -->
+            <FontIcon
+                x:Name="MicIcon"
+                FontSize="72"
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Glyph="&#xE720;" />
+
+            <!-- Recording: 5-bar waveform -->
+            <StackPanel
+                x:Name="Waveform"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Orientation="Horizontal"
+                Spacing="4"
+                Visibility="Collapsed">
+                <Border
+                    Width="4"
+                    Height="32"
+                    Background="{ThemeResource AccentFillColorDefaultBrush}"
+                    CornerRadius="2">
+                    <Border.RenderTransform>
+                        <ScaleTransform x:Name="Bar1Scale" CenterX="2" CenterY="32" ScaleY="0.25" />
+                    </Border.RenderTransform>
+                </Border>
+                <Border
+                    Width="4"
+                    Height="32"
+                    Background="{ThemeResource AccentFillColorDefaultBrush}"
+                    CornerRadius="2">
+                    <Border.RenderTransform>
+                        <ScaleTransform x:Name="Bar2Scale" CenterX="2" CenterY="32" ScaleY="0.25" />
+                    </Border.RenderTransform>
+                </Border>
+                <Border
+                    Width="4"
+                    Height="32"
+                    Background="{ThemeResource AccentFillColorDefaultBrush}"
+                    CornerRadius="2">
+                    <Border.RenderTransform>
+                        <ScaleTransform x:Name="Bar3Scale" CenterX="2" CenterY="32" ScaleY="0.25" />
+                    </Border.RenderTransform>
+                </Border>
+                <Border
+                    Width="4"
+                    Height="32"
+                    Background="{ThemeResource AccentFillColorDefaultBrush}"
+                    CornerRadius="2">
+                    <Border.RenderTransform>
+                        <ScaleTransform x:Name="Bar4Scale" CenterX="2" CenterY="32" ScaleY="0.25" />
+                    </Border.RenderTransform>
+                </Border>
+                <Border
+                    Width="4"
+                    Height="32"
+                    Background="{ThemeResource AccentFillColorDefaultBrush}"
+                    CornerRadius="2">
+                    <Border.RenderTransform>
+                        <ScaleTransform x:Name="Bar5Scale" CenterX="2" CenterY="32" ScaleY="0.25" />
+                    </Border.RenderTransform>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <!-- Row 2: Scrollable transcript area (visible while recording) -->
+        <ScrollViewer
+            x:Name="TranscriptScroller"
+            Grid.Row="2"
+            MaxHeight="240"
+            Margin="0,0,0,16"
+            Visibility="Collapsed">
+            <TextBlock
+                x:Name="TranscriptText"
+                TextWrapping="Wrap" />
+        </ScrollViewer>
+
+        <!-- Row 3: Action zone -->
+        <StackPanel
+            Grid.Row="3"
+            HorizontalAlignment="Center"
+            Spacing="8">
+            <Button
+                x:Name="StartButton"
+                Width="200"
+                Height="48"
+                Click="OnStartClicked"
+                Style="{StaticResource AccentButtonStyle}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon FontSize="16" Glyph="&#xE720;" />
+                    <TextBlock Text="Start" />
+                </StackPanel>
+            </Button>
+            <Button
+                x:Name="StopButton"
+                Width="200"
+                Height="48"
+                Click="OnStopClicked"
+                Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon FontSize="16" Glyph="&#xE71A;" />
+                    <TextBlock Text="Stop" />
+                </StackPanel>
+            </Button>
+            <TextBlock
+                x:Name="ActionStatus"
+                HorizontalAlignment="Center"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}" />
+        </StackPanel>
+    </Grid>
+</Page>

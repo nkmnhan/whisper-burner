@@ -1,8 +1,10 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 Containerized OpenAI Whisper ASR with GPU/CPU Docker profiles. Batch-processes videos from `videos/` into SRT transcripts and burnt-in MP4s saved to `videos/output/`.
 
-Also contains a **WinUI 3 desktop app** (`src/WhisperBurner.WinUI/`) for system-audio capture, live subtitle overlay, and session save. Audio-only pipeline: system audio → WAV chunks → Dockerized Whisper API → always-on-top overlay. Screen recording is Phase 1 (not yet implemented).
+Also contains a **WinUI 3 desktop app** (`src/WhisperBurner.WinUI/`) for system-audio capture, live subtitle overlay, and session save. Audio-only pipeline: system audio → WAV chunks → Dockerized Whisper API → always-on-top overlay. Screen recording is Phase 2 (not yet implemented).
 
 ## Role
 
@@ -22,30 +24,26 @@ Act as a **senior Windows desktop / DevOps developer** and collaborator. Apply c
 - **Evidence over assumption** — when claiming something exists or doesn't, show the grep/glob proof
 - **Verify after change** — after modifying code, verify it compiles; never assume correctness
 
-## Naming Conventions
+## Build Commands
 
-- **Meaningful names only** — never `d`, `e`, `v`, `tmp`, `res`, `cb`, `fn`, `arr` (except `i`/`j` in simple loops)
-- Booleans: `is`, `has`, `can`, `should` prefix
-- Event handlers: `On` prefix in C# (`OnAudioChunkReady`), `on`/`handle` in scripts
-- Async methods: verb prefix (`StartRecordingAsync`, `TranscribeChunkAsync`)
+### WinUI 3 App
 
-## Architecture
+```powershell
+cd src/WhisperBurner.WinUI
 
-- `Dockerfile` — Python 3.12-slim base, ffmpeg, openai-whisper
-- `docker-compose.yml` — `gpu` and `cpu` profiles; mounts `./models` and `./videos`
-- `process-videos.ps1` — batch transcription + subtitle burn script
-- `process-videos-gpu.cmd` / `process-videos-cpu.cmd` — double-click launchers
-- `videos/` — source files (any format); `videos/output/` — SRT + MP4 outputs
-- `src/WhisperBurner.WinUI/` — WinUI 3 desktop app (C# / Windows App SDK 2.1 unpackaged)
-  - `Models/` — `CaptureRegion`, `RecordingOptions`, `SubtitleSegment`, `SessionManifest`, `AudioChunkInfo`
-  - `Services/Audio/` — `IRecordingService`, `ITranscriptionClient`, `ISubtitleService` + implementations
-  - `Services/Video/` — `IRegionSelectionService`, `ISessionRepository` + implementations
-  - `Views/` — `RecordingPage`, `SessionReviewPage`, `SettingsPage`
-  - `Overlay/` — `SubtitleOverlayWindow`, `RegionSelectorWindow`
-  - `Infrastructure/` — `AppSettings`, `AppLogger`
-  - `Docs/` — `ARCHITECTURE.md`, `API_CONTRACT.md`, `DECISION_MATRIX.md`, `IMPLEMENTATION_PHASES.md`
+# First build only — compile the AppxStub (required once per machine/checkout)
+dotnet build .tools/AppxStub/AppxStub.csproj -c Release -o .tools/AppxPackage
 
-## Quick Start
+# Regular build
+dotnet build -c Debug
+
+# Run
+dotnet run -c Debug
+```
+
+> The `.tools/AppxPackage/Microsoft.Build.AppxPackage.dll` stub must exist before the main build. The csproj auto-builds it via a `BeforeBuild` target if absent, but the first explicit build of the stub is faster.
+
+### Docker / Batch transcription
 
 ```powershell
 # GPU (default)
@@ -57,78 +55,112 @@ docker compose --profile cpu build
 .\process-videos-cpu.cmd
 ```
 
+## Architecture
+
+### Docker pipeline
+
+- `Dockerfile` — Python 3.12-slim, ffmpeg, openai-whisper
+- `docker-compose.yml` — `gpu` and `cpu` profiles; mounts `./models` and `./videos`
+- `process-videos.ps1` — batch transcription + subtitle burn
+- `videos/` — source files; `videos/output/` — SRT + MP4 outputs
+
+### WinUI 3 App (`src/WhisperBurner.WinUI/`)
+
+Built on **Windows App SDK 2.1 unpackaged**, targeting `net10.0-windows10.0.19041.0`. Follows the **WinUI Gallery** code style as the reference implementation.
+
+**Key packages:**
+- `Microsoft.WindowsAppSDK` 2.1.3 — WinUI 3 platform
+- `CommunityToolkit.WinUI.Controls.SettingsControls` — `SettingsCard`, `SettingsExpander` for settings UI
+- `CommunityToolkit.WinUI.Converters` — `BoolToVisibilityConverter`, `StringVisibilityConverter`
+- `CommunityToolkit.WinUI.Animations` — animation utilities
+- `Microsoft.Windows.CsWin32` — source-generated Win32 P/Invoke (declare API names in `NativeMethods.txt`)
+- `NAudio` — audio capture (WasapiLoopbackCapture / WaveInEvent)
+
+**Layer structure:**
+
+| Folder | Purpose |
+|---|---|
+| `Helpers/` | `ThemeHelper` — dark/light/system theme across all windows; `WindowHelper` — tracks `ActiveWindows`, sets min size |
+| `Infrastructure/` | `AppSettings` (JSON, `~/whisper.burner/settings.json`), `AppLogger` (file logger) |
+| `Models/` | Immutable record types — `SubtitleSegment`, `CaptureRegion`, `AudioChunkInfo`, `SessionManifest`, `RecordingOptions`, `ApiHealthInfo` |
+| `Services/Audio/` | `IRecordingService` / `RecordingService` (NAudio + bounded Channel), `ITranscriptionClient` / `TranscriptionClient` (HTTP multipart), `ISubtitleService` / `SubtitleService` (NDJSON streaming + SRT export) |
+| `Services/Video/` | `ISessionRepository` / `SessionRepository` (manifest JSON), `IRegionSelectionService` / `RegionSelectionService` (screen capture) |
+| `Styles/` | `Brushes.xaml` — `ThemeDictionaries` (Light/Dark) for `WaveformBarBrush`, `SavedBannerBackgroundBrush`, `LiveTranscriptBackgroundBrush`; also `WaveformBarStyle`, `GhostButtonStyle`, `StopButtonStyle` |
+| `Views/` | `RecordingPage`, `SettingsPage` (uses `SettingsExpander`/`SettingsCard`), `SessionReviewPage` (placeholder) |
+| `Overlay/` | `SubtitleOverlayWindow` (always-on-top, layered, drag strip), `RegionSelectorWindow` (fullscreen selector), `SubtitleLine` (INotifyPropertyChanged for font-size binding) |
+
+**App shell (WinUI Gallery pattern):**
+- `App.xaml` — merges `Brushes.xaml`, declares CommunityToolkit converters in `ThemeDictionaries`
+- `App.xaml.cs` — owns all service singletons; calls `WindowHelper.TrackWindow()` + `ThemeHelper.Initialize()` on launch
+- `MainWindow.xaml` — `MicaBackdrop` in XAML, `TitleBar` control (`ExtendsContentIntoTitleBar`), `NavigationView` (Record, Sessions) + settings gear
+- `MainWindow.xaml.cs` — `WindowHelper.SetWindowMinSize`, `ThemeHelper.IsDarkTheme()` for caption button colour
+
+**Data flow (recording session):**
+```
+RecordingPage → RecordingService.StartAsync()
+  └─ NAudio DataAvailable → FlushChunk() → Channel<AudioChunkInfo>
+  └─ ConsumeChunksAsync() → TranscriptionClient.TranscribeChunkAsync()
+  └─ SubtitleService.AppendSegments() → SegmentAdded event
+  └─ RecordingPage.OnSegmentAdded() → SubtitleOverlayWindow.ShowSegment()
+```
+
+**AppxStub (`.tools/AppxStub/`):** Stub `Microsoft.Build.AppxPackage.dll` that satisfies MSBuild task references from `Microsoft.WindowsAppSDK` when the VS AppxPackage workload is absent. Built to `.tools/AppxPackage/`; `AppxMSBuildToolsPath` in the csproj redirects to it.
+
+**Old project:** `old-one/WhisperBurner.WinUI/` — archived prior implementation; reference for business logic only, do not modify.
+
+## Naming Conventions
+
+- Booleans: `is`, `has`, `can`, `should` prefix
+- Event handlers: `On` prefix (`OnSegmentAdded`, `OnAudioChunkReady`)
+- Async methods: verb prefix (`StartRecordingAsync`, `TranscribeChunkAsync`)
+- No single-letter names except `i`/`j` in simple loops
+
+## C# / WinUI 3 Conventions
+
+- PascalCase everywhere; `async`/`await` on all I/O paths; nullable enabled
+- Services are singletons owned by `App`; pages access them via `((App)Application.Current).ServiceName`
+- `WindowHelper.TrackWindow()` on every new `Window` — required for `ThemeHelper` to reach all windows
+- Custom brushes go in `Styles/Brushes.xaml` under `ThemeDictionaries`, never hardcoded in XAML
+- Settings UI uses `SettingsCard` / `SettingsExpander` from `CommunityToolkit.WinUI.Controls`; no raw `Expander` + `StackPanel`
+- Win32 P/Invoke: add API name to `NativeMethods.txt` for CsWin32. For complex interop not yet in CsWin32 (window style bits, DWM attributes), `[DllImport]` with explicit constants is acceptable
+- `CancellationTokenSource` per recording session; cancel on stop and on page `Unloaded`
+- Never implement UI logic directly in a `Page` or `Window` — delegate to a service
+- Keep interface and model files under 60 lines — one type per file
+
+## Docker Conventions
+
+- Pin base image to a specific version tag
+- One `RUN` layer per logical step; chain with `&&` to minimise layers
+- `--no-install-recommends` for apt installs
+- Never modify files in `videos/output/` — generated artifacts
+
+## PowerShell Conventions
+
+- PascalCase for functions, camelCase for local variables
+- Full cmdlet names — no aliases
+- `-LiteralPath` when paths may contain spaces or commas
+
 ## Whisper Models
 
 | Model | VRAM | Notes |
 |-------|------|-------|
 | `turbo` | ~8 GB | Default — fast, accurate |
-| `large-v3` | 10-15 GB | Most accurate |
+| `large-v3` | 10–15 GB | Most accurate |
 
 ## Development Workflow
 
-For non-trivial work, follow this sequence:
-
-1. **Design** — explore requirements and constraints before coding
-2. **Plan** — create step-by-step implementation plan
-3. **Isolate** — use a feature branch or git worktree
-4. **Execute** — implement in small, verifiable steps
-5. **Verify** — run `dotnet build` (C#) or test the feature manually
-6. **Finish** — merge or create PR
-
-## Coding Conventions
-
-### General
-- Max 100 lines per file — split into focused single-responsibility files if exceeded
-- No comments unless the WHY is non-obvious
-- No speculative features — implement only what is asked
-
-### Docker
-- Pin base image to a specific version tag (e.g. `python:3.12-slim`)
-- One `RUN` layer per logical step; chain with `&&` to minimize layers
-- Always `--no-install-recommends` for apt installs
-- Never run as root — add a non-root user for production images
-- Use `.dockerignore` to exclude build artifacts and secrets
-- Multi-stage builds when final image doesn't need build tools
-
-### PowerShell
-- PascalCase for functions (`Invoke-Whisper`), camelCase for local variables (`$baseName`)
-- Full cmdlet names in scripts — no aliases (`Get-ChildItem` not `ls`)
-- Always use `-LiteralPath` when paths may contain special characters (spaces, commas)
-- `[string[]]` type hints on function parameters
-- Group related logic into small focused functions
-
-### Python (if added)
-- Follow PEP 8; 4-space indent
-- Type hints on all function signatures
-- No bare `except` — catch specific exceptions
-
-### Whisper
-- Default model: `turbo` — change only if accuracy is insufficient
-- `--output_dir /app/output` keeps outputs separate from source files
-- ffmpeg subtitle burn: escape `,` and `:` in filenames for `-vf subtitles=`
-- WMV corrupt frame warnings are non-fatal — use `-fflags +discardcorrupt -err_detect ignore_err`
-
-### C# / WinUI 3
-- Target framework: `net10.0-windows10.0.19041.0`; Windows App SDK 2.1 unpackaged
-- PascalCase everywhere; `async`/`await` on all I/O paths; nullable enabled
-- Keep interface and model files under 60 lines — one type per file
-- Services are singletons owned by `App`; pages and windows consume them via `(App)Application.Current`
-- Use `Func<T, Task>` callbacks instead of `event EventHandler<T>` when the caller must await the handler
-- Add a `CancellationTokenSource` per recording session; cancel on stop and on page unload
-- Never implement directly in a `Page` or `Window` — delegate to a service
-- Original session `recording.mp4` must never be overwritten
+1. **Design** — explore requirements before coding
+2. **Plan** — step-by-step implementation plan for non-trivial changes
+3. **Isolate** — feature branch or git worktree
+4. **Execute** — small, verifiable steps
+5. **Verify** — `dotnet build` after every C# change
+6. **Finish** — merge or PR
 
 ## Agent Behaviour
 
-- Always use `-LiteralPath` in PowerShell when handling files in `videos/`
+- Run `dotnet build` after every C# change before reporting done
+- Always use `-LiteralPath` in PowerShell for `videos/` paths
 - Run `docker compose --profile gpu build --no-cache` when Dockerfile changes
-- Never modify files in `videos/output/` — they are generated artifacts
-- Skip already-processed files (SRT/MP4 exist checks) before running docker
+- Skip already-processed files (SRT/MP4 exist check) before running docker
 - Never implement WinUI 3 features beyond the current phase without user approval
-
-## CRITICAL — verify before every change
-
-1. **NEVER** hardcode secrets or API keys in source files
-2. **NEVER** overwrite `recording.mp4` — session source files are immutable
-3. **ALWAYS** read existing code before modifying — evidence over assumption
-4. **ALWAYS** run `dotnet build` after C# changes before reporting done
+- **NEVER** overwrite `recording.mp4` — session source files are immutable
