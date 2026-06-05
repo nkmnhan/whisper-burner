@@ -77,6 +77,7 @@ public sealed partial class MainWindow : Window
             var pageType = item.Tag?.ToString() switch
             {
                 "LiveTranscript" => typeof(LiveTranscriptPage),
+                "Sessions" => typeof(SessionsPage),
                 _ => null
             };
             if (pageType is not null)

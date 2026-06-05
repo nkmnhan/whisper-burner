@@ -10,6 +10,7 @@ public interface ISubtitleService
     event EventHandler<SubtitleSegment> SegmentAdded;
     IReadOnlyList<SubtitleSegment> AllSegments { get; }
     string? CurrentSessionPath { get; }
+    string SessionsDirectory { get; }
     void StartSession();
     void EndSession();
     void AppendSegments(IEnumerable<SubtitleSegment> segments);

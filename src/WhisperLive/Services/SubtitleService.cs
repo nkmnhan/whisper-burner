@@ -21,6 +21,7 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     public IReadOnlyList<SubtitleSegment> AllSegments => _segments;
     public string? CurrentSessionPath { get; private set; }
+    public string SessionsDirectory => _sessionsDir;
 
     public void StartSession()
     {
