@@ -4,15 +4,18 @@
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
             <SolidColorBrush x:Key="RecordingActiveBrush" Color="#C42B1C" />
-            <SolidColorBrush x:Key="CaptionOverlayBackgroundBrush" Color="#1F1F1F" />
+            <SolidColorBrush x:Key="CaptionOverlayBackgroundBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="CaptionOverlayBadgeBackgroundBrush" Color="#3D3D3D" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
             <SolidColorBrush x:Key="RecordingActiveBrush" Color="#FF6B6B" />
-            <SolidColorBrush x:Key="CaptionOverlayBackgroundBrush" Color="#1F1F1F" />
+            <SolidColorBrush x:Key="CaptionOverlayBackgroundBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="CaptionOverlayBadgeBackgroundBrush" Color="#3D3D3D" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
             <SolidColorBrush x:Key="RecordingActiveBrush" Color="{ThemeResource SystemColorHighlightColor}" />
             <SolidColorBrush x:Key="CaptionOverlayBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CaptionOverlayBadgeBackgroundBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 </ResourceDictionary>

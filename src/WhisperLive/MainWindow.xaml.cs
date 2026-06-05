@@ -40,7 +40,6 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(titleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
-        AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
     }
 
     private void AdjustNavigationViewMargin(bool? force = null)
