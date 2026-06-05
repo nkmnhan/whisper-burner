@@ -49,6 +49,7 @@ async def transcribe(
     file: UploadFile,
     model: str = Form(_DEFAULT_MODEL),
     language: str = Form("en"),
+    initial_prompt: str = Form(""),
 ):
     if model not in _AVAILABLE_MODELS:
         return JSONResponse({"error": "unknown_model"}, status_code=400)
@@ -61,7 +62,10 @@ async def transcribe(
         tmp_path = tmp.name
 
     try:
-        result = _get_model(model).transcribe(tmp_path, language=language)
+        kwargs = {"language": language}
+        if initial_prompt:
+            kwargs["initial_prompt"] = initial_prompt
+        result = _get_model(model).transcribe(tmp_path, **kwargs)
     finally:
         os.unlink(tmp_path)
 

@@ -125,6 +125,7 @@ public sealed partial class LiveTranscriptPage : Page
             Model: _settings.Model);
 
         var app = CurrentApp;
+        app.TranscriptionClient.ResetPrompt();
         app.SubtitleService.StartSession();
         app.SubtitleService.SegmentAdded += OnSegmentAdded;
         _ = app.RecordingService.StartAsync(options, _cts.Token);

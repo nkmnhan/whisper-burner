@@ -10,12 +10,15 @@ namespace WhisperLive.Services;
 
 public sealed class RecordingService : IRecordingService
 {
+    private const double OverlapSeconds = 0.3; // tail of previous chunk prepended to next
+
     private Channel<AudioChunkInfo> _channel = Channel.CreateBounded<AudioChunkInfo>(20);
     private WasapiLoopbackCapture? _capture;
     private MemoryStream _buffer = new();
     private readonly object _lock = new();
     private int _chunkIndex;
     private double _offsetSeconds;
+    private byte[] _overlapTail = [];
 
     private volatile bool _paused;
     public bool IsPaused => _paused;
@@ -29,6 +32,7 @@ public sealed class RecordingService : IRecordingService
         _chunkIndex = 0;
         _offsetSeconds = 0;
         _buffer = new MemoryStream();
+        _overlapTail = [];
 
         _capture = new WasapiLoopbackCapture();
         var waveFormat = _capture.WaveFormat;
@@ -87,21 +91,45 @@ public sealed class RecordingService : IRecordingService
 
     private async Task FlushAsync(WaveFormat waveFormat, RecordingOptions options)
     {
-        byte[] data;
+        byte[] freshData;
         lock (_lock)
         {
             if (_buffer.Length == 0) return;
-            data = _buffer.ToArray();
+            freshData = _buffer.ToArray();
             _buffer.SetLength(0);
             _buffer.Position = 0;
         }
 
+        // Prepend overlap tail from previous chunk so boundary words are fully captured
+        double chunkOverlap = _overlapTail.Length > 0 ? OverlapSeconds : 0.0;
+        byte[] wavData;
+        if (_overlapTail.Length > 0)
+        {
+            wavData = new byte[_overlapTail.Length + freshData.Length];
+            _overlapTail.CopyTo(wavData, 0);
+            freshData.CopyTo(wavData, _overlapTail.Length);
+        }
+        else
+        {
+            wavData = freshData;
+        }
+
+        // Save new overlap tail from the END of the fresh (non-overlap) data
+        int overlapBytes = (int)(OverlapSeconds * waveFormat.AverageBytesPerSecond);
+        _overlapTail = freshData.Length >= overlapBytes
+            ? freshData[^overlapBytes..]
+            : freshData;
+
+        // OffsetSeconds = actual wall-clock start of this WAV (overlap region begins here)
+        double wavStartTime = _offsetSeconds - chunkOverlap;
+
         var path = Path.Combine(Path.GetTempPath(), $"whisper_{_chunkIndex:D4}.wav");
         using (var writer = new WaveFileWriter(path, waveFormat))
-            writer.Write(data, 0, data.Length);
+            writer.Write(wavData, 0, wavData.Length);
 
-        AppLogger.Debug("Flushed chunk #{Index} — {Bytes} bytes → {Path}", _chunkIndex, data.Length, path);
-        await _channel.Writer.WriteAsync(new AudioChunkInfo(path, _chunkIndex, _offsetSeconds));
+        AppLogger.Debug("Flushed chunk #{Index} — {Bytes} bytes (overlap={Overlap}s) → {Path}",
+            _chunkIndex, wavData.Length, chunkOverlap, path);
+        await _channel.Writer.WriteAsync(new AudioChunkInfo(path, _chunkIndex, wavStartTime, chunkOverlap));
         _offsetSeconds += options.ChunkDurationSeconds;
         _chunkIndex++;
     }
