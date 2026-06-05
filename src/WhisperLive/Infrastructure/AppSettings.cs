@@ -13,7 +13,7 @@ public sealed class AppSettings
 
     private static readonly JsonSerializerOptions _json = new() { WriteIndented = true };
 
-    public string ApiUrl { get; set; } = "http://localhost:9000";
+    public string ApiUrl { get; set; } = "http://localhost:5000";
     public string Language { get; set; } = "en";
     public string Model { get; set; } = "small";
     public int ChunkDurationSeconds { get; set; } = 5;

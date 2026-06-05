@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Media;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using WhisperLive.Infrastructure;
 using WhisperLive.Models;
 using WhisperLive.Services;
 using Windows.UI;
@@ -14,6 +15,7 @@ namespace WhisperLive.Views;
 public sealed partial class LiveTranscriptPage : Page
 {
     private CancellationTokenSource? _cts;
+    private AppSettings _settings = new();
 
     public LiveTranscriptPage()
     {
@@ -22,8 +24,11 @@ public sealed partial class LiveTranscriptPage : Page
         Unloaded += OnUnloaded;
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs e) =>
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _settings = await AppSettings.LoadAsync();
         await CheckApiHealthAsync();
+    }
 
     private void OnUnloaded(object sender, RoutedEventArgs e) =>
         _cts?.Cancel();
@@ -40,7 +45,7 @@ public sealed partial class LiveTranscriptPage : Page
         try
         {
             using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-            var response = await http.GetAsync("http://localhost:9000/health");
+            var response = await http.GetAsync($"{_settings.ApiUrl}/health");
             SetApiReady(response.IsSuccessStatusCode);
         }
         catch
@@ -75,10 +80,10 @@ public sealed partial class LiveTranscriptPage : Page
     {
         _cts = new CancellationTokenSource();
         var options = new RecordingOptions(
-            Language: "en",
-            ChunkDurationSeconds: 5,
-            ApiUrl: "http://localhost:9000",
-            Model: "small");
+            Language: _settings.Language,
+            ChunkDurationSeconds: _settings.ChunkDurationSeconds,
+            ApiUrl: _settings.ApiUrl,
+            Model: _settings.Model);
 
         var app = CurrentApp;
         app.SubtitleService.SegmentAdded += OnSegmentAdded;

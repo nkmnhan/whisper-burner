@@ -21,12 +21,12 @@
                     <FontIcon Glyph="&#xE968;" />
                 </controls:SettingsExpander.HeaderIcon>
                 <controls:SettingsExpander.Items>
-                    <controls:SettingsCard Description="http://localhost:9000" Header="API URL">
+                    <controls:SettingsCard Description="http://localhost:5000" Header="API URL">
                         <TextBox
                             x:Name="ApiUrlBox"
                             Width="260"
                             HorizontalAlignment="Right"
-                            PlaceholderText="http://localhost:9000"
+                            PlaceholderText="http://localhost:5000"
                             TextChanged="OnApiUrlChanged" />
                     </controls:SettingsCard>
                     <controls:SettingsCard Description="Whisper model to use for transcription" Header="Model">
