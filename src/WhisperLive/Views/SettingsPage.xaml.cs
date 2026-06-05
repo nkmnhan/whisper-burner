@@ -28,7 +28,7 @@ public sealed partial class SettingsPage : Page
         ChunkLabel.Text = $"{_settings.ChunkDurationSeconds} s";
         SelectComboItem(ModelBox, _settings.Model);
         SelectComboItem(LanguageBox, _settings.Language);
-        SelectTheme(_settings.Theme);
+        SelectThemeCombo(_settings.Theme);
 
         _loaded = true;
     }
@@ -64,19 +64,24 @@ public sealed partial class SettingsPage : Page
         _ = _settings.SaveAsync();
     }
 
+    // Gallery-pattern: null-safe cast, no _loaded guard needed (guard is the null check itself)
     private void OnThemeChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_loaded) return;
-        var tag = (string)((RadioButton)ThemeRadio.SelectedItem).Tag;
+        if ((ThemeCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() is not string tag) return;
+
         _settings.Theme = tag;
         _ = _settings.SaveAsync();
 
         ThemeHelper.RootTheme = tag switch
         {
-            "Light" => Microsoft.UI.Xaml.ElementTheme.Light,
-            "Dark" => Microsoft.UI.Xaml.ElementTheme.Dark,
-            _ => Microsoft.UI.Xaml.ElementTheme.Default,
+            "Light" => ElementTheme.Light,
+            "Dark" => ElementTheme.Dark,
+            _ => ElementTheme.Default,
         };
+
+        // Gallery: update caption button colours after theme change (workaround for SDK bug)
+        if (WindowHelper.GetWindowForElement(this) is Window w)
+            TitleBarHelper.ApplySystemThemeToCaptionButtons(w, ThemeHelper.ActualTheme);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -95,16 +100,16 @@ public sealed partial class SettingsPage : Page
             box.SelectedIndex = 0;
     }
 
-    private void SelectTheme(string theme)
+    private void SelectThemeCombo(string theme)
     {
-        foreach (RadioButton rb in ThemeRadio.Items)
+        foreach (ComboBoxItem item in ThemeCombo.Items)
         {
-            if ((string)rb.Tag == theme)
+            if ((string?)item.Tag == theme)
             {
-                ThemeRadio.SelectedItem = rb;
+                ThemeCombo.SelectedItem = item;
                 return;
             }
         }
-        ThemeRadio.SelectedIndex = 0;
+        ThemeCombo.SelectedIndex = 2; // Default
     }
 }

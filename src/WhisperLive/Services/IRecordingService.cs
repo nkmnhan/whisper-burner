@@ -8,6 +8,9 @@ namespace WhisperLive.Services;
 public interface IRecordingService : IDisposable
 {
     ChannelReader<AudioChunkInfo> Chunks { get; }
+    bool IsPaused { get; }
     Task StartAsync(RecordingOptions options, CancellationToken ct);
     Task StopAsync();
+    Task PauseAsync();
+    Task ResumeAsync();
 }

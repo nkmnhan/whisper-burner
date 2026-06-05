@@ -1,16 +1,11 @@
 using Microsoft.UI.Xaml;
+using System.Threading.Tasks;
+using WhisperLive.Infrastructure;
 
 namespace WhisperLive.Helpers;
 
-/// <summary>
-/// Class providing functionality around switching and restoring theme settings
-/// </summary>
 public static partial class ThemeHelper
 {
-    /// <summary>
-    /// Gets the current actual theme of the app based on the requested theme of the
-    /// root element, or if that value is Default, the requested theme of the Application.
-    /// </summary>
     public static ElementTheme ActualTheme
     {
         get
@@ -20,21 +15,15 @@ public static partial class ThemeHelper
                 if (window.Content is FrameworkElement rootElement)
                 {
                     if (rootElement.RequestedTheme != ElementTheme.Default)
-                    {
                         return rootElement.RequestedTheme;
-                    }
                 }
             }
-
             return Application.Current.RequestedTheme == ApplicationTheme.Dark
                 ? ElementTheme.Dark
                 : ElementTheme.Light;
         }
     }
 
-    /// <summary>
-    /// Gets or sets the RequestedTheme of the root element.
-    /// </summary>
     public static ElementTheme RootTheme
     {
         get
@@ -42,11 +31,8 @@ public static partial class ThemeHelper
             foreach (Window window in WindowHelper.ActiveWindows)
             {
                 if (window.Content is FrameworkElement rootElement)
-                {
                     return rootElement.RequestedTheme;
-                }
             }
-
             return ElementTheme.Default;
         }
         set
@@ -54,21 +40,27 @@ public static partial class ThemeHelper
             foreach (Window window in WindowHelper.ActiveWindows)
             {
                 if (window.Content is FrameworkElement rootElement)
-                {
                     rootElement.RequestedTheme = value;
-                }
             }
         }
     }
 
-    public static void Initialize() { }
+    // Restores saved theme from AppSettings on launch (gallery pattern)
+    public static async Task InitializeAsync()
+    {
+        var settings = await AppSettings.LoadAsync();
+        RootTheme = settings.Theme switch
+        {
+            "Light" => ElementTheme.Light,
+            "Dark" => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
+    }
 
     public static bool IsDarkTheme()
     {
         if (RootTheme == ElementTheme.Default)
-        {
             return Application.Current.RequestedTheme == ApplicationTheme.Dark;
-        }
         return RootTheme == ElementTheme.Dark;
     }
 }

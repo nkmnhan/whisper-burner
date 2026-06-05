@@ -80,8 +80,25 @@
                     Click="OnCloseClicked"
                     CornerRadius="0"
                     Foreground="White"
-                    ToolTipService.ToolTip="Close">
+                    ToolTipService.ToolTip="Hide overlay">
                     <SymbolIcon Symbol="Cancel" />
+                </Button>
+
+                <!-- Pause / Resume button -->
+                <Button
+                    x:Name="OverlayPauseButton"
+                    Grid.Column="1"
+                    Width="32"
+                    Height="32"
+                    Padding="0"
+                    HorizontalAlignment="Center"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="OnOverlayPauseClicked"
+                    CornerRadius="0"
+                    Foreground="White"
+                    ToolTipService.ToolTip="Pause / Resume">
+                    <FontIcon x:Name="OverlayPauseIcon" FontSize="14" Glyph="&#xE769;" />
                 </Button>
             </Grid>
 

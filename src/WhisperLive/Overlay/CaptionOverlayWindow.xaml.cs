@@ -47,7 +47,6 @@ public sealed partial class CaptionOverlayWindow : Window
         ((FrameworkElement)Content).RequestedTheme = ElementTheme.Dark;
         ApplyAcrylicBackdrop();
         RootGrid.ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY;
-        Closed += (_, _) => WindowHelper.ActiveWindows.Remove(this);
     }
 
     private void ConfigureWindow()
@@ -203,7 +202,23 @@ public sealed partial class CaptionOverlayWindow : Window
         ScrollToBottom();
     }
 
-    private void OnCloseClicked(object sender, RoutedEventArgs e) => Close();
+    private void OnCloseClicked(object sender, RoutedEventArgs e) => AppWindow.Hide();
+
+    public void UpdatePauseState(bool isPaused)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+            OverlayPauseIcon.Glyph = isPaused ? "\uE768" : "\uE769"); // Play : Pause
+    }
+
+    private void OnOverlayPauseClicked(object sender, RoutedEventArgs e)
+    {
+        var svc = ((App)Application.Current).RecordingService;
+        if (svc.IsPaused)
+            _ = svc.ResumeAsync();
+        else
+            _ = svc.PauseAsync();
+        UpdatePauseState(svc.IsPaused);
+    }
 
     private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
     {

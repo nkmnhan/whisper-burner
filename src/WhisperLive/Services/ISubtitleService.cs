@@ -9,6 +9,9 @@ public interface ISubtitleService
 {
     event EventHandler<SubtitleSegment> SegmentAdded;
     IReadOnlyList<SubtitleSegment> AllSegments { get; }
+    string? CurrentSessionPath { get; }
+    void StartSession();
+    void EndSession();
     void AppendSegments(IEnumerable<SubtitleSegment> segments);
     Task ExportSrtAsync(string path);
 }

@@ -29,7 +29,7 @@ public sealed class AppSettings
                 return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
             }
         }
-        catch { }
+        catch (Exception ex) { AppLogger.Warning(ex, "Failed to load settings, using defaults"); }
         return new AppSettings();
     }
 
@@ -41,6 +41,6 @@ public sealed class AppSettings
             var json = JsonSerializer.Serialize(this, _json);
             await File.WriteAllTextAsync(_path, json);
         }
-        catch { }
+            catch (Exception ex) { AppLogger.Warning(ex, "Failed to save settings"); }
     }
 }

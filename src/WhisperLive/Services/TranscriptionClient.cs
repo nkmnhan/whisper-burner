@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using WhisperLive.Infrastructure;
 using WhisperLive.Models;
 
 namespace WhisperLive.Services;
@@ -13,6 +14,18 @@ namespace WhisperLive.Services;
 public sealed class TranscriptionClient : ITranscriptionClient
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(60) };
+
+    public async Task<bool> CheckHealthAsync(string apiUrl, CancellationToken ct = default)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(3));
+            using var response = await _http.GetAsync($"{apiUrl}/health", cts.Token);
+            return response.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
 
     private static readonly JsonSerializerOptions _json = new()
     {
@@ -31,20 +44,25 @@ public sealed class TranscriptionClient : ITranscriptionClient
         form.Add(new StringContent(options.Language), "language");
         form.Add(new StringContent(options.Model), "model");
 
-        var response = await _http.PostAsync($"{options.ApiUrl}/transcribe", form, ct);
+        AppLogger.Debug("Transcribing chunk #{Index} ({Bytes} bytes)", chunk.ChunkIndex, fileBytes.Length);
+
+        using var response = await _http.PostAsync($"{options.ApiUrl}/transcribe", form, ct);
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync(ct);
         var result = JsonSerializer.Deserialize<TranscribeResponse>(json, _json);
 
-        return result?.Segments?
+        var segments = result?.Segments?
             .Where(s => !string.IsNullOrWhiteSpace(s.Text))
             .Select(s => new SubtitleSegment(
                 s.Id,
                 s.Start + chunk.OffsetSeconds,
                 s.End + chunk.OffsetSeconds,
                 s.Text.Trim()))
-            ?? [];
+            .ToList() ?? [];
+
+        AppLogger.Debug("Chunk #{Index} → {Count} segment(s)", chunk.ChunkIndex, segments.Count);
+        return segments;
     }
 
     private record TranscribeResponse(string Text, List<SegmentDto> Segments);

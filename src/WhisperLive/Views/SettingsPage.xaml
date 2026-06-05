@@ -86,23 +86,16 @@
             </controls:SettingsCard>
 
             <!-- Appearance -->
-            <controls:SettingsExpander
-                Description="Choose app color theme"
-                Header="Appearance"
-                IsExpanded="False">
-                <controls:SettingsExpander.HeaderIcon>
+            <controls:SettingsCard Description="Choose app color theme" Header="Appearance">
+                <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE790;" />
-                </controls:SettingsExpander.HeaderIcon>
-                <controls:SettingsExpander.Items>
-                    <controls:SettingsCard Header="App theme">
-                        <RadioButtons x:Name="ThemeRadio" SelectionChanged="OnThemeChanged">
-                            <RadioButton Content="System default" Tag="Default" />
-                            <RadioButton Content="Light" Tag="Light" />
-                            <RadioButton Content="Dark" Tag="Dark" />
-                        </RadioButtons>
-                    </controls:SettingsCard>
-                </controls:SettingsExpander.Items>
-            </controls:SettingsExpander>
+                </controls:SettingsCard.HeaderIcon>
+                <ComboBox x:Name="ThemeCombo" SelectionChanged="OnThemeChanged">
+                    <ComboBoxItem Content="Light" Tag="Light" />
+                    <ComboBoxItem Content="Dark" Tag="Dark" />
+                    <ComboBoxItem Content="Use system setting" Tag="Default" />
+                </ComboBox>
+            </controls:SettingsCard>
 
         </StackPanel>
     </ScrollViewer>

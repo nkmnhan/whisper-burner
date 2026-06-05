@@ -186,28 +186,71 @@
             Grid.Row="3"
             HorizontalAlignment="Center"
             Spacing="8">
-            <Button
-                x:Name="StartButton"
-                Width="200"
-                Height="48"
-                Click="OnStartClicked"
-                Style="{StaticResource AccentButtonStyle}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <FontIcon FontSize="16" Glyph="&#xE720;" />
-                    <TextBlock Text="Start" />
-                </StackPanel>
-            </Button>
-            <Button
-                x:Name="StopButton"
-                Width="200"
-                Height="48"
-                Click="OnStopClicked"
+
+            <!-- Idle: Start + optional New Session -->
+            <StackPanel
+                x:Name="IdleActions"
+                HorizontalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button
+                    x:Name="StartButton"
+                    Width="200"
+                    Height="48"
+                    Click="OnStartClicked"
+                    Style="{StaticResource AccentButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="16" Glyph="&#xE720;" />
+                        <TextBlock Text="Start" />
+                    </StackPanel>
+                </Button>
+                <Button
+                    x:Name="NewSessionButton"
+                    Width="48"
+                    Height="48"
+                    Click="OnNewSessionClicked"
+                    ToolTipService.ToolTip="New Session — clears transcript and starts a new file"
+                    Visibility="Collapsed">
+                    <FontIcon FontSize="16" Glyph="&#xE8E5;" />
+                </Button>
+            </StackPanel>
+
+            <!-- Recording / Paused: Pause + Stop + Show Overlay -->
+            <StackPanel
+                x:Name="ActiveActions"
+                HorizontalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="8"
                 Visibility="Collapsed">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <FontIcon FontSize="16" Glyph="&#xE71A;" />
-                    <TextBlock Text="Stop" />
-                </StackPanel>
-            </Button>
+                <Button
+                    x:Name="PauseButton"
+                    Width="48"
+                    Height="48"
+                    Click="OnPauseClicked"
+                    ToolTipService.ToolTip="Pause recording">
+                    <FontIcon x:Name="PauseIcon" FontSize="16" Glyph="&#xE769;" />
+                </Button>
+                <Button
+                    x:Name="StopButton"
+                    Width="200"
+                    Height="48"
+                    Click="OnStopClicked">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon FontSize="16" Glyph="&#xE71A;" />
+                        <TextBlock Text="Stop" />
+                    </StackPanel>
+                </Button>
+                <Button
+                    x:Name="ShowOverlayButton"
+                    Width="48"
+                    Height="48"
+                    Click="OnShowOverlayClicked"
+                    ToolTipService.ToolTip="Show live transcript overlay"
+                    Visibility="Collapsed">
+                    <FontIcon FontSize="16" Glyph="&#xE890;" />
+                </Button>
+            </StackPanel>
+
             <TextBlock
                 x:Name="ActionStatus"
                 HorizontalAlignment="Center"
