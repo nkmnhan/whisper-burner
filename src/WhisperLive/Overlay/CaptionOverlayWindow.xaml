@@ -7,7 +7,6 @@
     <Grid
         x:Name="RootGrid"
         Background="{ThemeResource CaptionOverlayBackgroundBrush}"
-        CornerRadius="8"
         ManipulationDelta="OnManipulationDelta"
         ManipulationMode="TranslateX,TranslateY"
         ManipulationStarted="OnManipulationStarted">
