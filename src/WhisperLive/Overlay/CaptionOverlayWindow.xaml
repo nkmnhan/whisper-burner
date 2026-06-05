@@ -101,35 +101,20 @@
                 </StackPanel>
             </Border>
 
-            <!-- Expand + Close buttons -->
-            <StackPanel
+            <!-- Close button -->
+            <Button
                 Grid.Column="2"
-                Orientation="Horizontal">
-                <Button
-                    Width="32"
-                    Height="32"
-                    Padding="0"
-                    Background="Transparent"
-                    BorderThickness="0"
-                    Click="OnExpandClicked"
-                    CornerRadius="0"
-                    Foreground="White"
-                    ToolTipService.ToolTip="Expand / Collapse">
-                    <FontIcon x:Name="TopBarExpandIcon" FontSize="14" Glyph="&#xE8A7;" />
-                </Button>
-                <Button
-                    Width="32"
-                    Height="32"
-                    Padding="0"
-                    Background="Transparent"
-                    BorderThickness="0"
-                    Click="OnCloseClicked"
-                    CornerRadius="0"
-                    Foreground="White"
-                    ToolTipService.ToolTip="Close">
-                    <SymbolIcon Symbol="Cancel" />
-                </Button>
-            </StackPanel>
+                Width="32"
+                Height="32"
+                Padding="0"
+                Background="Transparent"
+                BorderThickness="0"
+                Click="OnCloseClicked"
+                CornerRadius="0"
+                Foreground="White"
+                ToolTipService.ToolTip="Close">
+                <SymbolIcon Symbol="Cancel" />
+            </Button>
         </Grid>
     </Grid>
 </Window>

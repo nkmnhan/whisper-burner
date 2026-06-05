@@ -144,8 +144,6 @@ public sealed partial class CaptionOverlayWindow : Window
 
         // Update icons: E70E = chevron up (expand), E70D = chevron down (collapse)
         ChevronIcon.Glyph = _isExpanded ? "\uE70D" : "\uE70E";
-        // E8A7 = Expand (fullscreen), E8A3 = BackToWindow (collapse)
-        TopBarExpandIcon.Glyph = _isExpanded ? "\uE8A3" : "\uE8A7";
 
         // Grow/shrink the window upward, keeping the bottom edge fixed
         int newHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
