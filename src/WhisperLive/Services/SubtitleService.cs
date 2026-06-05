@@ -49,9 +49,11 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
     {
         foreach (var seg in segments)
         {
-            _segments.Add(seg);
-            WriteSrtEntry(seg);
-            SegmentAdded?.Invoke(this, seg);
+            // Reassign Id to be globally sequential across all chunks
+            var globalSeg = seg with { Id = _segments.Count + 1 };
+            _segments.Add(globalSeg);
+            WriteSrtEntry(globalSeg);
+            SegmentAdded?.Invoke(this, globalSeg);
         }
     }
 
