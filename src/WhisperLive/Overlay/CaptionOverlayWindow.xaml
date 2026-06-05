@@ -13,39 +13,100 @@
         PointerEntered="OnPointerEntered"
         PointerExited="OnPointerExited">
 
-        <!-- Main content: always visible -->
-        <Grid Margin="16,8,16,0">
+        <!-- Dark overlay on top of acrylic — forces dark appearance in any system theme -->
+        <Rectangle Fill="{ThemeResource CaptionOverlayDarkOverlayBrush}" />
+
+        <Grid Margin="16,8,16,8">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
+                <RowDefinition Height="32" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="32" />
             </Grid.RowDefinitions>
 
+            <!-- Row 0: header — label (default) or top-bar (on hover) -->
             <TextBlock
                 x:Name="LiveTranscriptLabel"
                 Grid.Row="0"
+                VerticalAlignment="Center"
                 FontSize="13"
                 FontStyle="Italic"
                 FontWeight="SemiBold"
                 Foreground="White"
                 Text="Live Transcript" />
 
-            <ItemsControl
+            <Grid
+                x:Name="TopBar"
+                Grid.Row="0"
+                Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Language badge -->
+                <Border
+                    Grid.Column="0"
+                    Padding="8,3"
+                    VerticalAlignment="Center"
+                    Background="Transparent"
+                    BorderBrush="#4DB6AC"
+                    BorderThickness="1"
+                    CornerRadius="10">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock
+                            x:Name="LanguageLabel"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="White"
+                            Text="English" />
+                        <FontIcon
+                            VerticalAlignment="Center"
+                            FontSize="10"
+                            Foreground="White"
+                            Glyph="&#xE70D;"
+                            Opacity="0.7" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Close button -->
+                <Button
+                    Grid.Column="2"
+                    Width="32"
+                    Height="32"
+                    Padding="0"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="OnCloseClicked"
+                    CornerRadius="0"
+                    Foreground="White"
+                    ToolTipService.ToolTip="Close">
+                    <SymbolIcon Symbol="Cancel" />
+                </Button>
+            </Grid>
+
+            <!-- Row 1: scrollable caption lines -->
+            <ScrollViewer
+                x:Name="CaptionScroller"
                 Grid.Row="1"
                 Margin="0,4,0,0"
-                ItemsSource="{x:Bind DisplayLines}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="local:CaptionLine">
-                        <TextBlock
-                            FontSize="18"
-                            Foreground="White"
-                            Text="{x:Bind Text, Mode=OneWay}"
-                            TextWrapping="Wrap" />
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Hidden">
+                <ItemsControl ItemsSource="{x:Bind DisplayLines}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="local:CaptionLine">
+                            <TextBlock
+                                FontSize="18"
+                                Foreground="White"
+                                LineHeight="28"
+                                Text="{x:Bind Text, Mode=OneWay}"
+                                TextWrapping="Wrap" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
 
-            <!-- Bottom expand/collapse chevron -->
+            <!-- Row 2: expand / collapse chevron -->
             <Button
                 Grid.Row="2"
                 Width="32"
@@ -60,60 +121,6 @@
                 Foreground="White"
                 ToolTipService.ToolTip="Expand / Collapse">
                 <FontIcon x:Name="ChevronIcon" FontSize="12" Glyph="&#xE70E;" />
-            </Button>
-        </Grid>
-
-        <!-- Top bar overlay: hidden by default, revealed on hover -->
-        <Grid
-            x:Name="TopBar"
-            Height="32"
-            VerticalAlignment="Top"
-            Visibility="Collapsed">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <!-- Language badge: teal outline, transparent fill -->
-            <Border
-                Grid.Column="0"
-                Margin="12,0,0,0"
-                Padding="8,3"
-                VerticalAlignment="Center"
-                Background="Transparent"
-                BorderBrush="#4DB6AC"
-                BorderThickness="1"
-                CornerRadius="10">
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock
-                        x:Name="LanguageLabel"
-                        VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="White"
-                        Text="English" />
-                    <FontIcon
-                        VerticalAlignment="Center"
-                        FontSize="10"
-                        Foreground="White"
-                        Glyph="&#xE70D;"
-                        Opacity="0.7" />
-                </StackPanel>
-            </Border>
-
-            <!-- Close button -->
-            <Button
-                Grid.Column="2"
-                Width="32"
-                Height="32"
-                Padding="0"
-                Background="Transparent"
-                BorderThickness="0"
-                Click="OnCloseClicked"
-                CornerRadius="0"
-                Foreground="White"
-                ToolTipService.ToolTip="Close">
-                <SymbolIcon Symbol="Cancel" />
             </Button>
         </Grid>
     </Grid>

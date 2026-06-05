@@ -5,11 +5,13 @@
         <ResourceDictionary x:Key="Light">
             <SolidColorBrush x:Key="RecordingActiveBrush" Color="#C42B1C" />
             <SolidColorBrush x:Key="CaptionOverlayBackgroundBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="CaptionOverlayDarkOverlayBrush" Color="#4D0A0A0A" />
             <SolidColorBrush x:Key="CaptionOverlayBadgeBackgroundBrush" Color="#3D3D3D" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
             <SolidColorBrush x:Key="RecordingActiveBrush" Color="#FF6B6B" />
             <SolidColorBrush x:Key="CaptionOverlayBackgroundBrush" Color="Transparent" />
+            <SolidColorBrush x:Key="CaptionOverlayDarkOverlayBrush" Color="#4D0A0A0A" />
             <SolidColorBrush x:Key="CaptionOverlayBadgeBackgroundBrush" Color="#3D3D3D" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">

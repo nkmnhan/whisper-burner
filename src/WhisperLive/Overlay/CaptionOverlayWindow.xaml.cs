@@ -4,6 +4,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using WhisperLive.Helpers;
@@ -15,13 +16,11 @@ namespace WhisperLive.Overlay;
 
 public sealed partial class CaptionOverlayWindow : Window
 {
-    private const int MaxBuffer = 8;
-    private const int DisplayCollapsed = 2;
-    private const int DisplayExpanded = 8;
+    private const int MaxBuffer = 50;   // segments kept in history for scroll-back
 
-    private const int WindowWidth = 820;
-    private const int WindowHeightCollapsed = 118;  // 2 lines × ~27px + label + chevron row
-    private const int WindowHeightExpanded = 280;   // 8 lines × ~27px + label + chevron row
+    private const int WindowWidth = 860;
+    private const int WindowHeightCollapsed = 220;  // ~4 visible lines + header + chevron
+    private const int WindowHeightExpanded  = 440;  // ~12 visible lines + header + chevron
 
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
@@ -34,7 +33,7 @@ public sealed partial class CaptionOverlayWindow : Window
     private bool _isExpanded;
     private DesktopAcrylicController? _acrylicController;
     private SystemBackdropConfiguration? _backdropConfig;
-    private readonly List<CaptionLine> _lineBuffer = [];
+    private readonly List<string> _lineBuffer = [];
 
     public ObservableCollection<CaptionLine> DisplayLines { get; } = [];
 
@@ -43,6 +42,8 @@ public sealed partial class CaptionOverlayWindow : Window
         InitializeComponent();
         WindowHelper.TrackWindow(this);
         ConfigureWindow();
+        // Force dark theme on all XAML content so acrylic renders dark regardless of system theme
+        ((FrameworkElement)Content).RequestedTheme = ElementTheme.Dark;
         ApplyAcrylicBackdrop();
         RootGrid.ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY;
     }
@@ -76,7 +77,8 @@ public sealed partial class CaptionOverlayWindow : Window
         AppWindow.MoveAndResize(new RectInt32(x, y, WindowWidth, WindowHeightCollapsed));
     }
 
-    // Acrylic backdrop only affects the background — XAML content (text) stays fully opaque.
+
+    // Acrylic provides the frosted blur; the dark Rectangle overlay adds reliable dark tint.
     private void ApplyAcrylicBackdrop()
     {
         if (!DesktopAcrylicController.IsSupported()) return;
@@ -90,9 +92,9 @@ public sealed partial class CaptionOverlayWindow : Window
         _acrylicController = new DesktopAcrylicController
         {
             Kind = DesktopAcrylicKind.Base,
-            TintColor = Color.FromArgb(255, 43, 43, 43), // #2B2B2B — Chrome Live Caption dark
-            TintOpacity = 0.75f,   // 0.6–0.8 is the recommended range for dark acrylic
-            LuminosityOpacity = 0.15f  // low value preserves darkness and depth
+            TintColor = Color.FromArgb(255, 10, 10, 10),
+            TintOpacity = 0.5f,
+            LuminosityOpacity = 0.3f
         };
 
         _acrylicController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
@@ -106,17 +108,57 @@ public sealed partial class CaptionOverlayWindow : Window
         };
     }
 
+
     public void ShowSegment(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
 
         DispatcherQueue.TryEnqueue(() =>
         {
-            _lineBuffer.Add(new CaptionLine { Text = text });
-            if (_lineBuffer.Count > MaxBuffer)
-                _lineBuffer.RemoveAt(0);
-            RefreshDisplayLines();
+            foreach (var line in SplitIntoLines(text))
+            {
+                DisplayLines.Add(new CaptionLine { Text = line });
+                _lineBuffer.Add(line);
+                if (_lineBuffer.Count > MaxBuffer)
+                {
+                    _lineBuffer.RemoveAt(0);
+                    DisplayLines.RemoveAt(0);
+                }
+            }
+            ScrollToBottom();
         });
+    }
+
+    // Splits a segment into individual display lines so that "latest N lines"
+    // means N visual lines, not N potentially-long segments.
+    private static IEnumerable<string> SplitIntoLines(string text)
+    {
+        var parts = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var part in parts)
+        {
+            var trimmed = part.Trim();
+            if (string.IsNullOrEmpty(trimmed)) continue;
+
+            if (trimmed.Length <= 90)
+            {
+                yield return trimmed;
+                continue;
+            }
+
+            // Split at sentence endings for longer text
+            int start = 0;
+            for (int i = 0; i < trimmed.Length - 1; i++)
+            {
+                char c = trimmed[i];
+                if ((c == '.' || c == '?' || c == '!') && trimmed[i + 1] == ' ' && i - start >= 20)
+                {
+                    yield return trimmed[start..(i + 1)].Trim();
+                    start = i + 2;
+                }
+            }
+            if (start < trimmed.Length)
+                yield return trimmed[start..].Trim();
+        }
     }
 
     public void ClearLines() =>
@@ -129,30 +171,34 @@ public sealed partial class CaptionOverlayWindow : Window
     public void SetLanguage(string language) =>
         DispatcherQueue.TryEnqueue(() => LanguageLabel.Text = language);
 
+    // Scroll to the bottom after layout has settled so the latest line is visible.
+    private void ScrollToBottom()
+    {
+        CaptionScroller.UpdateLayout();
+        CaptionScroller.ChangeView(null, CaptionScroller.ScrollableHeight, null, disableAnimation: true);
+    }
+
     private void RefreshDisplayLines()
     {
-        int take = _isExpanded ? DisplayExpanded : DisplayCollapsed;
-        int start = Math.Max(0, _lineBuffer.Count - take);
         DisplayLines.Clear();
-        for (int i = start; i < _lineBuffer.Count; i++)
-            DisplayLines.Add(_lineBuffer[i]);
+        foreach (var line in _lineBuffer)
+            DisplayLines.Add(new CaptionLine { Text = line });
+        ScrollToBottom();
     }
 
     private void OnExpandClicked(object sender, RoutedEventArgs e)
     {
         _isExpanded = !_isExpanded;
 
-        // Update icons: E70E = chevron up (expand), E70D = chevron down (collapse)
+        // E70E = chevron up (expand), E70D = chevron down (collapse)
         ChevronIcon.Glyph = _isExpanded ? "\uE70D" : "\uE70E";
 
-        // Grow/shrink the window upward, keeping the bottom edge fixed
+        // Grow/shrink upward keeping the bottom edge fixed
         int newHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
-        var area = DisplayArea.Primary.WorkArea;
         int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;
-        int newY = bottomEdge - newHeight;
-        AppWindow.MoveAndResize(new RectInt32(AppWindow.Position.X, newY, WindowWidth, newHeight));
+        AppWindow.MoveAndResize(new RectInt32(AppWindow.Position.X, bottomEdge - newHeight, WindowWidth, newHeight));
 
-        RefreshDisplayLines();
+        ScrollToBottom();
     }
 
     private void OnCloseClicked(object sender, RoutedEventArgs e) => Close();
