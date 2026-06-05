@@ -3,11 +3,9 @@ using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using WhisperLive.Helpers;
+using WhisperLive.Models;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT;
@@ -16,11 +14,9 @@ namespace WhisperLive.Overlay;
 
 public sealed partial class CaptionOverlayWindow : Window
 {
-    private const int MaxBuffer = 50;   // segments kept in history for scroll-back
-
     private const int WindowWidth = 860;
-    private const int WindowHeightCollapsed = 220;  // ~4 visible lines + header + chevron
-    private const int WindowHeightExpanded  = 440;  // ~12 visible lines + header + chevron
+    private const int WindowHeightCollapsed = 220;
+    private const int WindowHeightExpanded  = 440;
 
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
@@ -33,9 +29,6 @@ public sealed partial class CaptionOverlayWindow : Window
     private bool _isExpanded;
     private DesktopAcrylicController? _acrylicController;
     private SystemBackdropConfiguration? _backdropConfig;
-    private readonly List<string> _lineBuffer = [];
-
-    public ObservableCollection<CaptionLine> DisplayLines { get; } = [];
 
     public CaptionOverlayWindow()
     {
@@ -110,91 +103,32 @@ public sealed partial class CaptionOverlayWindow : Window
     }
 
 
-    public void ShowSegment(string text)
+    public void ShowSegment(SubtitleSegment seg)
     {
-        if (string.IsNullOrWhiteSpace(text)) return;
-
         DispatcherQueue.TryEnqueue(() =>
         {
-            foreach (var line in SplitIntoLines(text))
-            {
-                DisplayLines.Add(new CaptionLine { Text = line });
-                _lineBuffer.Add(line);
-                if (_lineBuffer.Count > MaxBuffer)
-                {
-                    _lineBuffer.RemoveAt(0);
-                    DisplayLines.RemoveAt(0);
-                }
-            }
+            CaptionText.Text += (CaptionText.Text.Length > 0 ? " " : "") + seg.Text;
             ScrollToBottom();
         });
     }
 
-    // Splits a segment into individual display lines so that "latest N lines"
-    // means N visual lines, not N potentially-long segments.
-    private static IEnumerable<string> SplitIntoLines(string text)
-    {
-        var parts = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
-        foreach (var part in parts)
-        {
-            var trimmed = part.Trim();
-            if (string.IsNullOrEmpty(trimmed)) continue;
-
-            if (trimmed.Length <= 90)
-            {
-                yield return trimmed;
-                continue;
-            }
-
-            // Split at sentence endings for longer text
-            int start = 0;
-            for (int i = 0; i < trimmed.Length - 1; i++)
-            {
-                char c = trimmed[i];
-                if ((c == '.' || c == '?' || c == '!') && trimmed[i + 1] == ' ' && i - start >= 20)
-                {
-                    yield return trimmed[start..(i + 1)].Trim();
-                    start = i + 2;
-                }
-            }
-            if (start < trimmed.Length)
-                yield return trimmed[start..].Trim();
-        }
-    }
-
     public void ClearLines() =>
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            _lineBuffer.Clear();
-            DisplayLines.Clear();
-        });
+        DispatcherQueue.TryEnqueue(() => CaptionText.Text = string.Empty);
 
     public void SetLanguage(string language) =>
         DispatcherQueue.TryEnqueue(() => LanguageLabel.Text = language);
 
-    // Scroll to the bottom after layout has settled so the latest line is visible.
     private void ScrollToBottom()
     {
         CaptionScroller.UpdateLayout();
         CaptionScroller.ChangeView(null, CaptionScroller.ScrollableHeight, null, disableAnimation: true);
     }
 
-    private void RefreshDisplayLines()
-    {
-        DisplayLines.Clear();
-        foreach (var line in _lineBuffer)
-            DisplayLines.Add(new CaptionLine { Text = line });
-        ScrollToBottom();
-    }
-
     private void OnExpandClicked(object sender, RoutedEventArgs e)
     {
         _isExpanded = !_isExpanded;
-
-        // E70E = chevron up (expand), E70D = chevron down (collapse)
         ChevronIcon.Glyph = _isExpanded ? "\uE70D" : "\uE70E";
 
-        // Grow/shrink upward keeping the bottom edge fixed
         int newHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
         int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;
         AppWindow.MoveAndResize(new RectInt32(AppWindow.Position.X, bottomEdge - newHeight, WindowWidth, newHeight));

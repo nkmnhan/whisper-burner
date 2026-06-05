@@ -220,12 +220,11 @@ public sealed partial class LiveTranscriptPage : Page
             TranscriptScroller.UpdateLayout();
             TranscriptScroller.ChangeView(null, TranscriptScroller.ScrollableHeight, null);
 
-            // Show "Show Overlay" button if user has hidden the overlay
             if (_state == RecordingState.Recording &&
                 App.CaptionOverlay?.AppWindow.IsVisible == false)
                 ShowOverlayButton.Visibility = Visibility.Visible;
 
-            App.CaptionOverlay?.ShowSegment(seg.Text);
+            App.CaptionOverlay?.ShowSegment(seg);
         });
     }
 }

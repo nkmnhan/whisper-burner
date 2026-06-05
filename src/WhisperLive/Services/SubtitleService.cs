@@ -58,36 +58,16 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
     private void WriteSrtEntry(SubtitleSegment seg)
     {
         if (_writer is null) return;
-        try
-        {
-            _writer.WriteLine(seg.Id);
-            _writer.WriteLine($"{FormatSrtTime(seg.Start)} --> {FormatSrtTime(seg.End)}");
-            _writer.WriteLine(seg.Text);
-            _writer.WriteLine();
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Warning(ex, "Failed to write segment to session file");
-        }
+        try { _writer.Write(seg.ToSrtEntry()); _writer.WriteLine(); }
+        catch (Exception ex) { AppLogger.Warning(ex, "Failed to write segment to session file"); }
     }
 
     public async Task ExportSrtAsync(string path)
     {
         var sb = new StringBuilder();
         foreach (var seg in _segments)
-        {
-            sb.AppendLine(seg.Id.ToString());
-            sb.AppendLine($"{FormatSrtTime(seg.Start)} --> {FormatSrtTime(seg.End)}");
-            sb.AppendLine(seg.Text);
-            sb.AppendLine();
-        }
+            sb.AppendLine(seg.ToSrtEntry());
         await File.WriteAllTextAsync(path, sb.ToString(), Encoding.UTF8);
-    }
-
-    private static string FormatSrtTime(double seconds)
-    {
-        var ts = TimeSpan.FromSeconds(seconds);
-        return $"{ts.Hours:D2}:{ts.Minutes:D2}:{ts.Seconds:D2},{ts.Milliseconds:D3}";
     }
 
     public void Dispose() => EndSession();
