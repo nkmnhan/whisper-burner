@@ -40,12 +40,14 @@ public sealed partial class CaptionOverlayWindow : Window
     public CaptionOverlayWindow()
     {
         InitializeComponent();
-        WindowHelper.TrackWindow(this);
+        // Intentionally NOT tracked via WindowHelper — the overlay manages its own
+        // dark theme independently and must not affect the main window's theme.
         ConfigureWindow();
-        // Force dark theme on all XAML content so acrylic renders dark regardless of system theme
+        // Force dark theme on this window's content only, isolated from ThemeHelper
         ((FrameworkElement)Content).RequestedTheme = ElementTheme.Dark;
         ApplyAcrylicBackdrop();
         RootGrid.ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY;
+        Closed += (_, _) => WindowHelper.ActiveWindows.Remove(this);
     }
 
     private void ConfigureWindow()
