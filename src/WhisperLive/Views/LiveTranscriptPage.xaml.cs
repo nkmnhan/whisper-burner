@@ -32,11 +32,27 @@ public sealed partial class LiveTranscriptPage : Page
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = await AppSettings.LoadAsync();
-        await CheckApiHealthAsync();
+
+        var app = CurrentApp;
+        if (app.RecordingCts is { IsCancellationRequested: false })
+        {
+            // Recording survived navigation — re-attach without restarting anything
+            _cts = app.RecordingCts;
+            app.SubtitleService.SegmentAdded -= OnSegmentAdded;
+            app.SubtitleService.SegmentAdded += OnSegmentAdded;
+            ApplyState(RecordingState.Recording);
+        }
+        else
+        {
+            await CheckApiHealthAsync();
+        }
     }
 
-    private void OnUnloaded(object sender, RoutedEventArgs e) =>
-        _cts?.Cancel();
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        // Only detach the event — don't cancel recording when user navigates away
+        CurrentApp.SubtitleService.SegmentAdded -= OnSegmentAdded;
+    }
 
     private static App CurrentApp => (App)Application.Current;
 
@@ -124,13 +140,15 @@ public sealed partial class LiveTranscriptPage : Page
         if (_state == RecordingState.Idle)
         {
             _cts = new CancellationTokenSource();
+            var app = CurrentApp;
+            app.RecordingCts = _cts;  // store so it survives page navigation
+
             var options = new RecordingOptions(
                 Language: _settings.Language,
                 ChunkDurationSeconds: _settings.ChunkDurationSeconds,
                 ApiUrl: _settings.ApiUrl,
                 Model: _settings.Model);
 
-            var app = CurrentApp;
             app.TranscriptionClient.ResetPrompt();
             app.SubtitleService.StartSession();
             app.SubtitleService.SegmentAdded += OnSegmentAdded;
@@ -145,6 +163,7 @@ public sealed partial class LiveTranscriptPage : Page
         else
         {
             _cts?.Cancel();
+            CurrentApp.RecordingCts = null;  // clear app-level reference
             await CurrentApp.RecordingService.StopAsync();
             CurrentApp.SubtitleService.EndSession();
             CurrentApp.SubtitleService.SegmentAdded -= OnSegmentAdded;

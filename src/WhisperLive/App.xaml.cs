@@ -16,6 +16,9 @@ sealed partial class App : Application
     internal TranscriptionClient TranscriptionClient { get; } = new();
     internal SubtitleService SubtitleService { get; } = new();
 
+    // Survives page navigation — null when idle, non-null while recording
+    internal System.Threading.CancellationTokenSource? RecordingCts { get; set; }
+
     public App()
     {
         AppLogger.Initialize();
