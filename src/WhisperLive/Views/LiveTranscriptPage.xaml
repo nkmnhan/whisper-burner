@@ -5,7 +5,6 @@
     <Page.Resources>
         <!-- Waveform storyboard — 5 bars staggered by 80 ms each -->
         <Storyboard x:Name="WaveformStoryboard">
-            <!-- Bar 1 -->
             <DoubleAnimation
                 AutoReverse="True"
                 BeginTime="0:0:0.000"
@@ -13,8 +12,7 @@
                 RepeatBehavior="Forever"
                 Storyboard.TargetName="Bar1Scale"
                 Storyboard.TargetProperty="ScaleY"
-                From="0.25" To="1.0" />
-            <!-- Bar 2 -->
+                From="0.2" To="1.0" />
             <DoubleAnimation
                 AutoReverse="True"
                 BeginTime="0:0:0.080"
@@ -22,8 +20,7 @@
                 RepeatBehavior="Forever"
                 Storyboard.TargetName="Bar2Scale"
                 Storyboard.TargetProperty="ScaleY"
-                From="0.25" To="1.0" />
-            <!-- Bar 3 -->
+                From="0.2" To="1.0" />
             <DoubleAnimation
                 AutoReverse="True"
                 BeginTime="0:0:0.160"
@@ -31,8 +28,7 @@
                 RepeatBehavior="Forever"
                 Storyboard.TargetName="Bar3Scale"
                 Storyboard.TargetProperty="ScaleY"
-                From="0.25" To="1.0" />
-            <!-- Bar 4 -->
+                From="0.2" To="1.0" />
             <DoubleAnimation
                 AutoReverse="True"
                 BeginTime="0:0:0.240"
@@ -40,8 +36,7 @@
                 RepeatBehavior="Forever"
                 Storyboard.TargetName="Bar4Scale"
                 Storyboard.TargetProperty="ScaleY"
-                From="0.25" To="1.0" />
-            <!-- Bar 5 -->
+                From="0.2" To="1.0" />
             <DoubleAnimation
                 AutoReverse="True"
                 BeginTime="0:0:0.320"
@@ -49,7 +44,7 @@
                 RepeatBehavior="Forever"
                 Storyboard.TargetName="Bar5Scale"
                 Storyboard.TargetProperty="ScaleY"
-                From="0.25" To="1.0" />
+                From="0.2" To="1.0" />
         </Storyboard>
 
         <!-- Recording dot pulse -->
@@ -73,108 +68,86 @@
         </Storyboard>
     </Page.Resources>
 
-    <Grid Padding="24,16">
+    <Grid Padding="24,16,24,20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Row 0: Status bar -->
-        <StackPanel
-            Grid.Row="0"
-            Orientation="Horizontal"
-            Spacing="8">
-            <Ellipse
-                x:Name="StatusDot"
-                Width="8"
-                Height="8"
-                VerticalAlignment="Center"
-                Fill="{ThemeResource SystemFillColorCautionBrush}">
-                <Ellipse.RenderTransform>
-                    <ScaleTransform x:Name="StatusDotScale" CenterX="4" CenterY="4" />
-                </Ellipse.RenderTransform>
-            </Ellipse>
-            <TextBlock
-                x:Name="StatusLabel"
-                VerticalAlignment="Center"
-                Style="{StaticResource CaptionTextBlockStyle}"
-                Text="Checking API…" />
-        </StackPanel>
+        <!-- Row 0: Status bar — dot + label on left, compact waveform on right -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Ellipse
+                    x:Name="StatusDot"
+                    Width="8"
+                    Height="8"
+                    VerticalAlignment="Center"
+                    Fill="{ThemeResource SystemFillColorCautionBrush}">
+                    <Ellipse.RenderTransform>
+                        <ScaleTransform x:Name="StatusDotScale" CenterX="4" CenterY="4" />
+                    </Ellipse.RenderTransform>
+                </Ellipse>
+                <TextBlock
+                    x:Name="StatusLabel"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Checking API…" />
+            </StackPanel>
 
-        <!-- Row 1: Idle mic / Recording waveform -->
-        <Grid Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-
-            <!-- Idle: large mic icon -->
-            <FontIcon
-                x:Name="MicIcon"
-                FontSize="72"
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Glyph="&#xE720;" />
-
-            <!-- Recording: 5-bar waveform -->
+            <!-- Inline waveform — compact, right-aligned, visible only while recording -->
             <StackPanel
                 x:Name="Waveform"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Bottom"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
                 Orientation="Horizontal"
-                Spacing="4"
+                Spacing="3"
                 Visibility="Collapsed">
-                <Border
-                    Width="4"
-                    Height="32"
-                    Background="{ThemeResource AccentFillColorDefaultBrush}"
-                    CornerRadius="2">
-                    <Border.RenderTransform>
-                        <ScaleTransform x:Name="Bar1Scale" CenterX="2" CenterY="32" ScaleY="0.25" />
-                    </Border.RenderTransform>
+                <Border Width="3" Height="18" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2">
+                    <Border.RenderTransform><ScaleTransform x:Name="Bar1Scale" CenterX="1.5" CenterY="18" ScaleY="0.2" /></Border.RenderTransform>
                 </Border>
-                <Border
-                    Width="4"
-                    Height="32"
-                    Background="{ThemeResource AccentFillColorDefaultBrush}"
-                    CornerRadius="2">
-                    <Border.RenderTransform>
-                        <ScaleTransform x:Name="Bar2Scale" CenterX="2" CenterY="32" ScaleY="0.25" />
-                    </Border.RenderTransform>
+                <Border Width="3" Height="18" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2">
+                    <Border.RenderTransform><ScaleTransform x:Name="Bar2Scale" CenterX="1.5" CenterY="18" ScaleY="0.2" /></Border.RenderTransform>
                 </Border>
-                <Border
-                    Width="4"
-                    Height="32"
-                    Background="{ThemeResource AccentFillColorDefaultBrush}"
-                    CornerRadius="2">
-                    <Border.RenderTransform>
-                        <ScaleTransform x:Name="Bar3Scale" CenterX="2" CenterY="32" ScaleY="0.25" />
-                    </Border.RenderTransform>
+                <Border Width="3" Height="18" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2">
+                    <Border.RenderTransform><ScaleTransform x:Name="Bar3Scale" CenterX="1.5" CenterY="18" ScaleY="0.2" /></Border.RenderTransform>
                 </Border>
-                <Border
-                    Width="4"
-                    Height="32"
-                    Background="{ThemeResource AccentFillColorDefaultBrush}"
-                    CornerRadius="2">
-                    <Border.RenderTransform>
-                        <ScaleTransform x:Name="Bar4Scale" CenterX="2" CenterY="32" ScaleY="0.25" />
-                    </Border.RenderTransform>
+                <Border Width="3" Height="18" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2">
+                    <Border.RenderTransform><ScaleTransform x:Name="Bar4Scale" CenterX="1.5" CenterY="18" ScaleY="0.2" /></Border.RenderTransform>
                 </Border>
-                <Border
-                    Width="4"
-                    Height="32"
-                    Background="{ThemeResource AccentFillColorDefaultBrush}"
-                    CornerRadius="2">
-                    <Border.RenderTransform>
-                        <ScaleTransform x:Name="Bar5Scale" CenterX="2" CenterY="32" ScaleY="0.25" />
-                    </Border.RenderTransform>
+                <Border Width="3" Height="18" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2">
+                    <Border.RenderTransform><ScaleTransform x:Name="Bar5Scale" CenterX="1.5" CenterY="18" ScaleY="0.2" /></Border.RenderTransform>
                 </Border>
             </StackPanel>
         </Grid>
 
-        <!-- Row 2: Live transcript — Gallery log pattern, auto-scrolls to newest item -->
+        <!-- Row 1: idle placeholder OR live transcript (fills all remaining space) -->
+
+        <!-- Idle: mic icon + hint, vertically centered -->
+        <StackPanel
+            x:Name="IdlePlaceholder"
+            Grid.Row="1"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Spacing="12">
+            <FontIcon
+                x:Name="MicIcon"
+                HorizontalAlignment="Center"
+                FontSize="56"
+                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                Glyph="&#xE720;" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Capture system audio as live transcript" />
+        </StackPanel>
+
+        <!-- Recording: transcript fills the space, Gallery log pattern -->
         <ListView
             x:Name="TranscriptList"
-            Grid.Row="2"
-            MaxHeight="240"
-            Margin="0,0,0,16"
+            Grid.Row="1"
+            Margin="0,0,0,0"
             SelectionMode="None"
             Visibility="Collapsed">
             <ListView.ItemsPanel>
@@ -186,19 +159,22 @@
                 <Style TargetType="ListViewItem">
                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                     <Setter Property="MinHeight" Value="0" />
-                    <Setter Property="Padding" Value="0,2,0,2" />
+                    <Setter Property="Padding" Value="0,3,0,3" />
                 </Style>
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                    <TextBlock
+                        FontSize="14"
+                        Text="{Binding}"
+                        TextWrapping="Wrap" />
                 </DataTemplate>
             </ListView.ItemTemplate>
         </ListView>
 
-        <!-- Row 3: Action zone -->
+        <!-- Row 2: actions always at bottom -->
         <StackPanel
-            Grid.Row="3"
+            Grid.Row="2"
             HorizontalAlignment="Center"
             Spacing="8">
 
@@ -224,7 +200,7 @@
                     Width="48"
                     Height="48"
                     Click="OnNewSessionClicked"
-                    ToolTipService.ToolTip="New Session — clears transcript and starts a new file"
+                    ToolTipService.ToolTip="New session — clears transcript and starts a new file"
                     Visibility="Collapsed">
                     <FontIcon FontSize="16" Glyph="&#xE8E5;" />
                 </Button>

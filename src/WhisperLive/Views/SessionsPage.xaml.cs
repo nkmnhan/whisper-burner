@@ -179,11 +179,12 @@ public sealed partial class SessionsPage : Page
                 AcceptsReturn = true,
                 IsSpellCheckEnabled = false,
                 FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
-                TextWrapping = TextWrapping.NoWrap,
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
                 MinHeight = 200,
-                MaxHeight = 420,
+                MaxHeight = 480,
+                Width = 480,
             };
-            ScrollViewer.SetHorizontalScrollBarVisibility(previewBox, ScrollBarVisibility.Auto);
             ScrollViewer.SetVerticalScrollBarVisibility(previewBox, ScrollBarVisibility.Auto);
 
             var dialog = new ContentDialog

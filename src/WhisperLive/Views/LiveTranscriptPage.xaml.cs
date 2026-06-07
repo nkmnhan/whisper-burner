@@ -79,7 +79,7 @@ public sealed partial class LiveTranscriptPage : Page
         switch (state)
         {
             case RecordingState.Idle:
-                MicIcon.Visibility = Visibility.Visible;
+                IdlePlaceholder.Visibility = Visibility.Visible;
                 Waveform.Visibility = Visibility.Collapsed;
                 TranscriptList.Visibility = Visibility.Collapsed;
                 IdleActions.Visibility = Visibility.Visible;
@@ -92,7 +92,7 @@ public sealed partial class LiveTranscriptPage : Page
                 break;
 
             case RecordingState.Recording:
-                MicIcon.Visibility = Visibility.Collapsed;
+                IdlePlaceholder.Visibility = Visibility.Collapsed;
                 Waveform.Visibility = Visibility.Visible;
                 TranscriptList.Visibility = Visibility.Visible;
                 IdleActions.Visibility = Visibility.Collapsed;
