@@ -169,17 +169,32 @@
             </StackPanel>
         </Grid>
 
-        <!-- Row 2: Scrollable transcript area (visible while recording) -->
-        <ScrollViewer
-            x:Name="TranscriptScroller"
+        <!-- Row 2: Live transcript — Gallery log pattern, auto-scrolls to newest item -->
+        <ListView
+            x:Name="TranscriptList"
             Grid.Row="2"
             MaxHeight="240"
             Margin="0,0,0,16"
+            SelectionMode="None"
             Visibility="Collapsed">
-            <TextBlock
-                x:Name="TranscriptText"
-                TextWrapping="Wrap" />
-        </ScrollViewer>
+            <ListView.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
+                </ItemsPanelTemplate>
+            </ListView.ItemsPanel>
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="MinHeight" Value="0" />
+                    <Setter Property="Padding" Value="0,2,0,2" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
 
         <!-- Row 3: Action zone -->
         <StackPanel

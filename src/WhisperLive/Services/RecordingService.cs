@@ -28,7 +28,7 @@ public sealed class RecordingService : IRecordingService
     public Task StartAsync(RecordingOptions options, CancellationToken ct)
     {
         _channel = Channel.CreateBounded<AudioChunkInfo>(
-            new BoundedChannelOptions(20) { FullMode = BoundedChannelFullMode.Wait });
+            new BoundedChannelOptions(5) { FullMode = BoundedChannelFullMode.DropOldest });
         _chunkIndex = 0;
         _offsetSeconds = 0;
         _buffer = new MemoryStream();
@@ -81,15 +81,18 @@ public sealed class RecordingService : IRecordingService
         try
         {
             while (await timer.WaitForNextTickAsync(ct))
-                await FlushAsync(waveFormat, options);
+                FlushChunk(waveFormat, options);  // sync — never blocks the timer
         }
         catch (OperationCanceledException) { }
 
-        await FlushAsync(waveFormat, options);
+        FlushChunk(waveFormat, options);
         _channel.Writer.TryComplete();
     }
 
-    private async Task FlushAsync(WaveFormat waveFormat, RecordingOptions options)
+    // Sync so the PeriodicTimer loop can never be stalled by channel backpressure.
+    // TryWrite with DropOldest drops the oldest queued chunk when full, keeping
+    // the channel current without blocking this method.
+    private void FlushChunk(WaveFormat waveFormat, RecordingOptions options)
     {
         byte[] freshData;
         lock (_lock)
@@ -129,7 +132,7 @@ public sealed class RecordingService : IRecordingService
 
         AppLogger.Debug("Flushed chunk #{Index} — {Bytes} bytes (overlap={Overlap}s) → {Path}",
             _chunkIndex, wavData.Length, chunkOverlap, path);
-        await _channel.Writer.WriteAsync(new AudioChunkInfo(path, _chunkIndex, wavStartTime, chunkOverlap));
+        _channel.Writer.TryWrite(new AudioChunkInfo(path, _chunkIndex, wavStartTime, chunkOverlap));
         _offsetSeconds += options.ChunkDurationSeconds;
         _chunkIndex++;
     }

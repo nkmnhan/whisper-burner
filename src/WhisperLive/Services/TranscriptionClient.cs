@@ -57,7 +57,7 @@ public sealed class TranscriptionClient : ITranscriptionClient
 
         var segments = result?.Segments?
             .Where(s => !string.IsNullOrWhiteSpace(s.Text))
-            .Where(s => s.Start >= chunk.OverlapSeconds)   // skip overlap region already covered by previous chunk
+            .Where(s => s.End > chunk.OverlapSeconds)   // drop segments entirely within the overlap tail (already covered by previous chunk)
             .Select(s => new SubtitleSegment(
                 s.Id,
                 s.Start + chunk.OffsetSeconds,

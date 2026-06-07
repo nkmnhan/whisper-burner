@@ -40,6 +40,7 @@ public sealed partial class CaptionOverlayWindow : Window
         ((FrameworkElement)Content).RequestedTheme = ElementTheme.Dark;
         ApplyAcrylicBackdrop();
         RootGrid.ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY;
+        CaptionText.SizeChanged += (_, _) => ScrollToBottom();
     }
 
     private void ConfigureWindow()
@@ -71,7 +72,7 @@ public sealed partial class CaptionOverlayWindow : Window
         AppWindow.MoveAndResize(new RectInt32(x, y, WindowWidth, WindowHeightCollapsed));
     }
 
-
+
     // Acrylic provides the frosted blur; the dark Rectangle overlay adds reliable dark tint.
     private void ApplyAcrylicBackdrop()
     {
@@ -106,10 +107,8 @@ public sealed partial class CaptionOverlayWindow : Window
     public void ShowSegment(SubtitleSegment seg)
     {
         DispatcherQueue.TryEnqueue(() =>
-        {
-            CaptionText.Text += (CaptionText.Text.Length > 0 ? " " : "") + seg.Text;
-            ScrollToBottom();
-        });
+            CaptionText.Text += (CaptionText.Text.Length > 0 ? " " : "") + seg.Text);
+        // SizeChanged hook scrolls to bottom after layout
     }
 
     public void ClearLines() =>
@@ -118,11 +117,8 @@ public sealed partial class CaptionOverlayWindow : Window
     public void SetLanguage(string language) =>
         DispatcherQueue.TryEnqueue(() => LanguageLabel.Text = language);
 
-    private void ScrollToBottom()
-    {
-        CaptionScroller.UpdateLayout();
-        CaptionScroller.ChangeView(null, CaptionScroller.ScrollableHeight, null, disableAnimation: true);
-    }
+    private void ScrollToBottom() =>
+        CaptionScroller.ChangeView(null, double.MaxValue, null, disableAnimation: true);
 
     private void OnExpandClicked(object sender, RoutedEventArgs e)
     {

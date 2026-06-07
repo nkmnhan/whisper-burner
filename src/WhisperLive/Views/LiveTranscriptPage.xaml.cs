@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,10 +19,12 @@ public sealed partial class LiveTranscriptPage : Page
     private CancellationTokenSource? _cts;
     private AppSettings _settings = new();
     private RecordingState _state = RecordingState.Idle;
+    private readonly ObservableCollection<string> _segments = [];
 
     public LiveTranscriptPage()
     {
         InitializeComponent();
+        TranscriptList.ItemsSource = _segments;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -78,10 +81,10 @@ public sealed partial class LiveTranscriptPage : Page
             case RecordingState.Idle:
                 MicIcon.Visibility = Visibility.Visible;
                 Waveform.Visibility = Visibility.Collapsed;
-                TranscriptScroller.Visibility = Visibility.Collapsed;
+                TranscriptList.Visibility = Visibility.Collapsed;
                 IdleActions.Visibility = Visibility.Visible;
                 ActiveActions.Visibility = Visibility.Collapsed;
-                NewSessionButton.Visibility = TranscriptText.Text.Length > 0
+                NewSessionButton.Visibility = _segments.Count > 0
                     ? Visibility.Visible : Visibility.Collapsed;
                 WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
@@ -91,10 +94,10 @@ public sealed partial class LiveTranscriptPage : Page
             case RecordingState.Recording:
                 MicIcon.Visibility = Visibility.Collapsed;
                 Waveform.Visibility = Visibility.Visible;
-                TranscriptScroller.Visibility = Visibility.Visible;
+                TranscriptList.Visibility = Visibility.Visible;
                 IdleActions.Visibility = Visibility.Collapsed;
                 ActiveActions.Visibility = Visibility.Visible;
-                PauseIcon.Glyph = "\uE769"; // Pause glyph
+                PauseIcon.Glyph = ""; // Pause glyph
                 ToolTipService.SetToolTip(PauseButton, "Pause recording");
                 ShowOverlayButton.Visibility = Visibility.Collapsed;
                 WaveformStoryboard.Begin();
@@ -104,7 +107,7 @@ public sealed partial class LiveTranscriptPage : Page
                 break;
 
             case RecordingState.Paused:
-                PauseIcon.Glyph = "\uE768"; // Play/Resume glyph
+                PauseIcon.Glyph = ""; // Play/Resume glyph
                 WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
                 SetStatusDot(Colors.Orange, "Paused");
@@ -174,8 +177,8 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void OnNewSessionClicked(object sender, RoutedEventArgs e)
     {
-        TranscriptText.Text = string.Empty;
-        TranscriptScroller.Visibility = Visibility.Collapsed;
+        _segments.Clear();
+        TranscriptList.Visibility = Visibility.Collapsed;
         CurrentApp.SubtitleService.StartSession();
         App.CaptionOverlay?.ClearLines();
         NewSessionButton.Visibility = Visibility.Collapsed;
@@ -217,9 +220,7 @@ public sealed partial class LiveTranscriptPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            TranscriptText.Text += (TranscriptText.Text.Length > 0 ? " " : "") + seg.Text;
-            TranscriptScroller.UpdateLayout();
-            TranscriptScroller.ChangeView(null, TranscriptScroller.ScrollableHeight, null);
+            _segments.Add(seg.Text);
 
             if (_state == RecordingState.Recording &&
                 App.CaptionOverlay?.AppWindow.IsVisible == false)
