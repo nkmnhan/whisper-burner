@@ -15,14 +15,13 @@ sealed partial class App : Application
     internal RecordingService RecordingService { get; } = new();
     internal TranscriptionClient TranscriptionClient { get; } = new();
     internal SubtitleService SubtitleService { get; } = new();
-
-    // Survives page navigation — null when idle, non-null while recording
-    internal System.Threading.CancellationTokenSource? RecordingCts { get; set; }
+    internal RecordingManager RecordingManager { get; }
 
     public App()
     {
         AppLogger.Initialize();
         InitializeComponent();
+        RecordingManager = new RecordingManager(RecordingService, TranscriptionClient, SubtitleService);
         UnhandledException += (_, e) =>
         {
             AppLogger.Error(e.Exception, "Unhandled exception: {Message}", e.Message);
@@ -44,8 +43,7 @@ sealed partial class App : Application
         // Also clean up recording state and flush logs.
         MainWindow.Closed += async (s, _) =>
         {
-            await RecordingService.StopAsync();
-            SubtitleService.EndSession();
+            await RecordingManager.StopAsync();
 
             CaptionOverlay?.Close();
 
