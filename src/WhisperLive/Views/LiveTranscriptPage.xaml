@@ -75,55 +75,26 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Row 0: Status bar — dot + label on left, compact waveform on right -->
-        <Grid Grid.Row="0" Margin="0,0,0,16">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Ellipse
-                    x:Name="StatusDot"
-                    Width="8"
-                    Height="8"
-                    VerticalAlignment="Center"
-                    Fill="{ThemeResource SystemFillColorCautionBrush}">
-                    <Ellipse.RenderTransform>
-                        <ScaleTransform x:Name="StatusDotScale" CenterX="4" CenterY="4" />
-                    </Ellipse.RenderTransform>
-                </Ellipse>
-                <TextBlock
-                    x:Name="StatusLabel"
-                    VerticalAlignment="Center"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    Text="Checking API…" />
-            </StackPanel>
-
-            <!-- Inline waveform — compact, right-aligned, visible only while recording -->
-            <StackPanel
-                x:Name="Waveform"
-                HorizontalAlignment="Right"
+        <!-- Row 0: Status bar — dot + label only -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16" Orientation="Horizontal" Spacing="8">
+            <Ellipse
+                x:Name="StatusDot"
+                Width="8"
+                Height="8"
                 VerticalAlignment="Center"
-                Orientation="Horizontal"
-                Spacing="3"
-                Visibility="Collapsed">
-                <Border Width="3" Height="18" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2">
-                    <Border.RenderTransform><ScaleTransform x:Name="Bar1Scale" CenterX="1.5" CenterY="18" ScaleY="0.2" /></Border.RenderTransform>
-                </Border>
-                <Border Width="3" Height="18" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2">
-                    <Border.RenderTransform><ScaleTransform x:Name="Bar2Scale" CenterX="1.5" CenterY="18" ScaleY="0.2" /></Border.RenderTransform>
-                </Border>
-                <Border Width="3" Height="18" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2">
-                    <Border.RenderTransform><ScaleTransform x:Name="Bar3Scale" CenterX="1.5" CenterY="18" ScaleY="0.2" /></Border.RenderTransform>
-                </Border>
-                <Border Width="3" Height="18" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2">
-                    <Border.RenderTransform><ScaleTransform x:Name="Bar4Scale" CenterX="1.5" CenterY="18" ScaleY="0.2" /></Border.RenderTransform>
-                </Border>
-                <Border Width="3" Height="18" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2">
-                    <Border.RenderTransform><ScaleTransform x:Name="Bar5Scale" CenterX="1.5" CenterY="18" ScaleY="0.2" /></Border.RenderTransform>
-                </Border>
-            </StackPanel>
-        </Grid>
+                Fill="{ThemeResource SystemFillColorCautionBrush}">
+                <Ellipse.RenderTransform>
+                    <ScaleTransform x:Name="StatusDotScale" CenterX="4" CenterY="4" />
+                </Ellipse.RenderTransform>
+            </Ellipse>
+            <TextBlock
+                x:Name="StatusLabel"
+                VerticalAlignment="Center"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Checking API…" />
+        </StackPanel>
 
-        <!-- Row 1: idle placeholder OR live transcript (fills all remaining space) -->
-
-        <!-- Idle: mic icon + hint, vertically centered -->
+        <!-- Row 1: idle placeholder OR live transcript -->
         <StackPanel
             x:Name="IdlePlaceholder"
             Grid.Row="1"
@@ -143,11 +114,9 @@
                 Text="Capture system audio as live transcript" />
         </StackPanel>
 
-        <!-- Recording: transcript fills the space, Gallery log pattern -->
         <ListView
             x:Name="TranscriptList"
             Grid.Row="1"
-            Margin="0,0,0,0"
             SelectionMode="None"
             Visibility="Collapsed">
             <ListView.ItemsPanel>
@@ -172,29 +141,11 @@
             </ListView.ItemTemplate>
         </ListView>
 
-        <!-- Row 2: actions always at bottom -->
-        <StackPanel
-            Grid.Row="2"
-            HorizontalAlignment="Center"
-            Spacing="8">
+        <!-- Row 2: actions -->
+        <StackPanel Grid.Row="2" HorizontalAlignment="Center" Spacing="8">
+            <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
 
-            <!-- Idle: Start + optional New Session -->
-            <StackPanel
-                x:Name="IdleActions"
-                HorizontalAlignment="Center"
-                Orientation="Horizontal"
-                Spacing="8">
-                <Button
-                    x:Name="StartButton"
-                    Width="200"
-                    Height="48"
-                    Click="OnStartClicked"
-                    Style="{StaticResource AccentButtonStyle}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon FontSize="16" Glyph="&#xE720;" />
-                        <TextBlock Text="Start" />
-                    </StackPanel>
-                </Button>
+                <!-- New session: idle only, when prior transcript exists -->
                 <Button
                     x:Name="NewSessionButton"
                     Width="48"
@@ -204,33 +155,51 @@
                     Visibility="Collapsed">
                     <FontIcon FontSize="16" Glyph="&#xE8E5;" />
                 </Button>
-            </StackPanel>
 
-            <!-- Recording / Paused: Pause + Stop + Show Overlay -->
-            <StackPanel
-                x:Name="ActiveActions"
-                HorizontalAlignment="Center"
-                Orientation="Horizontal"
-                Spacing="8"
-                Visibility="Collapsed">
+                <!-- Main button: Start (idle) → waveform animation inside (recording) → click to stop -->
+                <Button
+                    x:Name="MainButton"
+                    Width="200"
+                    Height="48"
+                    Click="OnMainButtonClicked"
+                    Style="{StaticResource AccentButtonStyle}">
+                    <Grid>
+                        <StackPanel x:Name="StartContent" Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="16" Glyph="&#xE720;" />
+                            <TextBlock Text="Start" />
+                        </StackPanel>
+                        <StackPanel x:Name="WaveformInButton" Orientation="Horizontal" Spacing="4" Visibility="Collapsed">
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="2">
+                                <Border.RenderTransform><ScaleTransform x:Name="Bar1Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
+                            </Border>
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="2">
+                                <Border.RenderTransform><ScaleTransform x:Name="Bar2Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
+                            </Border>
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="2">
+                                <Border.RenderTransform><ScaleTransform x:Name="Bar3Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
+                            </Border>
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="2">
+                                <Border.RenderTransform><ScaleTransform x:Name="Bar4Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
+                            </Border>
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="2">
+                                <Border.RenderTransform><ScaleTransform x:Name="Bar5Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </Button>
+
+                <!-- Pause: visible while recording or paused -->
                 <Button
                     x:Name="PauseButton"
                     Width="48"
                     Height="48"
                     Click="OnPauseClicked"
-                    ToolTipService.ToolTip="Pause recording">
+                    ToolTipService.ToolTip="Pause recording"
+                    Visibility="Collapsed">
                     <FontIcon x:Name="PauseIcon" FontSize="16" Glyph="&#xE769;" />
                 </Button>
-                <Button
-                    x:Name="StopButton"
-                    Width="200"
-                    Height="48"
-                    Click="OnStopClicked">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <FontIcon FontSize="16" Glyph="&#xE71A;" />
-                        <TextBlock Text="Stop" />
-                    </StackPanel>
-                </Button>
+
+                <!-- Show overlay: when overlay was dismissed during recording -->
                 <Button
                     x:Name="ShowOverlayButton"
                     Width="48"
@@ -240,6 +209,7 @@
                     Visibility="Collapsed">
                     <FontIcon FontSize="16" Glyph="&#xE890;" />
                 </Button>
+
             </StackPanel>
 
             <TextBlock

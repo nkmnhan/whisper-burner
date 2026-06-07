@@ -172,25 +172,28 @@ public sealed partial class SessionsPage : Page
         _dialogOpen = true;
         try
         {
-            var previewBox = new TextBox
+            var textBlock = new TextBlock
             {
                 Text = content,
-                IsReadOnly = true,
-                AcceptsReturn = true,
-                IsSpellCheckEnabled = false,
                 FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+            };
+            var previewScroll = new ScrollViewer
+            {
+                Content = textBlock,
                 MinHeight = 200,
                 MaxHeight = 480,
                 Width = 480,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             };
-            ScrollViewer.SetVerticalScrollBarVisibility(previewBox, ScrollBarVisibility.Auto);
 
             var dialog = new ContentDialog
             {
                 Title = Path.GetFileName(filePath),
-                Content = previewBox,
+                Content = previewScroll,
                 CloseButtonText = "Close",
                 XamlRoot = XamlRoot,
                 Style = Application.Current.Resources["DefaultContentDialogStyle"] as Style

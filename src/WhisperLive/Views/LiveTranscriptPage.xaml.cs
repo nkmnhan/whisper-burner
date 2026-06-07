@@ -45,7 +45,7 @@ public sealed partial class LiveTranscriptPage : Page
     private async Task CheckApiHealthAsync()
     {
         SetStatusDot(Colors.Orange, "Checking API…");
-        StartButton.IsEnabled = false;
+        MainButton.IsEnabled = false;
 
         var healthy = await CurrentApp.TranscriptionClient.CheckHealthAsync(_settings.ApiUrl);
         SetApiReady(healthy);
@@ -56,12 +56,12 @@ public sealed partial class LiveTranscriptPage : Page
         if (ready)
         {
             SetStatusDot(Color.FromArgb(255, 16, 124, 16), "API ready");
-            StartButton.IsEnabled = true;
+            MainButton.IsEnabled = true;
         }
         else
         {
             SetStatusDot(Color.FromArgb(255, 196, 43, 28), "API offline — start Docker first");
-            StartButton.IsEnabled = false;
+            MainButton.IsEnabled = false;
         }
     }
 
@@ -80,10 +80,11 @@ public sealed partial class LiveTranscriptPage : Page
         {
             case RecordingState.Idle:
                 IdlePlaceholder.Visibility = Visibility.Visible;
-                Waveform.Visibility = Visibility.Collapsed;
                 TranscriptList.Visibility = Visibility.Collapsed;
-                IdleActions.Visibility = Visibility.Visible;
-                ActiveActions.Visibility = Visibility.Collapsed;
+                StartContent.Visibility = Visibility.Visible;
+                WaveformInButton.Visibility = Visibility.Collapsed;
+                PauseButton.Visibility = Visibility.Collapsed;
+                ShowOverlayButton.Visibility = Visibility.Collapsed;
                 NewSessionButton.Visibility = _segments.Count > 0
                     ? Visibility.Visible : Visibility.Collapsed;
                 WaveformStoryboard.Stop();
@@ -93,13 +94,13 @@ public sealed partial class LiveTranscriptPage : Page
 
             case RecordingState.Recording:
                 IdlePlaceholder.Visibility = Visibility.Collapsed;
-                Waveform.Visibility = Visibility.Visible;
                 TranscriptList.Visibility = Visibility.Visible;
-                IdleActions.Visibility = Visibility.Collapsed;
-                ActiveActions.Visibility = Visibility.Visible;
-                PauseIcon.Glyph = ""; // Pause glyph
+                StartContent.Visibility = Visibility.Collapsed;
+                WaveformInButton.Visibility = Visibility.Visible;
+                PauseButton.Visibility = Visibility.Visible;
+                NewSessionButton.Visibility = Visibility.Collapsed;
+                PauseIcon.Glyph = ""; // Pause
                 ToolTipService.SetToolTip(PauseButton, "Pause recording");
-                ShowOverlayButton.Visibility = Visibility.Collapsed;
                 WaveformStoryboard.Begin();
                 DotPulseStoryboard.Begin();
                 SetStatusDot(Color.FromArgb(255, 196, 43, 28), "Recording");
@@ -107,7 +108,7 @@ public sealed partial class LiveTranscriptPage : Page
                 break;
 
             case RecordingState.Paused:
-                PauseIcon.Glyph = ""; // Play/Resume glyph
+                PauseIcon.Glyph = ""; // Resume
                 WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
                 SetStatusDot(Colors.Orange, "Paused");
@@ -118,44 +119,46 @@ public sealed partial class LiveTranscriptPage : Page
 
     // ── Recording ─────────────────────────────────────────────────────────────
 
-    private void OnStartClicked(object sender, RoutedEventArgs e)
+    private async void OnMainButtonClicked(object sender, RoutedEventArgs e)
     {
-        _cts = new CancellationTokenSource();
-        var options = new RecordingOptions(
-            Language: _settings.Language,
-            ChunkDurationSeconds: _settings.ChunkDurationSeconds,
-            ApiUrl: _settings.ApiUrl,
-            Model: _settings.Model);
+        if (_state == RecordingState.Idle)
+        {
+            _cts = new CancellationTokenSource();
+            var options = new RecordingOptions(
+                Language: _settings.Language,
+                ChunkDurationSeconds: _settings.ChunkDurationSeconds,
+                ApiUrl: _settings.ApiUrl,
+                Model: _settings.Model);
 
-        var app = CurrentApp;
-        app.TranscriptionClient.ResetPrompt();
-        app.SubtitleService.StartSession();
-        app.SubtitleService.SegmentAdded += OnSegmentAdded;
-        _ = app.RecordingService.StartAsync(options, _cts.Token);
-        _ = ConsumeChunksAsync(app, options, _cts.Token);
+            var app = CurrentApp;
+            app.TranscriptionClient.ResetPrompt();
+            app.SubtitleService.StartSession();
+            app.SubtitleService.SegmentAdded += OnSegmentAdded;
+            _ = app.RecordingService.StartAsync(options, _cts.Token);
+            _ = ConsumeChunksAsync(app, options, _cts.Token);
 
-        App.CaptionOverlay?.ClearLines();
-        App.CaptionOverlay?.SetLanguage(_settings.Language);
-        App.CaptionOverlay?.UpdatePauseState(false);
-        ApplyState(RecordingState.Recording);
-    }
+            App.CaptionOverlay?.ClearLines();
+            App.CaptionOverlay?.SetLanguage(_settings.Language);
+            App.CaptionOverlay?.UpdatePauseState(false);
+            ApplyState(RecordingState.Recording);
+        }
+        else
+        {
+            _cts?.Cancel();
+            await CurrentApp.RecordingService.StopAsync();
+            CurrentApp.SubtitleService.EndSession();
+            CurrentApp.SubtitleService.SegmentAdded -= OnSegmentAdded;
 
-    private async void OnStopClicked(object sender, RoutedEventArgs e)
-    {
-        _cts?.Cancel();
-        await CurrentApp.RecordingService.StopAsync();
-        CurrentApp.SubtitleService.EndSession();
-        CurrentApp.SubtitleService.SegmentAdded -= OnSegmentAdded;
+            var savedFile = CurrentApp.SubtitleService.CurrentSessionPath is { } p
+                ? $"Saved → {Path.GetFileName(p)}" : null;
 
-        var savedFile = CurrentApp.SubtitleService.CurrentSessionPath is { } p
-            ? $"Saved → {Path.GetFileName(p)}" : null;
+            ApplyState(RecordingState.Idle);
 
-        ApplyState(RecordingState.Idle);
+            if (savedFile is not null)
+                ActionStatus.Text = savedFile;
 
-        if (savedFile is not null)
-            ActionStatus.Text = savedFile;
-
-        await CheckApiHealthAsync();
+            await CheckApiHealthAsync();
+        }
     }
 
     private void OnPauseClicked(object sender, RoutedEventArgs e)
