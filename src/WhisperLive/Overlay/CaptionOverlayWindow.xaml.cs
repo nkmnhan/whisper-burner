@@ -29,8 +29,6 @@ public sealed partial class CaptionOverlayWindow : Window
     private bool _isExpanded;
     private DesktopAcrylicController? _acrylicController;
     private SystemBackdropConfiguration? _backdropConfig;
-    private readonly Queue<string> _recentSegments = new();
-
     public CaptionOverlayWindow()
     {
         InitializeComponent();
@@ -108,20 +106,12 @@ public sealed partial class CaptionOverlayWindow : Window
     public void ShowSegment(SubtitleSegment seg)
     {
         DispatcherQueue.TryEnqueue(() =>
-        {
-            _recentSegments.Enqueue(seg.Text);
-            while (_recentSegments.Count > 5)
-                _recentSegments.Dequeue();
-            CaptionText.Text = string.Join(" ", _recentSegments);
-        });
+            CaptionText.Text += (CaptionText.Text.Length > 0 ? " " : "") + seg.Text);
+        // SizeChanged hook scrolls to bottom after layout
     }
 
     public void ClearLines() =>
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            _recentSegments.Clear();
-            CaptionText.Text = string.Empty;
-        });
+        DispatcherQueue.TryEnqueue(() => CaptionText.Text = string.Empty);
 
     public void SetLanguage(string language) =>
         DispatcherQueue.TryEnqueue(() => LanguageLabel.Text = language);
