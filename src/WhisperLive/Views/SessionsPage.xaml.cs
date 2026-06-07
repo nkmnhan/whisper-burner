@@ -50,22 +50,17 @@ public sealed partial class SessionsPage : Page
         SessionsList.ItemsSource = _items;
     }
 
-    private void Page_Loaded(object sender, RoutedEventArgs e) => LoadSessions();
+    private async void Page_Loaded(object sender, RoutedEventArgs e) => await LoadSessionsAsync();
 
-    private void LoadSessions()
+    private async Task LoadSessionsAsync()
     {
         _items.Clear();
-        var subtitleService = ((App)Application.Current).SubtitleService;
-        var dir = subtitleService.SessionsDirectory;
+        var dir = ((App)Application.Current).SubtitleService.SessionsDirectory;
 
-        if (!Directory.Exists(dir))
-        {
-            UpdateEmptyState();
-            return;
-        }
+        if (!Directory.Exists(dir)) { UpdateEmptyState(); return; }
 
         string[] files;
-        try { files = Directory.GetFiles(dir, "*.srt"); }
+        try { files = await Task.Run(() => Directory.GetFiles(dir, "*.srt")); }
         catch (Exception ex)
         {
             AppLogger.Warning(ex, "Failed to scan sessions directory");
@@ -79,7 +74,7 @@ public sealed partial class SessionsPage : Page
             {
                 var fileNameNoExt = Path.GetFileNameWithoutExtension(filePath);
                 var displayName = ParseDisplayName(fileNameNoExt);
-                var subTitle = BuildSubTitle(filePath);
+                var subTitle = await Task.Run(() => BuildSubTitle(filePath));
                 _items.Add(new SessionItemViewModel
                 {
                     FilePath = filePath,
