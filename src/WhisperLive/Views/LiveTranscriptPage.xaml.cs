@@ -224,6 +224,8 @@ public sealed partial class LiveTranscriptPage : Page
         DispatcherQueue.TryEnqueue(() =>
         {
             _segments.Add(seg.Text);
+            if (_segments.Count > 500)
+                _segments.RemoveAt(0);
 
             if (_state == RecordingState.Recording &&
                 App.CaptionOverlay?.AppWindow.IsVisible == false)
