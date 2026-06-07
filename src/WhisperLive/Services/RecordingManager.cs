@@ -93,6 +93,7 @@ public sealed class RecordingManager : IDisposable
             if (_recentSegments.Count > 500)
                 _recentSegments.RemoveAt(0);
         }
+        App.CaptionOverlay?.ShowSegment(seg); // always runs regardless of current page
         SegmentAdded?.Invoke(this, seg);
     }
 

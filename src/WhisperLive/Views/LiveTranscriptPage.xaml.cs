@@ -205,8 +205,6 @@ public sealed partial class LiveTranscriptPage : Page
             if (Manager.State == RecordingState.Recording &&
                 App.CaptionOverlay?.AppWindow.IsVisible == false)
                 ShowOverlayButton.Visibility = Visibility.Visible;
-
-            App.CaptionOverlay?.ShowSegment(seg);
         });
     }
 }
