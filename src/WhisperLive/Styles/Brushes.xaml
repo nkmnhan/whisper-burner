@@ -7,17 +7,26 @@
             <SolidColorBrush x:Key="CaptionOverlayBackgroundBrush" Color="Transparent" />
             <SolidColorBrush x:Key="CaptionOverlayDarkOverlayBrush" Color="#4D0A0A0A" />
             <SolidColorBrush x:Key="CaptionOverlayBadgeBackgroundBrush" Color="#3D3D3D" />
+            <SolidColorBrush x:Key="CaptionOverlayBadgeBorderBrush" Color="#4DB6AC" />
+            <SolidColorBrush x:Key="AssistantUserBubbleBrush" Color="#E0E7FF" />
+            <SolidColorBrush x:Key="AssistantResponseBubbleBrush" Color="#F2F2F2" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
             <SolidColorBrush x:Key="RecordingActiveBrush" Color="#FF6B6B" />
             <SolidColorBrush x:Key="CaptionOverlayBackgroundBrush" Color="Transparent" />
             <SolidColorBrush x:Key="CaptionOverlayDarkOverlayBrush" Color="#4D0A0A0A" />
             <SolidColorBrush x:Key="CaptionOverlayBadgeBackgroundBrush" Color="#3D3D3D" />
+            <SolidColorBrush x:Key="CaptionOverlayBadgeBorderBrush" Color="#4DB6AC" />
+            <SolidColorBrush x:Key="AssistantUserBubbleBrush" Color="#3A3F5C" />
+            <SolidColorBrush x:Key="AssistantResponseBubbleBrush" Color="#2D2D2D" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
             <SolidColorBrush x:Key="RecordingActiveBrush" Color="{ThemeResource SystemColorHighlightColor}" />
             <SolidColorBrush x:Key="CaptionOverlayBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="CaptionOverlayBadgeBackgroundBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="CaptionOverlayBadgeBorderBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="AssistantUserBubbleBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="AssistantResponseBubbleBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 </ResourceDictionary>

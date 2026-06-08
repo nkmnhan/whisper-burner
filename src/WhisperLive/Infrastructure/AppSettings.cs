@@ -18,6 +18,7 @@ public sealed class AppSettings
     public string Model { get; set; } = "small";
     public int ChunkDurationSeconds { get; set; } = 5;
     public string Theme { get; set; } = "Default";
+    public string? ContextFolderPath { get; set; }
 
     public static async Task<AppSettings> LoadAsync()
     {

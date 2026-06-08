@@ -16,12 +16,14 @@ sealed partial class App : Application
     internal TranscriptionClient TranscriptionClient { get; } = new();
     internal SubtitleService SubtitleService { get; } = new();
     internal RecordingManager RecordingManager { get; }
+    internal MeetingAssistantService MeetingAssistant { get; }
 
     public App()
     {
         AppLogger.Initialize();
         InitializeComponent();
         RecordingManager = new RecordingManager(RecordingService, TranscriptionClient, SubtitleService);
+        MeetingAssistant = new MeetingAssistantService(RecordingManager);
         UnhandledException += (_, e) =>
         {
             AppLogger.Error(e.Exception, "Unhandled exception: {Message}", e.Message);

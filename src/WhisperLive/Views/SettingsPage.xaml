@@ -85,6 +85,24 @@
                 </ComboBox>
             </controls:SettingsCard>
 
+            <!-- Meeting assistant -->
+            <controls:SettingsCard Description="Optional folder (code repo or documents) the meeting assistant can read for extra context" Header="Meeting context folder">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8B7;" />
+                </controls:SettingsCard.HeaderIcon>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock
+                        x:Name="ContextFolderLabel"
+                        MaxWidth="280"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Not set"
+                        TextTrimming="CharacterEllipsis" />
+                    <Button x:Name="BrowseContextFolderButton" Click="OnBrowseContextFolderClicked" Content="Browse…" />
+                    <Button x:Name="ClearContextFolderButton" Click="OnClearContextFolderClicked" Content="Clear" />
+                </StackPanel>
+            </controls:SettingsCard>
+
             <!-- Appearance -->
             <controls:SettingsCard Description="Choose app color theme" Header="Appearance">
                 <controls:SettingsCard.HeaderIcon>

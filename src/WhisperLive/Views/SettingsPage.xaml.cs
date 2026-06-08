@@ -4,6 +4,8 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using System;
 using WhisperLive.Helpers;
 using WhisperLive.Infrastructure;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 namespace WhisperLive.Views;
 
@@ -29,6 +31,8 @@ public sealed partial class SettingsPage : Page
         SelectComboItem(ModelBox, _settings.Model);
         SelectComboItem(LanguageBox, _settings.Language);
         SelectThemeCombo(_settings.Theme);
+        ContextFolderLabel.Text = string.IsNullOrWhiteSpace(_settings.ContextFolderPath)
+            ? "Not set" : _settings.ContextFolderPath;
 
         _loaded = true;
     }
@@ -62,6 +66,29 @@ public sealed partial class SettingsPage : Page
         if (!_loaded) return;
         _settings.Language = (string)((ComboBoxItem)LanguageBox.SelectedItem).Content;
         _ = _settings.SaveAsync();
+    }
+
+    private async void OnBrowseContextFolderClicked(object sender, RoutedEventArgs e)
+    {
+        if (WindowHelper.GetWindowForElement(this) is not Window window) return;
+
+        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.ComputerFolder };
+        picker.FileTypeFilter.Add("*");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(window));
+
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder is null) return;
+
+        _settings.ContextFolderPath = folder.Path;
+        ContextFolderLabel.Text = folder.Path;
+        await _settings.SaveAsync();
+    }
+
+    private async void OnClearContextFolderClicked(object sender, RoutedEventArgs e)
+    {
+        _settings.ContextFolderPath = null;
+        ContextFolderLabel.Text = "Not set";
+        await _settings.SaveAsync();
     }
 
     // Gallery-pattern: null-safe cast, no _loaded guard needed (guard is the null check itself)

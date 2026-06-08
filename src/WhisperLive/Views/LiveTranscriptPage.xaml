@@ -1,8 +1,35 @@
 <Page
     x:Class="WhisperLive.Views.LiveTranscriptPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:helpers="using:WhisperLive.Helpers"
+    xmlns:models="using:WhisperLive.Models">
     <Page.Resources>
+        <!-- Assistant chat bubbles — picked by AssistantMessageTemplateSelector based on Role -->
+        <DataTemplate x:Key="AssistantUserMessageTemplate" x:DataType="models:AssistantMessage">
+            <Border
+                Margin="40,0,0,0"
+                Padding="10,6"
+                HorizontalAlignment="Right"
+                Background="{ThemeResource AssistantUserBubbleBrush}"
+                CornerRadius="{StaticResource ControlCornerRadius}">
+                <TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" />
+            </Border>
+        </DataTemplate>
+        <DataTemplate x:Key="AssistantResponseMessageTemplate" x:DataType="models:AssistantMessage">
+            <Border
+                Margin="0,0,40,0"
+                Padding="10,6"
+                HorizontalAlignment="Left"
+                Background="{ThemeResource AssistantResponseBubbleBrush}"
+                CornerRadius="{StaticResource ControlCornerRadius}">
+                <TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" />
+            </Border>
+        </DataTemplate>
+        <helpers:AssistantMessageTemplateSelector
+            x:Key="AssistantMessageSelector"
+            ResponseTemplate="{StaticResource AssistantResponseMessageTemplate}"
+            UserTemplate="{StaticResource AssistantUserMessageTemplate}" />
         <!-- Waveform storyboard — 5 bars staggered by 80 ms each -->
         <Storyboard x:Name="WaveformStoryboard">
             <DoubleAnimation
@@ -75,71 +102,205 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Row 0: Status bar — dot + label only -->
-        <StackPanel Grid.Row="0" Margin="0,0,0,16" Orientation="Horizontal" Spacing="8">
-            <Ellipse
-                x:Name="StatusDot"
-                Width="8"
-                Height="8"
-                VerticalAlignment="Center"
-                Fill="{ThemeResource SystemFillColorCautionBrush}">
-                <Ellipse.RenderTransform>
-                    <ScaleTransform x:Name="StatusDotScale" CenterX="4" CenterY="4" />
-                </Ellipse.RenderTransform>
-            </Ellipse>
-            <TextBlock
-                x:Name="StatusLabel"
-                VerticalAlignment="Center"
-                Style="{StaticResource CaptionTextBlockStyle}"
-                Text="Checking API…" />
-        </StackPanel>
+        <!-- Row 0: Status bar — dot + label, assistant toggle on the right -->
+        <Grid Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                <Ellipse
+                    x:Name="StatusDot"
+                    Width="8"
+                    Height="8"
+                    VerticalAlignment="Center"
+                    Fill="{ThemeResource SystemFillColorCautionBrush}">
+                    <Ellipse.RenderTransform>
+                        <ScaleTransform x:Name="StatusDotScale" CenterX="4" CenterY="4" />
+                    </Ellipse.RenderTransform>
+                </Ellipse>
+                <TextBlock
+                    x:Name="StatusLabel"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Checking API…" />
+            </StackPanel>
+            <Button
+                x:Name="AssistantToggleButton"
+                Grid.Column="1"
+                Click="OnAssistantToggleClicked"
+                ToolTipService.ToolTip="Meeting assistant — notes and Q&amp;A">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon FontSize="14" Glyph="&#xE8BD;" />
+                    <TextBlock Text="Assistant" />
+                </StackPanel>
+            </Button>
+        </Grid>
 
-        <!-- Row 1: idle placeholder OR live transcript -->
-        <StackPanel
-            x:Name="IdlePlaceholder"
-            Grid.Row="1"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            Spacing="12">
-            <FontIcon
-                x:Name="MicIcon"
-                HorizontalAlignment="Center"
-                FontSize="56"
-                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                Glyph="&#xE720;" />
-            <TextBlock
-                HorizontalAlignment="Center"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Style="{StaticResource CaptionTextBlockStyle}"
-                Text="Capture system audio as live transcript" />
-        </StackPanel>
+        <!-- Row 1: live transcript (always visible) + collapsible assistant panel -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
 
-        <ListView
-            x:Name="TranscriptList"
-            Grid.Row="1"
-            SelectionMode="None"
-            Visibility="Collapsed">
-            <ListView.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
-                </ItemsPanelTemplate>
-            </ListView.ItemsPanel>
-            <ListView.ItemContainerStyle>
-                <Style TargetType="ListViewItem">
-                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                    <Setter Property="MinHeight" Value="0" />
-                    <Setter Property="Padding" Value="0,3,0,3" />
-                </Style>
-            </ListView.ItemContainerStyle>
-            <ListView.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock
-                        FontSize="14"
-                        Text="{Binding}"
-                        TextWrapping="Wrap" />
-                </DataTemplate>
-            </ListView.ItemTemplate>
-        </ListView>
+            <StackPanel
+                x:Name="IdlePlaceholder"
+                Grid.Column="0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="12">
+                <FontIcon
+                    x:Name="MicIcon"
+                    HorizontalAlignment="Center"
+                    FontSize="56"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Glyph="&#xE720;" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Capture system audio as live transcript" />
+            </StackPanel>
+
+            <ListView
+                x:Name="TranscriptList"
+                Grid.Column="0"
+                SelectionMode="None"
+                Visibility="Collapsed">
+                <ListView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
+                    </ItemsPanelTemplate>
+                </ListView.ItemsPanel>
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="MinHeight" Value="0" />
+                        <Setter Property="Padding" Value="0,4,0,4" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock
+                            FontSize="14"
+                            Text="{Binding}"
+                            TextWrapping="Wrap" />
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <!-- Assistant panel: Notes (auto-generated outline) / Ask (live Q&A chat) -->
+            <Border
+                x:Name="AssistantPanel"
+                Grid.Column="1"
+                Width="320"
+                Margin="16,0,0,0"
+                Padding="12"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource OverlayCornerRadius}"
+                Visibility="Collapsed">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="0,0,0,12" Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="NotesTabButton" Click="OnNotesTabClicked" Content="Notes" Style="{StaticResource AccentButtonStyle}" />
+                        <Button x:Name="AskTabButton" Click="OnAskTabClicked" Content="Ask" />
+                    </StackPanel>
+
+                    <!-- Notes view: running Key Points / Decisions / Action Items -->
+                    <Grid x:Name="NotesView" Grid.Row="1">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <ScrollViewer Grid.Row="0">
+                            <StackPanel Spacing="14">
+                                <StackPanel x:Name="KeyPointsSection" Spacing="4" Visibility="Collapsed">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Key Points" />
+                                    <ItemsControl x:Name="KeyPointsList" />
+                                </StackPanel>
+                                <StackPanel x:Name="DecisionsSection" Spacing="4" Visibility="Collapsed">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Decisions" />
+                                    <ItemsControl x:Name="DecisionsList" />
+                                </StackPanel>
+                                <StackPanel x:Name="ActionItemsSection" Spacing="4" Visibility="Collapsed">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Action Items" />
+                                    <ItemsControl x:Name="ActionItemsList" />
+                                </StackPanel>
+                                <TextBlock
+                                    x:Name="NotesEmptyLabel"
+                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Text="Notes will appear here as the meeting progresses — generated automatically every few minutes."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </ScrollViewer>
+                        <StackPanel Grid.Row="1" Margin="0,8,0,0" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <TextBlock
+                                x:Name="NotesUpdatedLabel"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}" />
+                            <Button x:Name="RefreshNotesButton" Click="OnRefreshNotesClicked" ToolTipService.ToolTip="Regenerate notes now">
+                                <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Chat view: freeform "what did I miss" Q&A -->
+                    <Grid x:Name="ChatView" Grid.Row="1" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <ListView
+                            x:Name="AssistantChatList"
+                            Grid.Row="0"
+                            ItemTemplateSelector="{StaticResource AssistantMessageSelector}"
+                            SelectionMode="None">
+                            <ListView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
+                                </ItemsPanelTemplate>
+                            </ListView.ItemsPanel>
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="MinHeight" Value="0" />
+                                    <Setter Property="Padding" Value="0,4,0,4" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                        </ListView>
+                        <Grid Grid.Row="1" Margin="0,8,0,0" ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox
+                                x:Name="AssistantQuestionBox"
+                                Grid.Column="0"
+                                AcceptsReturn="False"
+                                KeyDown="OnAssistantQuestionKeyDown"
+                                PlaceholderText="Ask about the meeting…"
+                                TextWrapping="Wrap" />
+                            <Button
+                                x:Name="SendQuestionButton"
+                                Grid.Column="1"
+                                Click="OnSendQuestionClicked"
+                                Style="{StaticResource AccentButtonStyle}">
+                                <FontIcon FontSize="14" Glyph="&#xE724;" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
 
         <!-- Row 2: actions -->
         <StackPanel Grid.Row="2" HorizontalAlignment="Center" Spacing="8">
@@ -169,19 +330,19 @@
                             <TextBlock Text="Start" />
                         </StackPanel>
                         <StackPanel x:Name="WaveformInButton" Orientation="Horizontal" Spacing="4" Visibility="Collapsed">
-                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="2">
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
                                 <Border.RenderTransform><ScaleTransform x:Name="Bar1Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
                             </Border>
-                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="2">
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
                                 <Border.RenderTransform><ScaleTransform x:Name="Bar2Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
                             </Border>
-                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="2">
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
                                 <Border.RenderTransform><ScaleTransform x:Name="Bar3Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
                             </Border>
-                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="2">
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
                                 <Border.RenderTransform><ScaleTransform x:Name="Bar4Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
                             </Border>
-                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="2">
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
                                 <Border.RenderTransform><ScaleTransform x:Name="Bar5Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
                             </Border>
                         </StackPanel>
