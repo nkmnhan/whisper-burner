@@ -16,6 +16,7 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     private readonly List<SubtitleSegment> _segments = [];
     private StreamWriter? _writer;
+    private bool _sessionPending;
 
     public event EventHandler<SubtitleSegment>? SegmentAdded;
 
@@ -27,14 +28,12 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
     {
         EndSession();
         _segments.Clear();
+        CurrentSessionPath = null;
 
-        Directory.CreateDirectory(_sessionsDir);
-        CurrentSessionPath = Path.Combine(
-            _sessionsDir,
-            $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.srt");
-
-        _writer = new StreamWriter(CurrentSessionPath, append: false, Encoding.UTF8) { AutoFlush = true };
-        AppLogger.Info("Session file opened: {Path}", CurrentSessionPath);
+        // Defer creating the .srt file until the first segment actually arrives —
+        // starting (or restarting) a session that never produces a segment must not
+        // leave an empty orphaned file behind.
+        _sessionPending = true;
     }
 
     public void EndSession()
@@ -44,6 +43,7 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         _writer = null;
         if (CurrentSessionPath is not null)
             AppLogger.Info("Session file closed: {Path}", CurrentSessionPath);
+        _sessionPending = false;
     }
 
     public void AppendSegments(IEnumerable<SubtitleSegment> segments)
@@ -60,9 +60,24 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     private void WriteSrtEntry(SubtitleSegment seg)
     {
+        EnsureSessionFile();
         if (_writer is null) return;
         try { _writer.Write(seg.ToSrtEntry()); _writer.WriteLine(); }
         catch (Exception ex) { AppLogger.Warning(ex, "Failed to write segment to session file"); }
+    }
+
+    private void EnsureSessionFile()
+    {
+        if (_writer is not null || !_sessionPending) return;
+
+        Directory.CreateDirectory(_sessionsDir);
+        CurrentSessionPath = Path.Combine(
+            _sessionsDir,
+            $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.srt");
+
+        _writer = new StreamWriter(CurrentSessionPath, append: false, Encoding.UTF8) { AutoFlush = true };
+        _sessionPending = false;
+        AppLogger.Info("Session file opened: {Path}", CurrentSessionPath);
     }
 
     public async Task ExportSrtAsync(string path)

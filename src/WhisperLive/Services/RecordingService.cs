@@ -10,7 +10,8 @@ namespace WhisperLive.Services;
 
 public sealed class RecordingService : IRecordingService
 {
-    private const double OverlapSeconds = 0.3; // tail of previous chunk prepended to next
+    private const double MaxOverlapSeconds = 1.5;   // long enough for Whisper to transcribe boundary words consistently
+    private const double MaxOverlapFraction = 0.4;  // never let the overlap dominate a short user-configured chunk
 
     private Channel<AudioChunkInfo> _channel = Channel.CreateBounded<AudioChunkInfo>(20);
     private WasapiLoopbackCapture? _capture;
@@ -103,8 +104,12 @@ public sealed class RecordingService : IRecordingService
             _buffer.Position = 0;
         }
 
+        // Overlap target scales with the user-configured chunk duration so a short chunk
+        // (e.g. 2s) isn't dominated by redundant re-transcribed audio.
+        double overlapTarget = Math.Min(MaxOverlapSeconds, options.ChunkDurationSeconds * MaxOverlapFraction);
+
         // Prepend overlap tail from previous chunk so boundary words are fully captured
-        double chunkOverlap = _overlapTail.Length > 0 ? OverlapSeconds : 0.0;
+        double chunkOverlap = _overlapTail.Length > 0 ? overlapTarget : 0.0;
         byte[] wavData;
         if (_overlapTail.Length > 0)
         {
@@ -118,7 +123,7 @@ public sealed class RecordingService : IRecordingService
         }
 
         // Save new overlap tail from the END of the fresh (non-overlap) data
-        int overlapBytes = (int)(OverlapSeconds * waveFormat.AverageBytesPerSecond);
+        int overlapBytes = (int)(overlapTarget * waveFormat.AverageBytesPerSecond);
         _overlapTail = freshData.Length >= overlapBytes
             ? freshData[^overlapBytes..]
             : freshData;
