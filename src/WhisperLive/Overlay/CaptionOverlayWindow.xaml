@@ -46,12 +46,12 @@
                 <!-- Language badge -->
                 <Border
                     Grid.Column="0"
-                    Padding="8,3"
+                    Padding="8,4"
                     VerticalAlignment="Center"
                     Background="Transparent"
-                    BorderBrush="#4DB6AC"
+                    BorderBrush="{ThemeResource CaptionOverlayBadgeBorderBrush}"
                     BorderThickness="1"
-                    CornerRadius="10">
+                    CornerRadius="{StaticResource OverlayCornerRadius}">
                     <StackPanel Orientation="Horizontal" Spacing="4">
                         <TextBlock
                             x:Name="LanguageLabel"

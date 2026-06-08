@@ -69,7 +69,7 @@
                                 <SwipeControl.RightItems>
                                     <SwipeItems Mode="Execute">
                                         <SwipeItem
-                                            Background="Red"
+                                            Background="{ThemeResource SystemFillColorCriticalBrush}"
                                             Command="{x:Bind DeleteCommand}"
                                             CommandParameter="{x:Bind FilePath}"
                                             Text="Delete">
@@ -100,7 +100,7 @@
                                     <StackPanel
                                         Grid.Column="1"
                                         VerticalAlignment="Center"
-                                        Spacing="2">
+                                        Spacing="4">
                                         <TextBlock
                                             Style="{StaticResource BodyStrongTextBlockStyle}"
                                             Text="{x:Bind DisplayName}" />
