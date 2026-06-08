@@ -118,6 +118,7 @@ RecordingPage → RecordingService.StartAsync()
 ## C# / WinUI 3 Conventions
 
 - PascalCase everywhere; `async`/`await` on all I/O paths; nullable enabled
+- **UI thread vs background thread**: `RecordingService`, `SubtitleService`, and `TranscriptionClient` raise events from background threads (audio capture callbacks, HTTP responses, channel consumers). Any event handler in a `Page`/`Window` that touches UI elements (`TextBlock.Text`, `Visibility`, brushes, etc.) must marshal back to the UI thread with `DispatcherQueue.TryEnqueue(() => ...)` — see `CaptionOverlayWindow.ShowSegment`/`ClearLines`/`SetLanguage` and `LiveTranscriptPage.OnStateChanged` for the established pattern. Conversely, never wrap a service's internal logic in `DispatcherQueue.TryEnqueue` — that's a presentation-layer concern, not the service's
 - Services are singletons owned by `App`; pages access them via `((App)Application.Current).ServiceName`
 - `WindowHelper.TrackWindow()` on every new `Window` — required for `ThemeHelper` to reach all windows
 - Custom brushes go in `Styles/Brushes.xaml` under `ThemeDictionaries`, never hardcoded in XAML

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Set-Location *)",
+      "PowerShell(Get-WmiObject *)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Get-PnpDevice *)"
+    ]
+  }
+}
