@@ -264,12 +264,13 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         await _claudeLock.WaitAsync(ct);
         try
         {
-            var args = await BuildArgumentsAsync(sessionId);
             for (var attempt = 0; attempt < 2; attempt++)
             {
                 if (attempt == 1)
-                    await Task.Delay(1000, ct); // session store may briefly hold ID after previous process exits
+                    await Task.Delay(1000, ct);
 
+                // Rebuild args each attempt so a rotated sessionId is picked up
+                var args = await BuildArgumentsAsync(sessionId);
                 var psi = new ProcessStartInfo
                 {
                     FileName = "claude",
@@ -294,8 +295,18 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
 
                 using (process)
                 {
-                    await process.StandardInput.WriteAsync(prompt);
-                    process.StandardInput.Close();
+                    // Process may exit before reading stdin if session context is too large
+                    var stdinFailed = false;
+                    try
+                    {
+                        await process.StandardInput.WriteAsync(prompt);
+                        process.StandardInput.Close();
+                    }
+                    catch (IOException)
+                    {
+                        stdinFailed = true;
+                        try { process.StandardInput.Close(); } catch { }
+                    }
 
                     var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
                     var stderrTask = process.StandardError.ReadToEndAsync(ct);
@@ -303,12 +314,23 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
                     var stdout = await stdoutTask;
                     var stderr = await stderrTask;
 
-                    if (process.ExitCode != 0)
+                    if (process.ExitCode != 0 || stdinFailed)
                     {
-                        if (attempt == 0 && stderr.Contains("already in use"))
+                        if (attempt == 0)
                         {
-                            AppLogger.Warning("Session ID in use — retrying after cooldown");
-                            continue;
+                            if (stdinFailed)
+                            {
+                                // Session context overflowed — rotate to a fresh session
+                                _sessionId = Guid.NewGuid().ToString();
+                                sessionId = _sessionId;
+                                AppLogger.Warning("Session pipe closed (context too large) — rotating to new session ID");
+                                continue;
+                            }
+                            if (stderr.Contains("already in use"))
+                            {
+                                AppLogger.Warning("Session ID in use — retrying after cooldown");
+                                continue;
+                            }
                         }
                         throw new InvalidOperationException($"Claude Code exited with an error: {stderr.Trim()}");
                     }
@@ -321,7 +343,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
                     return root.TryGetProperty("result", out var result) ? result.GetString() ?? string.Empty : string.Empty;
                 }
             }
-            throw new InvalidOperationException("Claude Code failed after session ID retry.");
+            throw new InvalidOperationException("Claude Code failed after retry.");
         }
         finally
         {
