@@ -35,6 +35,7 @@ public sealed partial class LiveTranscriptPage : Page
     private static App CurrentApp => (App)Application.Current;
     private static RecordingManager Manager => CurrentApp.RecordingManager;
     private static MeetingAssistantService Assistant => CurrentApp.MeetingAssistant;
+    private static TranscriptCorrectionService CorrectionService => CurrentApp.CorrectionService;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ public sealed partial class LiveTranscriptPage : Page
         Manager.StateChanged += OnStateChanged;
         Manager.SegmentAdded += OnSegmentAdded;
         Assistant.NotesUpdated += OnNotesUpdated;
+        CorrectionService.BatchCorrected += OnBatchCorrected;
 
         // Restore transcript that accumulated while we were away
         _segments.Clear();
@@ -62,6 +64,7 @@ public sealed partial class LiveTranscriptPage : Page
         Manager.StateChanged -= OnStateChanged;
         Manager.SegmentAdded -= OnSegmentAdded;
         Assistant.NotesUpdated -= OnNotesUpdated;
+        CorrectionService.BatchCorrected -= OnBatchCorrected;
     }
 
     // ── API health ────────────────────────────────────────────────────────────
@@ -158,12 +161,14 @@ public sealed partial class LiveTranscriptPage : Page
             App.CaptionOverlay?.SetLanguage(_settings.Language);
             App.CaptionOverlay?.UpdatePauseState(false);
             Assistant.StartSession();
+            CorrectionService.StartSession();
             await Manager.StartAsync(options);
         }
         else
         {
             await Manager.StopAsync();
             Assistant.EndSession();
+            CorrectionService.EndSession();
 
             var saved = Manager.CurrentSessionPath is { } p
                 ? $"Saved → {System.IO.Path.GetFileName(p)}" : null;
@@ -217,6 +222,19 @@ public sealed partial class LiveTranscriptPage : Page
             if (Manager.State == RecordingState.Recording &&
                 App.CaptionOverlay?.AppWindow.IsVisible == false)
                 ShowOverlayButton.Visibility = Visibility.Visible;
+        });
+    }
+
+    private void OnBatchCorrected(object? sender, IReadOnlyList<CorrectedSegment> corrections)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            foreach (var correction in corrections)
+            {
+                var index = correction.OriginalId - 1; // IDs are 1-based
+                if (index >= 0 && index < _segments.Count)
+                    _segments[index] = correction.CorrectedText;
+            }
         });
     }
 

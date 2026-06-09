@@ -17,6 +17,7 @@ sealed partial class App : Application
     internal SubtitleService SubtitleService { get; } = new();
     internal RecordingManager RecordingManager { get; }
     internal MeetingAssistantService MeetingAssistant { get; }
+    internal TranscriptCorrectionService CorrectionService { get; }
 
     public App()
     {
@@ -24,6 +25,7 @@ sealed partial class App : Application
         InitializeComponent();
         RecordingManager = new RecordingManager(RecordingService, TranscriptionClient, SubtitleService);
         MeetingAssistant = new MeetingAssistantService(RecordingManager);
+        CorrectionService = new TranscriptCorrectionService(RecordingManager, SubtitleService);
         UnhandledException += (_, e) =>
         {
             AppLogger.Error(e.Exception, "Unhandled exception: {Message}", e.Message);
@@ -46,6 +48,7 @@ sealed partial class App : Application
         MainWindow.Closed += async (s, _) =>
         {
             await RecordingManager.StopAsync();
+            CorrectionService.Dispose();
 
             CaptionOverlay?.Close();
 
