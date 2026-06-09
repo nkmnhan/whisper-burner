@@ -341,6 +341,8 @@ public sealed partial class LiveTranscriptPage : Page
     private async void OnRefreshNotesClicked(object sender, RoutedEventArgs e)
     {
         RefreshNotesButton.IsEnabled = false;
+        NotesRefreshRing.IsActive = true;
+        NotesRefreshRing.Visibility = Visibility.Visible;
         NotesUpdatedLabel.Text = "Refreshing…";
         try
         {
@@ -348,6 +350,8 @@ public sealed partial class LiveTranscriptPage : Page
         }
         finally
         {
+            NotesRefreshRing.IsActive = false;
+            NotesRefreshRing.Visibility = Visibility.Collapsed;
             RefreshNotesButton.IsEnabled = true;
         }
     }
@@ -377,6 +381,7 @@ public sealed partial class LiveTranscriptPage : Page
         AssistantQuestionBox.Text = string.Empty;
         AssistantQuestionBox.IsEnabled = false;
         SendQuestionButton.IsEnabled = false;
+        ThinkingIndicator.Visibility = Visibility.Visible;
 
         _assistantMessages.Add(new AssistantMessage("You", question, DateTimeOffset.Now));
 
@@ -387,6 +392,7 @@ public sealed partial class LiveTranscriptPage : Page
         }
         finally
         {
+            ThinkingIndicator.Visibility = Visibility.Collapsed;
             _isAsking = false;
             AssistantQuestionBox.IsEnabled = true;
             SendQuestionButton.IsEnabled = true;
