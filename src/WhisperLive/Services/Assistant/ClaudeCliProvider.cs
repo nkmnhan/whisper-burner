@@ -123,8 +123,6 @@ public sealed class ClaudeCliProvider : IAiProvider
             {
                 for (var attempt = 0; attempt < 2; attempt++)
                 {
-                    if (attempt == 1)
-                        await Task.Delay(1000, ct);
 
                     var args = BuildArgs(_sessionId, _systemPromptBase, context);
 
@@ -141,7 +139,10 @@ public sealed class ClaudeCliProvider : IAiProvider
                     catch (InvalidOperationException ex) when (
                         ex.Message.Contains("already in use") && attempt == 0)
                     {
-                        AppLogger.Warning("Claude session ID in use — retrying after cooldown");
+                        // Claude Code locks a session ID until its process fully releases it.
+                        // Retrying with the same ID fails again — rotate to a fresh ID instead.
+                        _sessionId = Guid.NewGuid().ToString();
+                        AppLogger.Warning("Claude session ID in use — rotating to new session ID and retrying");
                         continue;
                     }
                 }
