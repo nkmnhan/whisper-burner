@@ -8,6 +8,7 @@
 
             <TextBlock
                 Margin="0,0,0,12"
+                AutomationProperties.HeadingLevel="Level1"
                 Style="{StaticResource TitleTextBlockStyle}"
                 Text="Settings" />
 

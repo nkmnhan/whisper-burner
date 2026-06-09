@@ -26,7 +26,7 @@
 
         <!-- Header -->
         <StackPanel Margin="24,16,24,8">
-            <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Saved Sessions" />
+            <TextBlock AutomationProperties.HeadingLevel="Level1" Style="{StaticResource TitleTextBlockStyle}" Text="Saved Sessions" />
             <TextBlock
                 x:Name="SubHeaderText"
                 Margin="0,4,0,0"

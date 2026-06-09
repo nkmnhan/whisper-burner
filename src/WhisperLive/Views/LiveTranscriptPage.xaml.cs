@@ -1,5 +1,5 @@
-using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -13,7 +13,6 @@ using WhisperLive.Models;
 using WhisperLive.Services.Assistant;
 using WhisperLive.Services.Audio;
 using Windows.System;
-using Windows.UI;
 
 namespace WhisperLive.Views;
 
@@ -45,6 +44,10 @@ public sealed partial class LiveTranscriptPage : Page
             ThinkingIndicator.Visibility = Visibility.Collapsed;
             ThinkingDotsStoryboard.Stop();
         };
+
+        // Collapse the assistant panel only after the fade-out animation completes (EaseIn 150ms).
+        PanelHideStoryboard.Completed += (_, _) =>
+            AssistantPanel.Visibility = Visibility.Collapsed;
 
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -100,7 +103,7 @@ public sealed partial class LiveTranscriptPage : Page
 
     private async Task CheckApiHealthAsync()
     {
-        SetStatusDot(Colors.Orange, "Checking API…");
+        SetStatusDot("StatusDotCautionBrush", "Checking API…");
         MainButton.IsEnabled = false;
         var healthy = await CurrentApp.TranscriptionClient.CheckHealthAsync(_settings.ApiUrl);
         SetApiReady(healthy);
@@ -110,20 +113,29 @@ public sealed partial class LiveTranscriptPage : Page
     {
         if (ready)
         {
-            SetStatusDot(Color.FromArgb(255, 16, 124, 16), "API ready");
+            SetStatusDot("StatusDotReadyBrush", "API ready");
             MainButton.IsEnabled = true;
+            ApiErrorBar.IsOpen = false;
         }
         else
         {
-            SetStatusDot(Color.FromArgb(255, 196, 43, 28), "API offline — start Docker first");
+            SetStatusDot("StatusDotErrorBrush", "API offline");
             MainButton.IsEnabled = false;
+            ApiErrorBar.IsOpen = true;
         }
     }
 
-    private void SetStatusDot(Color color, string label)
+    private void SetStatusDot(string brushKey, string label)
     {
-        StatusDot.Fill = new SolidColorBrush(color);
+        StatusDot.Fill = (Brush)Application.Current.Resources[brushKey];
         StatusLabel.Text = label;
+    }
+
+    // Fades ActionStatus in from zero opacity (StatusFadeInStoryboard: EaseOut 200ms).
+    private void ShowActionStatus(string text)
+    {
+        ActionStatus.Text = text;
+        StatusFadeInStoryboard.Begin();
     }
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -147,6 +159,7 @@ public sealed partial class LiveTranscriptPage : Page
                 RefreshNotesButton.IsEnabled = false;
                 WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
+                AutomationProperties.SetName(MainButton, "Start recording");
                 App.CaptionOverlay?.AppWindow.Hide();
                 break;
 
@@ -158,20 +171,24 @@ public sealed partial class LiveTranscriptPage : Page
                 PauseButton.Visibility = Visibility.Visible;
                 NewSessionButton.Visibility = Visibility.Collapsed;
                 PauseIcon.Glyph = ""; // Pause
+                AutomationProperties.SetName(PauseButton, "Pause recording");
                 ToolTipService.SetToolTip(PauseButton, "Pause recording");
                 WaveformStoryboard.Begin();
                 RefreshNotesButton.IsEnabled = true;
                 DotPulseStoryboard.Begin();
-                SetStatusDot(Color.FromArgb(255, 196, 43, 28), "Recording");
+                AutomationProperties.SetName(MainButton, "Stop recording");
+                SetStatusDot("StatusDotErrorBrush", "Recording");
                 App.CaptionOverlay?.AppWindow.Show();
                 break;
 
             case RecordingState.Paused:
                 PauseIcon.Glyph = ""; // Resume
+                AutomationProperties.SetName(PauseButton, "Resume recording");
+                ToolTipService.SetToolTip(PauseButton, "Resume recording");
                 RefreshNotesButton.IsEnabled = true;
                 WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
-                SetStatusDot(Colors.Orange, "Paused");
+                SetStatusDot("StatusDotCautionBrush", "Paused");
                 App.CaptionOverlay?.UpdatePauseState(true);
                 break;
         }
@@ -227,7 +244,7 @@ public sealed partial class LiveTranscriptPage : Page
             var saved = Manager.CurrentSessionPath is { } p
                 ? $"Saved → {System.IO.Path.GetFileName(p)}" : null;
             if (saved is not null)
-                ActionStatus.Text = saved;
+                ShowActionStatus(saved);
 
             await CheckApiHealthAsync();
         }
@@ -392,7 +409,7 @@ public sealed partial class LiveTranscriptPage : Page
 
     private async Task ClearCorrectionStatusAsync(int applied)
     {
-        ActionStatus.Text = $"AI corrected {applied} line{(applied == 1 ? "" : "s")}";
+        ShowActionStatus($"AI corrected {applied} line{(applied == 1 ? "" : "s")}");
         await Task.Delay(4000);
         if (ActionStatus.Text.StartsWith("AI corrected"))
             ActionStatus.Text = string.Empty;
@@ -400,24 +417,30 @@ public sealed partial class LiveTranscriptPage : Page
 
     // ── Assistant panel ───────────────────────────────────────────────────────
 
-    private void OnAssistantToggleClicked(object sender, RoutedEventArgs e) =>
-        AssistantPanel.Visibility = AssistantPanel.Visibility == Visibility.Visible
-            ? Visibility.Collapsed : Visibility.Visible;
+    private void OnAssistantToggleChecked(object sender, RoutedEventArgs e) => ShowAssistantPanel();
+    private void OnAssistantToggleUnchecked(object sender, RoutedEventArgs e) => HideAssistantPanel();
 
-    private void OnNotesTabClicked(object sender, RoutedEventArgs e)
+    private void ShowAssistantPanel()
     {
-        NotesView.Visibility = Visibility.Visible;
-        ChatView.Visibility = Visibility.Collapsed;
-        NotesTabButton.Style = Application.Current.Resources["AccentButtonStyle"] as Style;
-        AskTabButton.ClearValue(StyleProperty);
+        // Clear the "new notes" badge whenever the user opens the panel.
+        AssistantBadge.Visibility = Visibility.Collapsed;
+        AutomationProperties.SetName(AssistantToggleButton, "Assistant");
+        AssistantPanel.Visibility = Visibility.Visible;
+        PanelShowStoryboard.Begin();
     }
 
-    private void OnAskTabClicked(object sender, RoutedEventArgs e)
+    private void HideAssistantPanel()
     {
-        NotesView.Visibility = Visibility.Collapsed;
-        ChatView.Visibility = Visibility.Visible;
-        AskTabButton.Style = Application.Current.Resources["AccentButtonStyle"] as Style;
-        NotesTabButton.ClearValue(StyleProperty);
+        // Visibility is set to Collapsed in PanelHideStoryboard.Completed.
+        PanelHideStoryboard.Begin();
+    }
+
+    // SelectorBar handler — Gallery pattern: compare sender.SelectedItem to named SelectorBarItems.
+    private void OnPanelTabSelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
+    {
+        var isNotes = sender.SelectedItem == NotesTabItem;
+        NotesView.Visibility = isNotes ? Visibility.Visible : Visibility.Collapsed;
+        ChatView.Visibility = isNotes ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void OnNotesRefreshStarted(object? sender, EventArgs e)
@@ -460,6 +483,15 @@ public sealed partial class LiveTranscriptPage : Page
             NotesEmptyPanel.Visibility = Visibility.Collapsed;
             NotesUpdatedLabel.Text = "Updated just now";
             ExpandNotesButton.IsEnabled = true;
+
+            // If the panel is hidden, surface a dot badge on the toggle button so the user
+            // knows notes have refreshed without opening the panel. AutomationProperties.Name
+            // is updated to announce the state to screen readers (Gallery NavigationView InfoBadge pattern).
+            if (AssistantPanel.Visibility != Visibility.Visible)
+            {
+                AssistantBadge.Visibility = Visibility.Visible;
+                AutomationProperties.SetName(AssistantToggleButton, "Assistant, new notes available");
+            }
         });
     }
 

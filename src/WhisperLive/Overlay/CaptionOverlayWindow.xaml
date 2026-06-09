@@ -13,7 +13,7 @@
         PointerExited="OnPointerExited">
 
         <!-- Dark overlay on top of acrylic — forces dark appearance in any system theme -->
-        <Rectangle Fill="{ThemeResource CaptionOverlayDarkOverlayBrush}" />
+        <Rectangle AutomationProperties.AccessibilityView="Raw" Fill="{ThemeResource CaptionOverlayDarkOverlayBrush}" />
 
         <Grid Margin="16,8,16,8">
             <Grid.RowDefinitions>
@@ -30,7 +30,7 @@
                 FontSize="13"
                 FontStyle="Italic"
                 FontWeight="SemiBold"
-                Foreground="White"
+                Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                 Text="Live Transcript" />
 
             <Grid
@@ -57,12 +57,12 @@
                             x:Name="LanguageLabel"
                             VerticalAlignment="Center"
                             FontSize="12"
-                            Foreground="White"
+                            Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                             Text="English" />
                         <FontIcon
                             VerticalAlignment="Center"
                             FontSize="10"
-                            Foreground="White"
+                            Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                             Glyph="&#xE70D;"
                             Opacity="0.7" />
                     </StackPanel>
@@ -74,11 +74,12 @@
                     Width="32"
                     Height="32"
                     Padding="0"
+                    AutomationProperties.Name="Hide overlay"
                     Background="Transparent"
                     BorderThickness="0"
                     Click="OnCloseClicked"
-                    CornerRadius="0"
-                    Foreground="White"
+                    CornerRadius="{StaticResource ControlCornerRadius}"
+                    Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                     ToolTipService.ToolTip="Hide overlay">
                     <SymbolIcon Symbol="Cancel" />
                 </Button>
@@ -91,11 +92,12 @@
                     Height="32"
                     Padding="0"
                     HorizontalAlignment="Center"
+                    AutomationProperties.Name="Pause or resume"
                     Background="Transparent"
                     BorderThickness="0"
                     Click="OnOverlayPauseClicked"
-                    CornerRadius="0"
-                    Foreground="White"
+                    CornerRadius="{StaticResource ControlCornerRadius}"
+                    Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                     ToolTipService.ToolTip="Pause / Resume">
                     <FontIcon x:Name="OverlayPauseIcon" FontSize="14" Glyph="&#xE769;" />
                 </Button>
@@ -111,7 +113,7 @@
                 <TextBlock
                     x:Name="CaptionText"
                     FontSize="18"
-                    Foreground="White"
+                    Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                     LineHeight="28"
                     TextWrapping="Wrap" />
             </ScrollViewer>
@@ -124,11 +126,12 @@
                 Padding="0"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
+                AutomationProperties.Name="Expand or collapse overlay"
                 Background="Transparent"
                 BorderThickness="0"
                 Click="OnExpandClicked"
-                CornerRadius="16"
-                Foreground="White"
+                CornerRadius="{StaticResource ControlCornerRadius}"
+                Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                 ToolTipService.ToolTip="Expand / Collapse">
                 <FontIcon x:Name="ChevronIcon" FontSize="12" Glyph="&#xE70E;" />
             </Button>

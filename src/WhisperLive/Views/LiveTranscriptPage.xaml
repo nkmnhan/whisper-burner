@@ -139,48 +139,141 @@
                 <DiscreteObjectKeyFrame KeyTime="0:0:1.5" Value="Thinking..." />
             </ObjectAnimationUsingKeyFrames>
         </Storyboard>
+
+        <!-- Assistant panel: slide in from the right (EaseOut 250ms) -->
+        <Storyboard x:Name="PanelShowStoryboard">
+            <DoubleAnimation
+                From="32" To="0"
+                Duration="0:0:0.25"
+                Storyboard.TargetName="AssistantPanelTranslate"
+                Storyboard.TargetProperty="X">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseOut" Exponent="5" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation
+                From="0" To="1"
+                Duration="0:0:0.2"
+                Storyboard.TargetName="AssistantPanel"
+                Storyboard.TargetProperty="Opacity">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseOut" Exponent="4" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!-- Assistant panel: fade out (EaseIn 150ms) — Completed handler collapses Visibility -->
+        <Storyboard x:Name="PanelHideStoryboard">
+            <DoubleAnimation
+                From="1" To="0"
+                Duration="0:0:0.15"
+                Storyboard.TargetName="AssistantPanel"
+                Storyboard.TargetProperty="Opacity">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseIn" Exponent="4" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!-- ActionStatus fade-in (EaseOut 200ms) -->
+        <Storyboard x:Name="StatusFadeInStoryboard">
+            <DoubleAnimation
+                From="0" To="1"
+                Duration="0:0:0.2"
+                Storyboard.TargetName="ActionStatus"
+                Storyboard.TargetProperty="Opacity">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseOut" Exponent="4" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
     </Page.Resources>
 
-    <Grid Padding="24,16,24,20">
+    <Grid Padding="24,16,24,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Row 0: Status bar — dot + label, assistant toggle on the right -->
-        <Grid Grid.Row="0" Margin="0,0,0,20">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
-                <Ellipse
-                    x:Name="StatusDot"
-                    Width="8"
-                    Height="8"
-                    VerticalAlignment="Center"
-                    Fill="{ThemeResource SystemFillColorCautionBrush}">
-                    <Ellipse.RenderTransform>
-                        <ScaleTransform x:Name="StatusDotScale" CenterX="4" CenterY="4" />
-                    </Ellipse.RenderTransform>
-                </Ellipse>
-                <TextBlock
-                    x:Name="StatusLabel"
-                    VerticalAlignment="Center"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    Text="Checking API…" />
-            </StackPanel>
-            <Button
-                x:Name="AssistantToggleButton"
-                Grid.Column="1"
-                Click="OnAssistantToggleClicked"
-                ToolTipService.ToolTip="Meeting assistant — notes and Q&amp;A">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <FontIcon FontSize="14" Glyph="&#xE8BD;" />
-                    <TextBlock Text="Assistant" />
+        <!-- Row 0: Status bar — dot + label, assistant toggle, API error InfoBar -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16" Spacing="8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                    <Ellipse
+                        x:Name="StatusDot"
+                        Width="8"
+                        Height="8"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AccessibilityView="Raw"
+                        Fill="{ThemeResource SystemFillColorCautionBrush}">
+                        <Ellipse.RenderTransform>
+                            <ScaleTransform x:Name="StatusDotScale" CenterX="4" CenterY="4" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                    <TextBlock
+                        x:Name="StatusLabel"
+                        VerticalAlignment="Center"
+                        AutomationProperties.LiveSetting="Polite"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="Checking API…" />
                 </StackPanel>
-            </Button>
-        </Grid>
+                <!--
+                    ToggleButton: IsChecked=True → panel visible (Checked fires ShowAssistantPanel),
+                    IsChecked=False → panel animates out (Unchecked fires HideAssistantPanel).
+                    InfoBadge: AttentionDotInfoBadgeStyle — shown when notes refresh while panel is
+                    closed. AutomationProperties.Name updated to include "new notes" when badge visible
+                    so screen readers announce the state change.
+                    Gallery pattern: PlacingInfobadgeInsideAnother.txt — inner Grid stretch, badge TopRight.
+                -->
+                <ToggleButton
+                    x:Name="AssistantToggleButton"
+                    Grid.Column="1"
+                    AutomationProperties.Name="Assistant"
+                    Checked="OnAssistantToggleChecked"
+                    HorizontalContentAlignment="Stretch"
+                    ToolTipService.ToolTip="Meeting assistant — notes and Q&amp;A"
+                    Unchecked="OnAssistantToggleUnchecked"
+                    VerticalContentAlignment="Stretch">
+                    <Grid
+                        Width="Auto"
+                        Height="Auto"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch">
+                        <StackPanel
+                            Margin="4,0"
+                            HorizontalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE8BD;" />
+                            <TextBlock Text="Assistant" />
+                        </StackPanel>
+                        <InfoBadge
+                            x:Name="AssistantBadge"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Style="{StaticResource AttentionDotInfoBadgeStyle}"
+                            Visibility="Collapsed" />
+                    </Grid>
+                </ToggleButton>
+            </Grid>
+            <!--
+                InfoBar: Error severity — shown only when Whisper API health check fails.
+                IsClosable=True lets user dismiss once they've read it; code re-opens it if API
+                is still down on next health check. Severity=Error gives the red icon + color
+                that matches the status dot already shown.
+            -->
+            <InfoBar
+                x:Name="ApiErrorBar"
+                IsClosable="True"
+                IsOpen="False"
+                Message="Start the Whisper Docker container, then check the API URL in Settings."
+                Severity="Error"
+                Title="Whisper API offline" />
+        </StackPanel>
 
         <!-- Row 1: live transcript (always visible) + collapsible assistant panel -->
         <Grid Grid.Row="1">
@@ -212,7 +305,7 @@
                     Text="Capture system audio as live transcript" />
                 <TextBox
                     x:Name="PreContextBox"
-                    Width="400"
+                    MaxWidth="400"
                     MaxHeight="120"
                     Margin="0,8,0,0"
                     AcceptsReturn="True"
@@ -283,16 +376,35 @@
                 BorderThickness="1"
                 CornerRadius="{StaticResource OverlayCornerRadius}"
                 Visibility="Collapsed">
+                <!--
+                    TranslateTransform is the target for PanelShowStoryboard (X: 32→0, EaseOut 250ms)
+                    and PanelHideStoryboard (Opacity: 1→0, EaseIn 150ms). Visibility is set to
+                    Collapsed in PanelHideStoryboard.Completed in code-behind.
+                -->
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="AssistantPanelTranslate" />
+                </Border.RenderTransform>
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Margin="0,0,0,12" Orientation="Horizontal" Spacing="8">
-                        <Button x:Name="NotesTabButton" Click="OnNotesTabClicked" Content="Notes" Style="{StaticResource AccentButtonStyle}" />
-                        <Button x:Name="AskTabButton" Click="OnAskTabClicked" Content="Ask" />
-                    </StackPanel>
+                    <!--
+                        SelectorBar: Gallery-recommended tab switcher (Navigation group).
+                        Gives keyboard navigation, selection state, and the underline indicator
+                        for free — replaces the manual AccentButtonStyle toggling on two Buttons.
+                        IsSelected="True" on first item sets the initial selection in XAML
+                        so no code-behind initialization is needed (Gallery SelectorBarPage pattern).
+                    -->
+                    <SelectorBar
+                        x:Name="PanelTabBar"
+                        Grid.Row="0"
+                        Margin="0,0,0,12"
+                        SelectionChanged="OnPanelTabSelectionChanged">
+                        <SelectorBarItem x:Name="NotesTabItem" IsSelected="True" Text="Notes" />
+                        <SelectorBarItem x:Name="AskTabItem" Text="Ask" />
+                    </SelectorBar>
 
                     <!-- Notes view: scrolling chat-bubble snapshots, UI only (not saved to disk) -->
                     <Grid x:Name="NotesView" Grid.Row="1">
@@ -311,6 +423,16 @@
                                     <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
                                 </ItemsPanelTemplate>
                             </ListView.ItemsPanel>
+                            <!--
+                                AddDeleteThemeTransition: matches AssistantChatList — notes
+                                snapshots slide in with a fade when added, consistent with the
+                                chat list. Gallery pattern: Collections > ListView.
+                            -->
+                            <ListView.ItemContainerTransitions>
+                                <TransitionCollection>
+                                    <AddDeleteThemeTransition />
+                                </TransitionCollection>
+                            </ListView.ItemContainerTransitions>
                             <ListView.ItemContainerStyle>
                                 <Style TargetType="ListViewItem">
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -350,6 +472,7 @@
                                 Width="28"
                                 Height="28"
                                 HorizontalAlignment="Center"
+                                AutomationProperties.Name="Generating notes"
                                 IsActive="False"
                                 Visibility="Collapsed" />
                             <TextBlock
@@ -366,24 +489,27 @@
                             <TextBlock
                                 x:Name="NotesCountdownLabel"
                                 VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 Style="{StaticResource CaptionTextBlockStyle}"
                                 Visibility="Collapsed" />
                             <TextBlock
                                 x:Name="NotesUpdatedLabel"
                                 VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                AutomationProperties.LiveSetting="Polite"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 Style="{StaticResource CaptionTextBlockStyle}" />
                             <ProgressRing
                                 x:Name="NotesRefreshRing"
                                 Width="16"
                                 Height="16"
                                 VerticalAlignment="Center"
+                                AutomationProperties.Name="Refreshing notes"
                                 IsActive="False"
                                 Visibility="Collapsed" />
                             <components:GhostButton
                                 x:Name="RefreshNotesButton"
                                 IsEnabled="False"
+                                AutomationProperties.Name="Refresh notes now"
                                 Style="{StaticResource GhostButtonStyle}"
                                 ToolTipService.ToolTip="Refresh notes now"
                                 Click="OnRefreshNotesClicked">
@@ -392,6 +518,7 @@
                             <components:GhostButton
                                 x:Name="ExpandNotesButton"
                                 IsEnabled="False"
+                                AutomationProperties.Name="View full notes"
                                 Style="{StaticResource GhostButtonStyle}"
                                 ToolTipService.ToolTip="View full notes"
                                 Click="OnExpandNotesClicked">
@@ -441,6 +568,8 @@
                             Grid.Row="1"
                             Margin="0,6,0,0"
                             Opacity="0"
+                            AutomationProperties.Name="Claude is thinking"
+                            AutomationProperties.LiveSetting="Assertive"
                             Orientation="Horizontal"
                             Spacing="8"
                             Visibility="Collapsed">
@@ -448,10 +577,12 @@
                                 Width="16"
                                 Height="16"
                                 VerticalAlignment="Center"
+                                AutomationProperties.AccessibilityView="Raw"
                                 IsActive="True" />
                             <TextBlock
                                 x:Name="ThinkingDotsText"
                                 VerticalAlignment="Center"
+                                AutomationProperties.AccessibilityView="Raw"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 Style="{StaticResource CaptionTextBlockStyle}"
                                 Text="Thinking" />
@@ -465,6 +596,7 @@
                                 x:Name="AssistantQuestionBox"
                                 Grid.Column="0"
                                 AcceptsReturn="False"
+                                AutomationProperties.HelpText="Press Enter or the send button to submit"
                                 KeyDown="OnAssistantQuestionKeyDown"
                                 PlaceholderText="Ask about the meeting…"
                                 TextWrapping="Wrap" />
@@ -490,6 +622,7 @@
                     x:Name="NewSessionButton"
                     Width="48"
                     Height="48"
+                    AutomationProperties.Name="New session"
                     Click="OnNewSessionClicked"
                     ToolTipService.ToolTip="New session — clears transcript and starts a new file"
                     Visibility="Collapsed">
@@ -533,6 +666,7 @@
                     x:Name="PauseButton"
                     Width="48"
                     Height="48"
+                    AutomationProperties.Name="Pause recording"
                     Click="OnPauseClicked"
                     ToolTipService.ToolTip="Pause recording"
                     Visibility="Collapsed">
@@ -544,6 +678,7 @@
                     x:Name="ShowOverlayButton"
                     Width="48"
                     Height="48"
+                    AutomationProperties.Name="Show live transcript overlay"
                     Click="OnShowOverlayClicked"
                     ToolTipService.ToolTip="Show live transcript overlay"
                     Visibility="Collapsed">
@@ -554,7 +689,9 @@
 
             <TextBlock
                 x:Name="ActionStatus"
+                Opacity="0"
                 HorizontalAlignment="Center"
+                AutomationProperties.LiveSetting="Polite"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 Style="{StaticResource CaptionTextBlockStyle}" />
         </StackPanel>
