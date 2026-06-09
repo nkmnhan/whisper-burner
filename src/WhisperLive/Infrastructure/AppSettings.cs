@@ -19,6 +19,7 @@ public sealed class AppSettings
     public int ChunkDurationSeconds { get; set; } = 5;
     public string Theme { get; set; } = "Default";
     public string? ContextFolderPath { get; set; }
+    public List<string> AllowedReadPaths { get; set; } = [];
 
     public static async Task<AppSettings> LoadAsync()
     {
