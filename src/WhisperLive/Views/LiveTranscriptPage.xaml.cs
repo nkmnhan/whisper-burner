@@ -233,13 +233,24 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void OnBatchCorrected(object? sender, IReadOnlyList<CorrectedSegment> corrections)
     {
-        DispatcherQueue.TryEnqueue(() =>
+        DispatcherQueue.TryEnqueue(async () =>
         {
+            var applied = 0;
             foreach (var correction in corrections)
             {
                 var index = correction.OriginalId - 1 - _displayOffset;
                 if (index >= 0 && index < _segments.Count)
+                {
                     _segments[index] = correction.CorrectedText;
+                    applied++;
+                }
+            }
+            if (applied > 0)
+            {
+                ActionStatus.Text = $"AI corrected {applied} line{(applied == 1 ? "" : "s")}";
+                await Task.Delay(4000);
+                if (ActionStatus.Text.StartsWith("AI corrected"))
+                    ActionStatus.Text = string.Empty;
             }
         });
     }
