@@ -298,6 +298,13 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
     {
         if (settings.AllowedReadPaths.Count > 0)
         {
+            // Glob patterns with spaces in paths may not be supported by all Claude CLI versions.
+            // Fall back to unrestricted Read if any path contains a space to avoid silent failures.
+            if (settings.AllowedReadPaths.Exists(p => p.Contains(' ')))
+            {
+                AppLogger.Warning("AllowedReadPaths contains a path with spaces — falling back to unrestricted Read tool access");
+                return "Read";
+            }
             var patterns = settings.AllowedReadPaths
                 .Select(p => Directory.Exists(p) ? $"Read({p}/**)" : $"Read({p})")
                 .ToList();

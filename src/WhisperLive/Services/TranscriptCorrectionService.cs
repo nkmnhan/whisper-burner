@@ -27,6 +27,7 @@ public sealed class TranscriptCorrectionService : ITranscriptCorrectionService, 
     private readonly SubtitleService _subtitleService;
     private readonly object _bufferLock = new();
     private readonly List<SubtitleSegment> _buffer = [];
+    private readonly SemaphoreSlim _flushLock = new(1, 1);
 
     private CancellationTokenSource? _sessionCts;
 
@@ -85,6 +86,7 @@ public sealed class TranscriptCorrectionService : ITranscriptCorrectionService, 
             _buffer.Clear();
         }
 
+        await _flushLock.WaitAsync(ct);
         try
         {
             var corrected = await CorrectBatchAsync(batch, ct);
@@ -95,6 +97,10 @@ public sealed class TranscriptCorrectionService : ITranscriptCorrectionService, 
         catch (Exception ex)
         {
             AppLogger.Warning(ex, "Transcript correction batch failed — raw transcript unaffected");
+        }
+        finally
+        {
+            _flushLock.Release();
         }
     }
 
@@ -169,5 +175,6 @@ public sealed class TranscriptCorrectionService : ITranscriptCorrectionService, 
     {
         _sessionCts?.Cancel();
         _sessionCts?.Dispose();
+        _flushLock.Dispose();
     }
 }

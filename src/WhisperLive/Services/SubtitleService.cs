@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using WhisperLive.Infrastructure;
@@ -15,6 +16,7 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         "whisper.live", "sessions");
 
     private readonly List<SubtitleSegment> _segments = [];
+    private readonly object _segLock = new();
     private StreamWriter? _writer;
     private StreamWriter? _correctedWriter;
     private bool _sessionPending;
@@ -55,8 +57,12 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         foreach (var seg in segments)
         {
             // Reassign Id to be globally sequential across all chunks
-            var globalSeg = seg with { Id = _segments.Count + 1 };
-            _segments.Add(globalSeg);
+            SubtitleSegment globalSeg;
+            lock (_segLock)
+            {
+                globalSeg = seg with { Id = _segments.Count + 1 };
+                _segments.Add(globalSeg);
+            }
             WriteSrtEntry(globalSeg);
             SegmentAdded?.Invoke(this, globalSeg);
         }
@@ -97,14 +103,20 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         EnsureCorrectedFile();
         if (_correctedWriter is null) return;
 
-        foreach (var correction in corrections)
+        // Sort by Id so the .corrected.srt file has valid sequential SRT ordering
+        foreach (var correction in corrections.OrderBy(c => c.OriginalId))
         {
-            var index = correction.OriginalId - 1; // IDs are 1-based sequential
-            if (index < 0 || index >= _segments.Count) continue;
-            _segments[index] = _segments[index] with { Text = correction.CorrectedText };
+            SubtitleSegment updated;
+            lock (_segLock)
+            {
+                var index = correction.OriginalId - 1; // IDs are 1-based sequential
+                if (index < 0 || index >= _segments.Count) continue;
+                updated = _segments[index] with { Text = correction.CorrectedText };
+                _segments[index] = updated;
+            }
             try
             {
-                _correctedWriter.Write(_segments[index].ToSrtEntry());
+                _correctedWriter.Write(updated.ToSrtEntry());
                 _correctedWriter.WriteLine();
             }
             catch (Exception ex) { AppLogger.Warning(ex, "Failed to write corrected segment"); }
