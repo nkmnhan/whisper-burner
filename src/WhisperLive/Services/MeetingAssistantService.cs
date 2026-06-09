@@ -244,49 +244,64 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         await _claudeLock.WaitAsync(ct);
         try
         {
-            var psi = new ProcessStartInfo
+            var args = await BuildArgumentsAsync(sessionId);
+            for (var attempt = 0; attempt < 2; attempt++)
             {
-                FileName = "claude",
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            foreach (var arg in await BuildArgumentsAsync(sessionId))
-                psi.ArgumentList.Add(arg);
+                if (attempt == 1)
+                    await Task.Delay(1000, ct); // session store may briefly hold ID after previous process exits
 
-            Process process;
-            try
-            {
-                process = Process.Start(psi) ?? throw new InvalidOperationException("Process.Start returned null.");
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "claude",
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                foreach (var arg in args)
+                    psi.ArgumentList.Add(arg);
+
+                Process process;
+                try
+                {
+                    process = Process.Start(psi) ?? throw new InvalidOperationException("Process.Start returned null.");
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("Claude Code CLI not found — is it installed and on PATH?", ex);
+                }
+
+                using (process)
+                {
+                    await process.StandardInput.WriteAsync(prompt);
+                    process.StandardInput.Close();
+
+                    var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+                    var stderrTask = process.StandardError.ReadToEndAsync(ct);
+                    await process.WaitForExitAsync(ct);
+                    var stdout = await stdoutTask;
+                    var stderr = await stderrTask;
+
+                    if (process.ExitCode != 0)
+                    {
+                        if (attempt == 0 && stderr.Contains("already in use"))
+                        {
+                            AppLogger.Warning("Session ID in use — retrying after cooldown");
+                            continue;
+                        }
+                        throw new InvalidOperationException($"Claude Code exited with an error: {stderr.Trim()}");
+                    }
+
+                    using var doc = JsonDocument.Parse(stdout);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("is_error", out var isError) && isError.GetBoolean())
+                        throw new InvalidOperationException("Claude Code reported an error for this request.");
+
+                    return root.TryGetProperty("result", out var result) ? result.GetString() ?? string.Empty : string.Empty;
+                }
             }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException("Claude Code CLI not found — is it installed and on PATH?", ex);
-            }
-
-            using (process)
-            {
-                await process.StandardInput.WriteAsync(prompt);
-                process.StandardInput.Close();
-
-                var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
-                var stderrTask = process.StandardError.ReadToEndAsync(ct);
-                await process.WaitForExitAsync(ct);
-                var stdout = await stdoutTask;
-                var stderr = await stderrTask;
-
-                if (process.ExitCode != 0)
-                    throw new InvalidOperationException($"Claude Code exited with an error: {stderr.Trim()}");
-
-                using var doc = JsonDocument.Parse(stdout);
-                var root = doc.RootElement;
-                if (root.TryGetProperty("is_error", out var isError) && isError.GetBoolean())
-                    throw new InvalidOperationException("Claude Code reported an error for this request.");
-
-                return root.TryGetProperty("result", out var result) ? result.GetString() ?? string.Empty : string.Empty;
-            }
+            throw new InvalidOperationException("Claude Code failed after session ID retry.");
         }
         finally
         {
@@ -298,15 +313,13 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
     {
         if (settings.AllowedReadPaths.Count > 0)
         {
-            // Glob patterns with spaces in paths may not be supported by all Claude CLI versions.
-            // Fall back to unrestricted Read if any path contains a space to avoid silent failures.
-            if (settings.AllowedReadPaths.Exists(p => p.Contains(' ')))
-            {
-                AppLogger.Warning("AllowedReadPaths contains a path with spaces — falling back to unrestricted Read tool access");
-                return "Read";
-            }
             var patterns = settings.AllowedReadPaths
-                .Select(p => Directory.Exists(p) ? $"Read({p}/**)" : $"Read({p})")
+                .Select(p =>
+                {
+                    // Claude CLI is Node.js — its glob matcher requires forward slashes
+                    var fwd = p.Replace('\\', '/');
+                    return Directory.Exists(p) ? $"Read({fwd}/**)" : $"Read({fwd})";
+                })
                 .ToList();
             return string.Join(",", patterns);
         }
