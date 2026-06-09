@@ -30,11 +30,17 @@
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
-    <!--  Transparent background, no border — inherits all hover/pressed visual states from the default template  -->
+    <!--
+        Transparent background, no border — inherits all hover/pressed visual states from the default template.
+        Padding="8,5": 16 px icon + 16 px H padding = 32 px minimum touch target (Fluent spec).
+        Use with helpers:GhostButton (not plain Button) so the Arrow cursor is enforced even inside
+        text containers like TextBox.Header that would otherwise bleed in the I-beam cursor.
+    -->
     <Style x:Key="GhostButtonStyle" BasedOn="{StaticResource DefaultButtonStyle}" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
-        <Setter Property="Padding" Value="4,2" />
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="MinWidth" Value="0" />
     </Style>
 
 </ResourceDictionary>

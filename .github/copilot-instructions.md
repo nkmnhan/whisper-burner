@@ -64,16 +64,16 @@ Four Docker profiles: `gpu`, `cpu`, `api-gpu`, `api-cpu`. The `api-*` profiles r
 **Target:** `net9.0-windows10.0.22621.0`, unpackaged (`WindowsPackageType=None`), x64 only.
 
 **App shell pattern (WinUI Gallery style):**
-- `App.xaml.cs` — owns service singletons (`RecordingService`, `TranscriptionClient`, `SubtitleService`); calls `WindowHelper.TrackWindow()` + `ThemeHelper.Initialize()` on launch; creates `CaptionOverlayWindow` (hidden until recording starts)
-- `MainWindow` — `ExtendsContentIntoTitleBar`, custom `TitleBar`, `NavigationView` → `LiveTranscriptPage` / `SettingsPage`
+- `App.xaml.cs` — owns all service singletons; constructs `RecordingManager` (wires the three core services together); calls `WindowHelper.TrackWindow()` + `ThemeHelper.InitializeAsync()` on launch; creates `CaptionOverlayWindow` (hidden until recording starts)
+- `MainWindow` — `ExtendsContentIntoTitleBar`, custom `TitleBar`, `NavigationView` → `LiveTranscriptPage` / `SessionsPage` / `SettingsPage`
 
 **Data flow:**
 ```
-LiveTranscriptPage → RecordingService.StartAsync()
-  └─ WasapiLoopbackCapture DataAvailable → buffer → PeriodicTimer → FlushAsync()
-  └─ Channel<AudioChunkInfo> → TranscriptionClient.TranscribeChunkAsync() (POST /transcribe)
-  └─ SubtitleService.AppendSegments() → SegmentAdded event
-  └─ LiveTranscriptPage.OnSegmentAdded() → CaptionOverlayWindow.ShowSegment()
+LiveTranscriptPage → RecordingManager.StartAsync()   ← central orchestrator
+  └─ RecordingService: WasapiLoopbackCapture → Channel<AudioChunkInfo>
+  └─ TranscriptionClient.TranscribeChunkAsync() (POST /transcribe)
+  └─ SubtitleService.AppendSegments() → RecordingManager.SegmentAdded event
+  └─ LiveTranscriptPage.OnSegmentAdded() → DispatcherQueue.TryEnqueue() → CaptionOverlayWindow.ShowSegment()
 ```
 
 **Layer map:**
@@ -81,11 +81,11 @@ LiveTranscriptPage → RecordingService.StartAsync()
 | Folder | Key types |
 |---|---|
 | `Helpers/` | `ThemeHelper`, `TitleBarHelper`, `WindowHelper` |
-| `Infrastructure/` | `AppSettings` (JSON, `~/whisper.burner/settings.json`) |
-| `Models/` | `SubtitleSegment`, `AudioChunkInfo`, `RecordingOptions` (immutable records) |
-| `Services/` | `IRecordingService`/`RecordingService`, `ITranscriptionClient`/`TranscriptionClient`, `ISubtitleService`/`SubtitleService` |
+| `Infrastructure/` | `AppSettings` (JSON, `~/whisper.burner/settings.json`), `AppLogger` (Serilog wrapper) |
+| `Models/` | `SubtitleSegment`, `AudioChunkInfo`, `RecordingOptions`, `RecordingState` (enum), `AssistantMessage`, `CorrectedSegment`, `MeetingNotes` |
+| `Services/` | `RecordingService`, `TranscriptionClient`, `SubtitleService` (core pipeline); `RecordingManager` (session lifecycle orchestrator); `MeetingAssistantService`, `TranscriptCorrectionService` (AI features) |
 | `Overlay/` | `CaptionOverlayWindow` (always-on-top, draggable, 3-line rolling), `CaptionLine` |
-| `Views/` | `LiveTranscriptPage`, `SettingsPage` |
+| `Views/` | `LiveTranscriptPage`, `SessionsPage`, `SettingsPage` |
 | `Styles/` | `Brushes.xaml` — all custom brushes in `ThemeDictionaries` (Light/Dark) |
 
 ---
@@ -95,6 +95,8 @@ LiveTranscriptPage → RecordingService.StartAsync()
 ### C# / WinUI 3
 
 - Services are singletons on `App`; pages access them via `((App)Application.Current).ServiceName`
+- **Thread safety**: `RecordingService`, `SubtitleService`, and `TranscriptionClient` raise events from background threads. Any `Page`/`Window` event handler that touches UI elements must marshal to the UI thread: `DispatcherQueue.TryEnqueue(() => { ... })`. Never put `DispatcherQueue.TryEnqueue` inside a service — that's a presentation-layer concern
+- **Logging**: Use `AppLogger` (Serilog wrapper in `Infrastructure/`) — `AppLogger.Info(...)`, `AppLogger.Error(ex, ...)`. Do not use `Debug.WriteLine` in production paths
 - `WindowHelper.TrackWindow(this)` in **every** `Window` constructor — required for `ThemeHelper` to apply theme to all windows
 - Custom brushes in `Styles/Brushes.xaml` under `ThemeDictionaries` — never hardcoded in XAML
 - Settings UI: `SettingsCard` / `SettingsExpander` from `CommunityToolkit.WinUI.Controls` — not raw `Expander` + `StackPanel`

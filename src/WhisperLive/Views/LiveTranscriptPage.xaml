@@ -2,6 +2,7 @@
     x:Class="WhisperLive.Views.LiveTranscriptPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:components="using:WhisperLive.Components"
     xmlns:helpers="using:WhisperLive.Helpers"
     xmlns:models="using:WhisperLive.Models">
     <Page.Resources>
@@ -93,6 +94,51 @@
                 Storyboard.TargetProperty="ScaleY"
                 From="1.0" To="1.5" />
         </Storyboard>
+
+        <!--
+            Thinking indicator: enter (Decelerate 150ms) — Gallery EasingFunction: use EaseOut for objects entering the scene.
+            Opacity animates 0→1; Visibility is set to Visible before Begin() in code-behind.
+        -->
+        <Storyboard x:Name="ShowThinkingStoryboard">
+            <DoubleAnimation
+                Storyboard.TargetName="ThinkingIndicator"
+                Storyboard.TargetProperty="Opacity"
+                From="0" To="1" Duration="0:0:0.15">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseOut" Exponent="4.5" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!--
+            Thinking indicator: exit (Accelerate 100ms) — Gallery EasingFunction: use EaseIn for objects exiting the scene.
+            Completed handler in code-behind sets Visibility=Collapsed and stops the dots storyboard.
+        -->
+        <Storyboard x:Name="HideThinkingStoryboard">
+            <DoubleAnimation
+                Storyboard.TargetName="ThinkingIndicator"
+                Storyboard.TargetProperty="Opacity"
+                From="1" To="0" Duration="0:0:0.10">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseIn" Exponent="4.5" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!--
+            Animated thinking dots — cycles "Thinking" → "Thinking." → "Thinking.." → "Thinking..."
+            every 500ms, giving the VS Code AI "thinking in progress" feel without a spinner next to text.
+        -->
+        <Storyboard x:Name="ThinkingDotsStoryboard" RepeatBehavior="Forever">
+            <ObjectAnimationUsingKeyFrames
+                Storyboard.TargetName="ThinkingDotsText"
+                Storyboard.TargetProperty="Text">
+                <DiscreteObjectKeyFrame KeyTime="0:0:0.0" Value="Thinking" />
+                <DiscreteObjectKeyFrame KeyTime="0:0:0.5" Value="Thinking." />
+                <DiscreteObjectKeyFrame KeyTime="0:0:1.0" Value="Thinking.." />
+                <DiscreteObjectKeyFrame KeyTime="0:0:1.5" Value="Thinking..." />
+            </ObjectAnimationUsingKeyFrames>
+        </Storyboard>
     </Page.Resources>
 
     <Grid Padding="24,16,24,20">
@@ -175,20 +221,20 @@
                                 VerticalAlignment="Center"
                                 Style="{ThemeResource BodyTextBlockStyle}"
                                 Text="Meeting context (optional)" />
-                            <Button
+                            <components:GhostButton
                                 x:Name="ContextHistoryButton"
                                 Style="{StaticResource GhostButtonStyle}"
                                 ToolTipService.ToolTip="Recent &amp; saved prompts"
                                 Click="OnContextHistoryClicked">
                                 <FontIcon FontSize="16" Glyph="&#xE81C;" />
-                            </Button>
-                            <Button
+                            </components:GhostButton>
+                            <components:GhostButton
                                 x:Name="SaveContextButton"
                                 Style="{StaticResource GhostButtonStyle}"
                                 ToolTipService.ToolTip="Save as preset"
                                 Click="OnSaveContextClicked">
                                 <FontIcon FontSize="16" Glyph="&#xE718;" />
-                            </Button>
+                            </components:GhostButton>
                         </StackPanel>
                     </TextBox.Header>
                 </TextBox>
@@ -331,19 +377,22 @@
                                 VerticalAlignment="Center"
                                 IsActive="False"
                                 Visibility="Collapsed" />
-                            <Button
+                            <components:GhostButton
                                 x:Name="RefreshNotesButton"
+                                IsEnabled="False"
                                 Style="{StaticResource GhostButtonStyle}"
                                 ToolTipService.ToolTip="Refresh notes now"
                                 Click="OnRefreshNotesClicked">
                                 <FontIcon FontSize="16" Glyph="&#xE72C;" />
-                            </Button>
-                            <Button
+                            </components:GhostButton>
+                            <components:GhostButton
+                                x:Name="ExpandNotesButton"
+                                IsEnabled="False"
                                 Style="{StaticResource GhostButtonStyle}"
                                 ToolTipService.ToolTip="View full notes"
                                 Click="OnExpandNotesClicked">
                                 <FontIcon FontSize="16" Glyph="&#xE740;" />
-                            </Button>
+                            </components:GhostButton>
                         </StackPanel>
                     </Grid>
 
@@ -364,6 +413,15 @@
                                     <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
                                 </ItemsPanelTemplate>
                             </ListView.ItemsPanel>
+                            <!--
+                                AddDeleteThemeTransition: Gallery-recommended transition for ListView items
+                                being added. Each new message slides in with a fade — no code-behind needed.
+                            -->
+                            <ListView.ItemContainerTransitions>
+                                <TransitionCollection>
+                                    <AddDeleteThemeTransition />
+                                </TransitionCollection>
+                            </ListView.ItemContainerTransitions>
                             <ListView.ItemContainerStyle>
                                 <Style TargetType="ListViewItem">
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -377,6 +435,7 @@
                             x:Name="ThinkingIndicator"
                             Grid.Row="1"
                             Margin="0,6,0,0"
+                            Opacity="0"
                             Orientation="Horizontal"
                             Spacing="8"
                             Visibility="Collapsed">
@@ -386,10 +445,11 @@
                                 VerticalAlignment="Center"
                                 IsActive="True" />
                             <TextBlock
+                                x:Name="ThinkingDotsText"
                                 VerticalAlignment="Center"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 Style="{StaticResource CaptionTextBlockStyle}"
-                                Text="Thinking…" />
+                                Text="Thinking" />
                         </StackPanel>
                         <Grid Grid.Row="2" Margin="0,8,0,0" ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
