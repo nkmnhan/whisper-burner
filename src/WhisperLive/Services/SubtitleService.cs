@@ -16,6 +16,7 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     private readonly List<SubtitleSegment> _segments = [];
     private StreamWriter? _writer;
+    private StreamWriter? _correctedWriter;
     private bool _sessionPending;
 
     public event EventHandler<SubtitleSegment>? SegmentAdded;
@@ -41,6 +42,9 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         _writer?.Flush();
         _writer?.Dispose();
         _writer = null;
+        _correctedWriter?.Flush();
+        _correctedWriter?.Dispose();
+        _correctedWriter = null;
         if (CurrentSessionPath is not null)
             AppLogger.Info("Session file closed: {Path}", CurrentSessionPath);
         _sessionPending = false;
@@ -66,6 +70,14 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         catch (Exception ex) { AppLogger.Warning(ex, "Failed to write segment to session file"); }
     }
 
+    private void EnsureCorrectedFile()
+    {
+        if (_correctedWriter is not null || CurrentSessionPath is null) return;
+        var correctedPath = Path.ChangeExtension(CurrentSessionPath, ".corrected.srt");
+        _correctedWriter = new StreamWriter(correctedPath, append: false, Encoding.UTF8) { AutoFlush = true };
+        AppLogger.Info("Corrected session file opened: {Path}", correctedPath);
+    }
+
     private void EnsureSessionFile()
     {
         if (_writer is not null || !_sessionPending) return;
@@ -78,6 +90,25 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         _writer = new StreamWriter(CurrentSessionPath, append: false, Encoding.UTF8) { AutoFlush = true };
         _sessionPending = false;
         AppLogger.Info("Session file opened: {Path}", CurrentSessionPath);
+    }
+
+    public void ApplyCorrections(IReadOnlyList<CorrectedSegment> corrections)
+    {
+        EnsureCorrectedFile();
+        if (_correctedWriter is null) return;
+
+        foreach (var correction in corrections)
+        {
+            var index = correction.OriginalId - 1; // IDs are 1-based sequential
+            if (index < 0 || index >= _segments.Count) continue;
+            _segments[index] = _segments[index] with { Text = correction.CorrectedText };
+            try
+            {
+                _correctedWriter.Write(_segments[index].ToSrtEntry());
+                _correctedWriter.WriteLine();
+            }
+            catch (Exception ex) { AppLogger.Warning(ex, "Failed to write corrected segment"); }
+        }
     }
 
     public async Task ExportSrtAsync(string path)

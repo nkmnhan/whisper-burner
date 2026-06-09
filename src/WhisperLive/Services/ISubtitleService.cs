@@ -14,5 +14,6 @@ public interface ISubtitleService
     void StartSession();
     void EndSession();
     void AppendSegments(IEnumerable<SubtitleSegment> segments);
+    void ApplyCorrections(IReadOnlyList<CorrectedSegment> corrections);
     Task ExportSrtAsync(string path);
 }
