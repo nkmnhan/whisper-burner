@@ -6,7 +6,7 @@ using WhisperLive.Models;
 
 namespace WhisperLive.Services.Assistant;
 
-public interface ITranscriptCorrectionService
+public interface ITranscriptCorrectionService : IDisposable
 {
     event EventHandler<IReadOnlyList<CorrectedSegment>>? BatchCorrected;
     void StartSession();

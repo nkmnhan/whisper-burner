@@ -10,7 +10,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using WhisperLive.Infrastructure;
 using WhisperLive.Models;
-using WhisperLive.Services;
+using WhisperLive.Services.Assistant;
+using WhisperLive.Services.Audio;
 using Windows.System;
 using Windows.UI;
 
@@ -20,10 +21,12 @@ public sealed partial class LiveTranscriptPage : Page
 {
     private AppSettings _settings = new();
     private readonly ObservableCollection<string> _segments = [];
-    private readonly ObservableCollection<AssistantMessage> _assistantMessages = [];
+    private readonly ObservableCollection<AssistantMessage>[] _threadMessages =
+        [new ObservableCollection<AssistantMessage>(), new ObservableCollection<AssistantMessage>()];
     private readonly ObservableCollection<NotesBubble> _notesBubbles = [];
     private readonly List<NotesBubble> _notesHistory = [];
-    private bool _isAsking;
+    private readonly bool[] _isAskingThread = [false, false];
+    private int _activeThread;
     private int _displayOffset;
 
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _notesTimer;
@@ -34,7 +37,7 @@ public sealed partial class LiveTranscriptPage : Page
     {
         InitializeComponent();
         TranscriptList.ItemsSource = _segments;
-        AssistantChatList.ItemsSource = _assistantMessages;
+        AssistantChatList.ItemsSource = _threadMessages[0];
         NotesChatList.ItemsSource = _notesBubbles;
 
         // Collapse ThinkingIndicator after its fade-out finishes, then stop the dots animation.
@@ -49,9 +52,9 @@ public sealed partial class LiveTranscriptPage : Page
     }
 
     private static App CurrentApp => (App)Application.Current;
-    private static RecordingManager Manager => CurrentApp.RecordingManager;
-    private static MeetingAssistantService Assistant => CurrentApp.MeetingAssistant;
-    private static TranscriptCorrectionService CorrectionService => CurrentApp.CorrectionService;
+    private static IRecordingManager Manager => CurrentApp.RecordingManager;
+    private static IMeetingAssistantService Assistant => CurrentApp.MeetingAssistant;
+    private static ITranscriptCorrectionService CorrectionService => CurrentApp.CorrectionService;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -142,6 +145,7 @@ public sealed partial class LiveTranscriptPage : Page
                 ShowOverlayButton.Visibility = Visibility.Collapsed;
                 NewSessionButton.Visibility = _segments.Count > 0
                     ? Visibility.Visible : Visibility.Collapsed;
+                RefreshNotesButton.IsEnabled = false;
                 WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
                 App.CaptionOverlay?.AppWindow.Hide();
@@ -157,6 +161,7 @@ public sealed partial class LiveTranscriptPage : Page
                 PauseIcon.Glyph = ""; // Pause
                 ToolTipService.SetToolTip(PauseButton, "Pause recording");
                 WaveformStoryboard.Begin();
+                RefreshNotesButton.IsEnabled = true;
                 DotPulseStoryboard.Begin();
                 SetStatusDot(Color.FromArgb(255, 196, 43, 28), "Recording");
                 App.CaptionOverlay?.AppWindow.Show();
@@ -164,6 +169,7 @@ public sealed partial class LiveTranscriptPage : Page
 
             case RecordingState.Paused:
                 PauseIcon.Glyph = ""; // Resume
+                RefreshNotesButton.IsEnabled = true;
                 WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
                 SetStatusDot(Colors.Orange, "Paused");
@@ -247,10 +253,15 @@ public sealed partial class LiveTranscriptPage : Page
         _segments.Clear();
         _notesBubbles.Clear();
         _notesHistory.Clear();
+        foreach (var col in _threadMessages) col.Clear();
+        _activeThread = 0;
+        ThreadSelector.SelectedItem = Thread1Item;
+        AssistantChatList.ItemsSource = _threadMessages[0];
         _displayOffset = 0;
         TranscriptList.Visibility = Visibility.Collapsed;
         NewSessionButton.Visibility = Visibility.Collapsed;
         NotesEmptyPanel.Visibility = Visibility.Visible;
+        ExpandNotesButton.IsEnabled = false;
         ActionStatus.Text = string.Empty;
         PreContextBox.Text = _settings.DefaultMeetingContext;
         App.CaptionOverlay?.ClearLines();
@@ -447,6 +458,7 @@ public sealed partial class LiveTranscriptPage : Page
 
             NotesEmptyPanel.Visibility = Visibility.Collapsed;
             NotesUpdatedLabel.Text = "Updated just now";
+            ExpandNotesButton.IsEnabled = true;
         });
     }
 
@@ -523,6 +535,24 @@ public sealed partial class LiveTranscriptPage : Page
         }
     }
 
+    private void OnThreadSelectorChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs e)
+    {
+        var newThread = ReferenceEquals(sender.SelectedItem, Thread2Item) ? 1 : 0;
+        if (newThread == _activeThread) return;
+
+        // Clear draft so user doesn't accidentally post into the wrong thread.
+        AssistantQuestionBox.Text = string.Empty;
+
+        _activeThread = newThread;
+        AssistantChatList.ItemsSource = _threadMessages[_activeThread];
+
+        // Reflect per-thread busy state immediately on switch.
+        var isBusy = _isAskingThread[_activeThread];
+        AssistantQuestionBox.IsEnabled = !isBusy;
+        SendQuestionButton.IsEnabled = !isBusy;
+        if (isBusy) ShowThinking(); else HideThinking();
+    }
+
     private async void OnAssistantQuestionKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key != VirtualKey.Enter)
@@ -537,33 +567,41 @@ public sealed partial class LiveTranscriptPage : Page
 
     private async Task SubmitQuestionAsync()
     {
-        if (_isAsking)
+        var thread = _activeThread;
+        if (_isAskingThread[thread])
             return;
 
         var question = AssistantQuestionBox.Text.Trim();
         if (question.Length == 0)
             return;
 
-        _isAsking = true;
+        _isAskingThread[thread] = true;
         AssistantQuestionBox.Text = string.Empty;
         AssistantQuestionBox.IsEnabled = false;
         SendQuestionButton.IsEnabled = false;
         ShowThinking();
 
-        _assistantMessages.Add(new AssistantMessage("You", question, DateTimeOffset.Now));
+        _threadMessages[thread].Add(new AssistantMessage("You", question, DateTimeOffset.Now));
 
         try
         {
-            var answer = await Assistant.AskAsync(question);
-            _assistantMessages.Add(new AssistantMessage("Claude", answer, DateTimeOffset.Now));
+            var answer = await Assistant.AskAsync(question, thread);
+            // Only append if the user hasn't switched away — still update the collection regardless
+            // (it's not visible but preserves history).
+            _threadMessages[thread].Add(new AssistantMessage("Claude", answer, DateTimeOffset.Now));
         }
         finally
         {
-            HideThinking();
-            _isAsking = false;
-            AssistantQuestionBox.IsEnabled = true;
-            SendQuestionButton.IsEnabled = true;
-            AssistantQuestionBox.Focus(FocusState.Programmatic);
+            _isAskingThread[thread] = false;
+
+            // Only restore UI state if we're still on this thread.
+            if (_activeThread == thread)
+            {
+                HideThinking();
+                AssistantQuestionBox.IsEnabled = true;
+                SendQuestionButton.IsEnabled = true;
+                AssistantQuestionBox.Focus(FocusState.Programmatic);
+            }
         }
     }
 

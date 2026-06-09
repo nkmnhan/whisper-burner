@@ -13,6 +13,7 @@ namespace WhisperLive.Services.Assistant;
 public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposable
 {
     private static readonly TimeSpan NotesRefreshInterval = TimeSpan.FromMinutes(3);
+    private const int ThreadCount = 2;
 
     private const string SystemPromptBase =
         "You are a meeting assistant embedded in a live-transcription desktop app. " +
@@ -29,13 +30,26 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
     private readonly IRecordingManager _recordingManager;
     private readonly IAiProvider _aiProvider;
 
+    // Per-thread sessions — _sessions[0] is the notes/Thread-1 session (eager),
+    // _sessions[1] is Thread 2 (lazy: created on first ask, bootstrapped with full transcript).
+    private readonly IAiSession?[] _sessions = new IAiSession?[ThreadCount];
+
+    // Per-thread transcript deltas — both accumulate from StartSession onwards so that
+    // Thread 2's first ask can send the full meeting history as bootstrap context.
+    private readonly StringBuilder[] _chatDeltas = [new(), new()];
+
+    // Notes delta is separate — only session 0 drives notes refresh.
     private readonly object _bufferLock = new();
-    private readonly StringBuilder _chatDelta = new();
     private readonly StringBuilder _notesDelta = new();
 
+    // Latest generated notes — injected into Thread 2 bootstrap so it understands meeting state.
+    private MeetingNotes? _latestNotes;
+    private string? _systemPrompt;
+
     private CancellationTokenSource? _sessionCts;
-    private IAiSession? _session;
-    private string? _preContext;
+
+    // Guard lazy creation of session 1 against concurrent first-asks.
+    private readonly SemaphoreSlim _sessionCreateLock = new(1, 1);
 
     public event EventHandler<MeetingNotes>? NotesUpdated;
     public event EventHandler? NotesRefreshStarted;
@@ -50,15 +64,15 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
 
     public void StartSession(string? preContext = null)
     {
-        _preContext = string.IsNullOrWhiteSpace(preContext) ? null : preContext.Trim();
-
-        var systemPrompt = BuildSystemPrompt(_preContext);
-        _session = _aiProvider.CreateSession(systemPrompt);
+        _systemPrompt = BuildSystemPrompt(preContext?.Trim());
+        _sessions[0] = _aiProvider.CreateSession(_systemPrompt);
+        _sessions[1] = null; // Thread 2 is lazy
 
         lock (_bufferLock)
         {
-            _chatDelta.Clear();
+            foreach (var sb in _chatDeltas) sb.Clear();
             _notesDelta.Clear();
+            _latestNotes = null;
         }
 
         _sessionCts = new CancellationTokenSource();
@@ -68,67 +82,148 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
 
     public void EndSession()
     {
-        if (_session is null) return;
+        if (_sessions[0] is null) return;
 
         _recordingManager.SegmentAdded -= OnSegmentAdded;
+
+        // Cancel in-flight work first so sessions are not disposed under an active call.
         _sessionCts?.Cancel();
         _sessionCts?.Dispose();
         _sessionCts = null;
 
-        _session.Dispose();
-        _session = null;
-        _preContext = null;
+        for (var i = 0; i < ThreadCount; i++)
+        {
+            _sessions[i]?.Dispose();
+            _sessions[i] = null;
+        }
 
         lock (_bufferLock)
         {
-            _chatDelta.Clear();
+            foreach (var sb in _chatDeltas) sb.Clear();
             _notesDelta.Clear();
+            _latestNotes = null;
         }
+
+        _systemPrompt = null;
     }
 
     private void OnSegmentAdded(object? sender, SubtitleSegment seg)
     {
         lock (_bufferLock)
         {
-            _chatDelta.AppendLine(seg.Text);
+            // Both threads accumulate — Thread 2's delta grows until its first ask.
+            foreach (var sb in _chatDeltas)
+                sb.AppendLine(seg.Text);
             _notesDelta.AppendLine(seg.Text);
         }
     }
 
     // ── Chat ──────────────────────────────────────────────────────────────────
 
-    public async Task<string> AskAsync(string question, CancellationToken cancellationToken = default)
+    public async Task<string> AskAsync(
+        string question, int threadIndex = 0, CancellationToken cancellationToken = default)
     {
-        if (_session is null) return "No active meeting session.";
+        if ((uint)threadIndex >= ThreadCount)
+            throw new ArgumentOutOfRangeException(nameof(threadIndex));
 
+        // Capture session reference locally — safe against EndSession racing disposal.
+        var session = await GetOrCreateSessionAsync(threadIndex, cancellationToken);
+        if (session is null) return "No active meeting session.";
+
+        // Snapshot delta — restore on failure so context is not lost.
         string delta;
         lock (_bufferLock)
         {
-            delta = _chatDelta.ToString();
-            _chatDelta.Clear();
+            delta = _chatDeltas[threadIndex].ToString();
+            _chatDeltas[threadIndex].Clear();
         }
 
-        var prompt = delta.Length > 0
-            ? $"[New transcript since your last question]\n{delta}\n\n[Question]\n{question}"
-            : $"[Question]\n{question}";
+        var prompt = BuildAskPrompt(question, delta, threadIndex);
 
         try
         {
             var context = await BuildCallContextAsync();
-            return await _session.SendAsync(prompt, context, cancellationToken);
+            return await session.SendAsync(prompt, context, cancellationToken);
         }
         catch (Exception ex)
         {
-            AppLogger.Warning(ex, "Meeting assistant question failed");
+            // Restore unread delta so the next ask gets the missed transcript.
+            lock (_bufferLock)
+                _chatDeltas[threadIndex].Insert(0, delta);
+
+            AppLogger.Warning(ex, "Meeting assistant question failed (thread {Index})", threadIndex);
             return $"⚠ Couldn't reach {_aiProvider.Name} — {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Returns the session for <paramref name="threadIndex"/>, creating it lazily for Thread 2.
+    /// Thread 2's session is bootstrapped on its own first-ask via <see cref="BuildAskPrompt"/>.
+    /// Returns null if the service has been stopped.
+    /// </summary>
+    private async Task<IAiSession?> GetOrCreateSessionAsync(int threadIndex, CancellationToken ct)
+    {
+        if (_sessions[threadIndex] is { } existing) return existing;
+        if (_systemPrompt is null) return null;
+
+        await _sessionCreateLock.WaitAsync(ct);
+        try
+        {
+            // Double-check after acquiring lock.
+            if (_sessions[threadIndex] is not null) return _sessions[threadIndex];
+            if (_systemPrompt is null) return null;
+
+            _sessions[threadIndex] = _aiProvider.CreateSession(_systemPrompt);
+            return _sessions[threadIndex];
+        }
+        finally
+        {
+            _sessionCreateLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Builds the full prompt for an ask, injecting transcript delta.
+    /// For Thread 2's first ask (delta == all transcript since session start),
+    /// also injects latest meeting notes so it starts with full meeting context.
+    /// </summary>
+    private string BuildAskPrompt(string question, string delta, int threadIndex)
+    {
+        if (delta.Length == 0)
+            return $"[Question]\n{question}";
+
+        var sb = new StringBuilder();
+
+        // Thread 2 bootstrap: include notes summary so it understands the meeting state.
+        if (threadIndex == 1 && _latestNotes is { } notes)
+        {
+            sb.AppendLine("[Current meeting notes]");
+            AppendNoteSection(sb, "Reasons", notes.Reasons);
+            AppendNoteSection(sb, "Goals", notes.Goals);
+            AppendNoteSection(sb, "Approaches", notes.Approaches);
+            AppendNoteSection(sb, "Decisions", notes.Decisions);
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("[Meeting transcript since last update]");
+        sb.AppendLine(delta);
+        sb.AppendLine("[Question]");
+        sb.Append(question);
+        return sb.ToString();
+    }
+
+    private static void AppendNoteSection(StringBuilder sb, string label, IReadOnlyList<string> items)
+    {
+        if (items.Count == 0) return;
+        sb.AppendLine($"{label}: {string.Join("; ", items)}");
     }
 
     // ── Notes ─────────────────────────────────────────────────────────────────
 
     public async Task RefreshNotesAsync(CancellationToken cancellationToken = default, bool force = false)
     {
-        if (_session is null) return;
+        var session = _sessions[0];
+        if (session is null) return;
 
         string delta;
         lock (_bufferLock)
@@ -149,7 +244,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         MeetingNotes? notes;
         try
         {
-            notes = await GenerateNotesAsync(delta, cancellationToken);
+            notes = await GenerateNotesAsync(session, delta, cancellationToken);
         }
         catch
         {
@@ -159,7 +254,11 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         }
 
         if (notes is not null)
+        {
+            lock (_bufferLock)
+                _latestNotes = notes;
             NotesUpdated?.Invoke(this, notes);
+        }
     }
 
     private async Task RunPeriodicNotesRefreshAsync(CancellationToken ct)
@@ -173,7 +272,8 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         catch (OperationCanceledException) { }
     }
 
-    private async Task<MeetingNotes?> GenerateNotesAsync(string transcriptDelta, CancellationToken ct)
+    private async Task<MeetingNotes?> GenerateNotesAsync(
+        IAiSession session, string transcriptDelta, CancellationToken ct)
     {
         var prompt =
             "[New transcript since the last notes update]\n" + transcriptDelta +
@@ -183,7 +283,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         try
         {
             var context = await BuildCallContextAsync();
-            var response = await _session!.SendAsync(prompt, context, ct);
+            var response = await session.SendAsync(prompt, context, ct);
             return ParseNotes(response);
         }
         catch (Exception ex)
@@ -257,6 +357,8 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
     {
         _sessionCts?.Cancel();
         _sessionCts?.Dispose();
-        _session?.Dispose();
+        foreach (var s in _sessions)
+            s?.Dispose();
+        _sessionCreateLock.Dispose();
     }
 }

@@ -399,13 +399,34 @@
                     <!-- Chat view: freeform "what did I miss" Q&A -->
                     <Grid x:Name="ChatView" Grid.Row="1" Visibility="Collapsed">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
+
+                        <!--
+                            SelectorBar: Gallery-idiomatic lightweight tab switcher.
+                            Thread 1 is the default; Thread 2 is lazy-created on first use
+                            and bootstrapped with full transcript + latest meeting notes.
+                        -->
+                        <SelectorBar
+                            x:Name="ThreadSelector"
+                            Grid.Row="0"
+                            Margin="0,0,0,6"
+                            SelectionChanged="OnThreadSelectorChanged">
+                            <SelectorBarItem
+                                x:Name="Thread1Item"
+                                IsSelected="True"
+                                Text="Thread 1" />
+                            <SelectorBarItem
+                                x:Name="Thread2Item"
+                                Text="Thread 2" />
+                        </SelectorBar>
+
                         <ListView
                             x:Name="AssistantChatList"
-                            Grid.Row="0"
+                            Grid.Row="1"
                             ItemTemplateSelector="{StaticResource AssistantMessageSelector}"
                             SelectionMode="None">
                             <ListView.ItemsPanel>
@@ -433,7 +454,7 @@
                         <!-- Thinking indicator: shown while Claude call is in flight -->
                         <StackPanel
                             x:Name="ThinkingIndicator"
-                            Grid.Row="1"
+                            Grid.Row="2"
                             Margin="0,6,0,0"
                             Opacity="0"
                             Orientation="Horizontal"
@@ -451,7 +472,7 @@
                                 Style="{StaticResource CaptionTextBlockStyle}"
                                 Text="Thinking" />
                         </StackPanel>
-                        <Grid Grid.Row="2" Margin="0,8,0,0" ColumnSpacing="8">
+                        <Grid Grid.Row="3" Margin="0,8,0,0" ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />

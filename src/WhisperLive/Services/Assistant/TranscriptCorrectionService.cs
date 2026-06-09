@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using WhisperLive.Infrastructure;
 using WhisperLive.Models;
+using WhisperLive.Services.Audio;
 
-namespace WhisperLive.Services;
+namespace WhisperLive.Services.Assistant;
 
 public sealed class TranscriptCorrectionService : ITranscriptCorrectionService, IDisposable
 {
@@ -23,8 +23,9 @@ public sealed class TranscriptCorrectionService : ITranscriptCorrectionService, 
         "Do not rephrase, add meaning, or alter correct text.\n\n" +
         "Input:\n";
 
-    private readonly RecordingManager _recordingManager;
-    private readonly SubtitleService _subtitleService;
+    private readonly IRecordingManager _recordingManager;
+    private readonly ISubtitleService _subtitleService;
+    private readonly IAiProvider _aiProvider;
     private readonly object _bufferLock = new();
     private readonly List<SubtitleSegment> _buffer = [];
     private readonly SemaphoreSlim _flushLock = new(1, 1);
@@ -33,10 +34,14 @@ public sealed class TranscriptCorrectionService : ITranscriptCorrectionService, 
 
     public event EventHandler<IReadOnlyList<CorrectedSegment>>? BatchCorrected;
 
-    public TranscriptCorrectionService(RecordingManager recordingManager, SubtitleService subtitleService)
+    public TranscriptCorrectionService(
+        IRecordingManager recordingManager,
+        ISubtitleService subtitleService,
+        IAiProvider aiProvider)
     {
         _recordingManager = recordingManager;
         _subtitleService = subtitleService;
+        _aiProvider = aiProvider;
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -104,71 +109,35 @@ public sealed class TranscriptCorrectionService : ITranscriptCorrectionService, 
         }
     }
 
-    // ── Claude subprocess ─────────────────────────────────────────────────────
-
-    private static async Task<IReadOnlyList<CorrectedSegment>> CorrectBatchAsync(
+    private async Task<IReadOnlyList<CorrectedSegment>> CorrectBatchAsync(
         List<SubtitleSegment> batch, CancellationToken ct)
     {
         var inputJson = JsonSerializer.Serialize(batch.Select(s => s.Text).ToList());
         var prompt = CorrectionPromptTemplate + inputJson;
 
-        var psi = new ProcessStartInfo
-        {
-            FileName = "claude",
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        psi.ArgumentList.Add("-p");
-        psi.ArgumentList.Add("--output-format");
-        psi.ArgumentList.Add("json");
+        var responseText = await _aiProvider.CompleteAsync(prompt, ct);
 
-        Process process;
-        try
+        var trimmed = responseText.Trim();
+        if (trimmed.StartsWith("```"))
         {
-            process = Process.Start(psi) ?? throw new InvalidOperationException("Process.Start returned null.");
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException("Claude Code CLI not found — is it installed and on PATH?", ex);
+            var firstNewline = trimmed.IndexOf('\n');
+            var lastFence = trimmed.LastIndexOf("```");
+            if (firstNewline >= 0 && lastFence > firstNewline)
+                trimmed = trimmed[(firstNewline + 1)..lastFence].Trim();
         }
 
-        using (process)
+        using var arrayDoc = JsonDocument.Parse(trimmed);
+        var corrected = new List<CorrectedSegment>();
+        var i = 0;
+        foreach (var item in arrayDoc.RootElement.EnumerateArray())
         {
-            await process.StandardInput.WriteAsync(prompt);
-            process.StandardInput.Close();
-
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
-            var stderrTask = process.StandardError.ReadToEndAsync(ct);
-            await process.WaitForExitAsync(ct);
-            var stdout = await stdoutTask;
-            var stderr = await stderrTask;
-
-            if (process.ExitCode != 0)
-                throw new InvalidOperationException($"Claude exited with error: {stderr.Trim()}");
-
-            using var doc = JsonDocument.Parse(stdout);
-            var root = doc.RootElement;
-            if (root.TryGetProperty("is_error", out var isError) && isError.GetBoolean())
-                throw new InvalidOperationException("Claude reported an error for this correction request.");
-
-            var resultJson = root.TryGetProperty("result", out var r) ? r.GetString() ?? "[]" : "[]";
-            using var arrayDoc = JsonDocument.Parse(resultJson);
-
-            var corrected = new List<CorrectedSegment>();
-            var i = 0;
-            foreach (var item in arrayDoc.RootElement.EnumerateArray())
-            {
-                if (i < batch.Count)
-                    corrected.Add(new CorrectedSegment(batch[i].Id, item.GetString() ?? batch[i].Text));
-                i++;
-            }
-            if (i != batch.Count)
-                AppLogger.Warning("Correction batch count mismatch: sent {Sent}, received {Received}", batch.Count, i);
-            return corrected;
+            if (i < batch.Count)
+                corrected.Add(new CorrectedSegment(batch[i].Id, item.GetString() ?? batch[i].Text));
+            i++;
         }
+        if (i != batch.Count)
+            AppLogger.Warning("Correction batch count mismatch: sent {Sent}, received {Received}", batch.Count, i);
+        return corrected;
     }
 
     public void Dispose()
