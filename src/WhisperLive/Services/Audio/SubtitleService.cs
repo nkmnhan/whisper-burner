@@ -18,7 +18,6 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
     private readonly List<SubtitleSegment> _segments = [];
     private readonly object _segLock = new();
     private StreamWriter? _writer;
-    private StreamWriter? _correctedWriter;
     private bool _sessionPending;
 
     public event EventHandler<SubtitleSegment>? SegmentAdded;
@@ -41,9 +40,6 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         _writer?.Flush();
         _writer?.Dispose();
         _writer = null;
-        _correctedWriter?.Flush();
-        _correctedWriter?.Dispose();
-        _correctedWriter = null;
         if (CurrentSessionPath is not null)
             AppLogger.Info("Session file closed: {Path}", CurrentSessionPath);
         _sessionPending = false;
@@ -56,7 +52,11 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
             SubtitleSegment globalSeg;
             lock (_segLock)
             {
-                globalSeg = seg with { Id = _segments.Count + 1 };
+                var deduped = _segments.Count > 0
+                    ? seg with { Text = StripLeadingOverlap(_segments[^1].Text, seg.Text) }
+                    : seg;
+                if (deduped.Text.Length == 0) continue;
+                globalSeg = deduped with { Id = _segments.Count + 1 };
                 _segments.Add(globalSeg);
             }
             WriteSrtEntry(globalSeg);
@@ -64,20 +64,58 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         }
     }
 
+    // Strips word-level prefix of `current` that overlaps with a suffix of `prev`.
+    // Handles Whisper's chunk-boundary repetition (e.g. prev: "Make the most of."
+    // curr: "Make the most of means use your time" → "means use your time").
+    // Minimum 2-word overlap required to avoid false positives on short common phrases.
+    private static string StripLeadingOverlap(string prev, string current)
+    {
+        const int MinOverlapWords = 2;
+
+        var prevWords = NormalizeWords(prev);
+        var currWords = NormalizeWords(current);
+
+        var maxK = Math.Min(prevWords.Count - 1, currWords.Count);
+        if (maxK < MinOverlapWords) return current;
+
+        for (var k = maxK; k >= MinOverlapWords; k--)
+        {
+            var match = true;
+            for (var i = 0; i < k; i++)
+            {
+                if (!string.Equals(prevWords[prevWords.Count - k + i], currWords[i], StringComparison.OrdinalIgnoreCase))
+                {
+                    match = false;
+                    break;
+                }
+            }
+            if (!match) continue;
+
+            // Skip k raw words from current (preserving original casing/spacing after them)
+            var raw = current.AsSpan().TrimStart();
+            for (var i = 0; i < k && raw.Length > 0; i++)
+            {
+                var space = raw.IndexOf(' ');
+                raw = space < 0 ? [] : raw[(space + 1)..].TrimStart();
+            }
+            return raw.ToString();
+        }
+
+        return current;
+    }
+
+    private static List<string> NormalizeWords(string text) =>
+        text.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => w.TrimEnd('.', ',', '?', '!', ';', ':'))
+            .Where(w => w.Length > 0)
+            .ToList();
+
     private void WriteSrtEntry(SubtitleSegment seg)
     {
         EnsureSessionFile();
         if (_writer is null) return;
         try { _writer.Write(seg.ToSrtEntry()); _writer.WriteLine(); }
         catch (Exception ex) { AppLogger.Warning(ex, "Failed to write segment to session file"); }
-    }
-
-    private void EnsureCorrectedFile()
-    {
-        if (_correctedWriter is not null || CurrentSessionPath is null) return;
-        var correctedPath = Path.ChangeExtension(CurrentSessionPath, ".corrected.srt");
-        _correctedWriter = new StreamWriter(correctedPath, append: false, Encoding.UTF8) { AutoFlush = true };
-        AppLogger.Info("Corrected session file opened: {Path}", correctedPath);
     }
 
     private void EnsureSessionFile()
@@ -96,26 +134,22 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     public void ApplyCorrections(IReadOnlyList<CorrectedSegment> corrections)
     {
-        EnsureCorrectedFile();
-        if (_correctedWriter is null) return;
+        if (CurrentSessionPath is null) return;
 
-        foreach (var correction in corrections.OrderBy(c => c.OriginalId))
+        List<SubtitleSegment> snapshot;
+        lock (_segLock)
         {
-            SubtitleSegment updated;
-            lock (_segLock)
+            foreach (var correction in corrections.OrderBy(c => c.OriginalId))
             {
                 var index = correction.OriginalId - 1;
                 if (index < 0 || index >= _segments.Count) continue;
-                updated = _segments[index] with { Text = correction.CorrectedText };
-                _segments[index] = updated;
+                _segments[index] = _segments[index] with { Text = correction.CorrectedText };
             }
-            try
-            {
-                _correctedWriter.Write(updated.ToSrtEntry());
-                _correctedWriter.WriteLine();
-            }
-            catch (Exception ex) { AppLogger.Warning(ex, "Failed to write corrected segment"); }
+            snapshot = [.._segments];
         }
+
+        var correctedPath = Path.ChangeExtension(CurrentSessionPath, ".corrected.srt");
+        WriteSrtFile(correctedPath, snapshot, "Failed to write corrected SRT");
     }
 
     private void WriteFinalSrt()
@@ -128,22 +162,29 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
             snapshot = [.._segments];
         }
         var finalPath = Path.ChangeExtension(CurrentSessionPath, ".final.srt");
+        WriteSrtFile(finalPath, snapshot, "Failed to write final SRT");
+        AppLogger.Info("Final SRT written: {Path}", finalPath);
+    }
+
+    private static void WriteSrtFile(string path, List<SubtitleSegment> segments, string errorMsg)
+    {
         try
         {
             var sb = new StringBuilder();
-            for (var i = 0; i < snapshot.Count; i++)
-                sb.AppendLine((snapshot[i] with { Id = i + 1 }).ToSrtEntry());
-            File.WriteAllText(finalPath, sb.ToString(), Encoding.UTF8);
-            AppLogger.Info("Final SRT written: {Path}", finalPath);
+            for (var i = 0; i < segments.Count; i++)
+                sb.AppendLine((segments[i] with { Id = i + 1 }).ToSrtEntry());
+            File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
         }
-        catch (Exception ex) { AppLogger.Warning(ex, "Failed to write final SRT"); }
+        catch (Exception ex) { AppLogger.Warning(ex, errorMsg); }
     }
 
     public async Task ExportSrtAsync(string path)
     {
+        List<SubtitleSegment> snapshot;
+        lock (_segLock) snapshot = [.._segments];
         var sb = new StringBuilder();
-        foreach (var seg in _segments)
-            sb.AppendLine(seg.ToSrtEntry());
+        for (var i = 0; i < snapshot.Count; i++)
+            sb.AppendLine((snapshot[i] with { Id = i + 1 }).ToSrtEntry());
         await File.WriteAllTextAsync(path, sb.ToString(), Encoding.UTF8);
     }
 

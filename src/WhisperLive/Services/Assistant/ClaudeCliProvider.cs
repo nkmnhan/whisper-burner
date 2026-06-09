@@ -81,7 +81,15 @@ public sealed class ClaudeCliProvider : IAiProvider
 
             var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
             var stderrTask = process.StandardError.ReadToEndAsync(ct);
-            await process.WaitForExitAsync(ct);
+            try
+            {
+                await process.WaitForExitAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                throw;
+            }
             var stdout = await stdoutTask;
             var stderr = await stderrTask;
 

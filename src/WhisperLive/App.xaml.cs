@@ -59,6 +59,7 @@ sealed partial class App : Application
         MainWindow.Closed += async (s, _) =>
         {
             await RecordingManager.StopAsync();
+            MeetingAssistant.EndSession();
             CorrectionService.Dispose();
 
             CaptionOverlay?.Close();

@@ -145,7 +145,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Row 0: Status bar — dot + label, assistant toggle on the right -->
@@ -185,6 +184,10 @@
 
         <!-- Row 1: live transcript (always visible) + collapsible assistant panel -->
         <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -271,6 +274,7 @@
             <Border
                 x:Name="AssistantPanel"
                 Grid.Column="1"
+                Grid.RowSpan="2"
                 Width="320"
                 Margin="16,0,0,0"
                 Padding="12"
@@ -399,34 +403,14 @@
                     <!-- Chat view: freeform "what did I miss" Q&A -->
                     <Grid x:Name="ChatView" Grid.Row="1" Visibility="Collapsed">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <!--
-                            SelectorBar: Gallery-idiomatic lightweight tab switcher.
-                            Thread 1 is the default; Thread 2 is lazy-created on first use
-                            and bootstrapped with full transcript + latest meeting notes.
-                        -->
-                        <SelectorBar
-                            x:Name="ThreadSelector"
-                            Grid.Row="0"
-                            Margin="0,0,0,6"
-                            SelectionChanged="OnThreadSelectorChanged">
-                            <SelectorBarItem
-                                x:Name="Thread1Item"
-                                IsSelected="True"
-                                Text="Thread 1" />
-                            <SelectorBarItem
-                                x:Name="Thread2Item"
-                                Text="Thread 2" />
-                        </SelectorBar>
-
                         <ListView
                             x:Name="AssistantChatList"
-                            Grid.Row="1"
+                            Grid.Row="0"
                             ItemTemplateSelector="{StaticResource AssistantMessageSelector}"
                             SelectionMode="None">
                             <ListView.ItemsPanel>
@@ -454,7 +438,7 @@
                         <!-- Thinking indicator: shown while Claude call is in flight -->
                         <StackPanel
                             x:Name="ThinkingIndicator"
-                            Grid.Row="2"
+                            Grid.Row="1"
                             Margin="0,6,0,0"
                             Opacity="0"
                             Orientation="Horizontal"
@@ -472,7 +456,7 @@
                                 Style="{StaticResource CaptionTextBlockStyle}"
                                 Text="Thinking" />
                         </StackPanel>
-                        <Grid Grid.Row="3" Margin="0,8,0,0" ColumnSpacing="8">
+                        <Grid Grid.Row="2" Margin="0,8,0,0" ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
@@ -497,8 +481,8 @@
             </Border>
         </Grid>
 
-        <!-- Row 2: actions -->
-        <StackPanel Grid.Row="2" Margin="0,16,0,0" HorizontalAlignment="Center" Spacing="12">
+        <!-- Row 1 / Column 0: actions — inside left column so it centers with the content above -->
+        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" HorizontalAlignment="Center" Spacing="12">
             <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
 
                 <!-- New session: idle only, when prior transcript exists -->

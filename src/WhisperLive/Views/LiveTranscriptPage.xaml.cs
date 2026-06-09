@@ -21,13 +21,12 @@ public sealed partial class LiveTranscriptPage : Page
 {
     private AppSettings _settings = new();
     private readonly ObservableCollection<string> _segments = [];
-    private readonly ObservableCollection<AssistantMessage>[] _threadMessages =
-        [new ObservableCollection<AssistantMessage>(), new ObservableCollection<AssistantMessage>()];
+    private readonly ObservableCollection<AssistantMessage> _chatMessages = [];
     private readonly ObservableCollection<NotesBubble> _notesBubbles = [];
     private readonly List<NotesBubble> _notesHistory = [];
-    private readonly bool[] _isAskingThread = [false, false];
-    private int _activeThread;
+    private bool _isAsking;
     private int _displayOffset;
+    private int _activeRefreshCount;
 
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _notesTimer;
     private DateTimeOffset _notesLastRefresh;
@@ -37,7 +36,7 @@ public sealed partial class LiveTranscriptPage : Page
     {
         InitializeComponent();
         TranscriptList.ItemsSource = _segments;
-        AssistantChatList.ItemsSource = _threadMessages[0];
+        AssistantChatList.ItemsSource = _chatMessages;
         NotesChatList.ItemsSource = _notesBubbles;
 
         // Collapse ThinkingIndicator after its fade-out finishes, then stop the dots animation.
@@ -253,10 +252,7 @@ public sealed partial class LiveTranscriptPage : Page
         _segments.Clear();
         _notesBubbles.Clear();
         _notesHistory.Clear();
-        foreach (var col in _threadMessages) col.Clear();
-        _activeThread = 0;
-        ThreadSelector.SelectedItem = Thread1Item;
-        AssistantChatList.ItemsSource = _threadMessages[0];
+        _chatMessages.Clear();
         _displayOffset = 0;
         TranscriptList.Visibility = Visibility.Collapsed;
         NewSessionButton.Visibility = Visibility.Collapsed;
@@ -428,6 +424,7 @@ public sealed partial class LiveTranscriptPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
+            _activeRefreshCount++;
             NotesRefreshRing.IsActive = true;
             NotesRefreshRing.Visibility = Visibility.Visible;
             NotesUpdatedLabel.Text = "Updating…";
@@ -441,8 +438,12 @@ public sealed partial class LiveTranscriptPage : Page
             _notesLastRefresh = DateTimeOffset.Now;
             NotesWaitingRing.IsActive = false;
             NotesWaitingRing.Visibility = Visibility.Collapsed;
-            NotesRefreshRing.IsActive = false;
-            NotesRefreshRing.Visibility = Visibility.Collapsed;
+            _activeRefreshCount = Math.Max(0, _activeRefreshCount - 1);
+            if (_activeRefreshCount == 0)
+            {
+                NotesRefreshRing.IsActive = false;
+                NotesRefreshRing.Visibility = Visibility.Collapsed;
+            }
 
             var content = FormatNotesBubble(notes);
             if (string.IsNullOrWhiteSpace(content)) return;
@@ -520,37 +521,14 @@ public sealed partial class LiveTranscriptPage : Page
     private async void OnRefreshNotesClicked(object sender, RoutedEventArgs e)
     {
         RefreshNotesButton.IsEnabled = false;
-        NotesRefreshRing.IsActive = true;
-        NotesRefreshRing.Visibility = Visibility.Visible;
-        NotesUpdatedLabel.Text = "Refreshing…";
         try
         {
             await Assistant.RefreshNotesAsync(force: true);
         }
         finally
         {
-            NotesRefreshRing.IsActive = false;
-            NotesRefreshRing.Visibility = Visibility.Collapsed;
             RefreshNotesButton.IsEnabled = true;
         }
-    }
-
-    private void OnThreadSelectorChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs e)
-    {
-        var newThread = ReferenceEquals(sender.SelectedItem, Thread2Item) ? 1 : 0;
-        if (newThread == _activeThread) return;
-
-        // Clear draft so user doesn't accidentally post into the wrong thread.
-        AssistantQuestionBox.Text = string.Empty;
-
-        _activeThread = newThread;
-        AssistantChatList.ItemsSource = _threadMessages[_activeThread];
-
-        // Reflect per-thread busy state immediately on switch.
-        var isBusy = _isAskingThread[_activeThread];
-        AssistantQuestionBox.IsEnabled = !isBusy;
-        SendQuestionButton.IsEnabled = !isBusy;
-        if (isBusy) ShowThinking(); else HideThinking();
     }
 
     private async void OnAssistantQuestionKeyDown(object sender, KeyRoutedEventArgs e)
@@ -567,41 +545,31 @@ public sealed partial class LiveTranscriptPage : Page
 
     private async Task SubmitQuestionAsync()
     {
-        var thread = _activeThread;
-        if (_isAskingThread[thread])
-            return;
+        if (_isAsking) return;
 
         var question = AssistantQuestionBox.Text.Trim();
-        if (question.Length == 0)
-            return;
+        if (question.Length == 0) return;
 
-        _isAskingThread[thread] = true;
+        _isAsking = true;
         AssistantQuestionBox.Text = string.Empty;
         AssistantQuestionBox.IsEnabled = false;
         SendQuestionButton.IsEnabled = false;
         ShowThinking();
 
-        _threadMessages[thread].Add(new AssistantMessage("You", question, DateTimeOffset.Now));
+        _chatMessages.Add(new AssistantMessage("You", question, DateTimeOffset.Now));
 
         try
         {
-            var answer = await Assistant.AskAsync(question, thread);
-            // Only append if the user hasn't switched away — still update the collection regardless
-            // (it's not visible but preserves history).
-            _threadMessages[thread].Add(new AssistantMessage("Claude", answer, DateTimeOffset.Now));
+            var answer = await Assistant.AskAsync(question);
+            _chatMessages.Add(new AssistantMessage("Claude", answer, DateTimeOffset.Now));
         }
         finally
         {
-            _isAskingThread[thread] = false;
-
-            // Only restore UI state if we're still on this thread.
-            if (_activeThread == thread)
-            {
-                HideThinking();
-                AssistantQuestionBox.IsEnabled = true;
-                SendQuestionButton.IsEnabled = true;
-                AssistantQuestionBox.Focus(FocusState.Programmatic);
-            }
+            _isAsking = false;
+            HideThinking();
+            AssistantQuestionBox.IsEnabled = true;
+            SendQuestionButton.IsEnabled = true;
+            AssistantQuestionBox.Focus(FocusState.Programmatic);
         }
     }
 

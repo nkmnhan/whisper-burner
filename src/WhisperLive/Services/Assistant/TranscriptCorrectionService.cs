@@ -91,7 +91,12 @@ public sealed class TranscriptCorrectionService : ITranscriptCorrectionService, 
             _buffer.Clear();
         }
 
-        await _flushLock.WaitAsync(ct);
+        try
+        {
+            await _flushLock.WaitAsync(ct);
+        }
+        catch (ObjectDisposedException) { return; }
+
         try
         {
             var corrected = await CorrectBatchAsync(batch, ct);
@@ -105,7 +110,7 @@ public sealed class TranscriptCorrectionService : ITranscriptCorrectionService, 
         }
         finally
         {
-            _flushLock.Release();
+            try { _flushLock.Release(); } catch (ObjectDisposedException) { }
         }
     }
 
