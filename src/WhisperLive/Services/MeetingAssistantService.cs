@@ -31,6 +31,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
     private readonly object _bufferLock = new();
     private readonly StringBuilder _chatDelta = new();
     private readonly StringBuilder _notesDelta = new();
+    private readonly SemaphoreSlim _claudeLock = new(1, 1);
 
     private CancellationTokenSource? _sessionCts;
     private string? _sessionId;
@@ -238,50 +239,58 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
 
     // ── Claude Code subprocess ────────────────────────────────────────────────
 
-    private static async Task<string> RunClaudeAsync(string sessionId, string prompt, CancellationToken ct)
+    private async Task<string> RunClaudeAsync(string sessionId, string prompt, CancellationToken ct)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = "claude",
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var arg in await BuildArgumentsAsync(sessionId))
-            psi.ArgumentList.Add(arg);
-
-        Process process;
+        await _claudeLock.WaitAsync(ct);
         try
         {
-            process = Process.Start(psi) ?? throw new InvalidOperationException("Process.Start returned null.");
+            var psi = new ProcessStartInfo
+            {
+                FileName = "claude",
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            foreach (var arg in await BuildArgumentsAsync(sessionId))
+                psi.ArgumentList.Add(arg);
+
+            Process process;
+            try
+            {
+                process = Process.Start(psi) ?? throw new InvalidOperationException("Process.Start returned null.");
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("Claude Code CLI not found — is it installed and on PATH?", ex);
+            }
+
+            using (process)
+            {
+                await process.StandardInput.WriteAsync(prompt);
+                process.StandardInput.Close();
+
+                var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
+                var stderrTask = process.StandardError.ReadToEndAsync(ct);
+                await process.WaitForExitAsync(ct);
+                var stdout = await stdoutTask;
+                var stderr = await stderrTask;
+
+                if (process.ExitCode != 0)
+                    throw new InvalidOperationException($"Claude Code exited with an error: {stderr.Trim()}");
+
+                using var doc = JsonDocument.Parse(stdout);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("is_error", out var isError) && isError.GetBoolean())
+                    throw new InvalidOperationException("Claude Code reported an error for this request.");
+
+                return root.TryGetProperty("result", out var result) ? result.GetString() ?? string.Empty : string.Empty;
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            throw new InvalidOperationException("Claude Code CLI not found — is it installed and on PATH?", ex);
-        }
-
-        using (process)
-        {
-            await process.StandardInput.WriteAsync(prompt);
-            process.StandardInput.Close();
-
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
-            var stderrTask = process.StandardError.ReadToEndAsync(ct);
-            await process.WaitForExitAsync(ct);
-            var stdout = await stdoutTask;
-            var stderr = await stderrTask;
-
-            if (process.ExitCode != 0)
-                throw new InvalidOperationException($"Claude Code exited with an error: {stderr.Trim()}");
-
-            using var doc = JsonDocument.Parse(stdout);
-            var root = doc.RootElement;
-            if (root.TryGetProperty("is_error", out var isError) && isError.GetBoolean())
-                throw new InvalidOperationException("Claude Code reported an error for this request.");
-
-            return root.TryGetProperty("result", out var result) ? result.GetString() ?? string.Empty : string.Empty;
+            _claudeLock.Release();
         }
     }
 
@@ -308,5 +317,6 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
     {
         _sessionCts?.Cancel();
         _sessionCts?.Dispose();
+        _claudeLock.Dispose();
     }
 }
