@@ -21,6 +21,7 @@ public sealed partial class LiveTranscriptPage : Page
     private AppSettings _settings = new();
     private readonly ObservableCollection<string> _segments = [];
     private readonly ObservableCollection<AssistantMessage> _assistantMessages = [];
+    private readonly ObservableCollection<NotesBubble> _notesBubbles = [];
     private bool _isAsking;
     private int _displayOffset;
 
@@ -33,6 +34,7 @@ public sealed partial class LiveTranscriptPage : Page
         InitializeComponent();
         TranscriptList.ItemsSource = _segments;
         AssistantChatList.ItemsSource = _assistantMessages;
+        NotesChatList.ItemsSource = _notesBubbles;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -216,9 +218,11 @@ public sealed partial class LiveTranscriptPage : Page
     private void OnNewSessionClicked(object sender, RoutedEventArgs e)
     {
         _segments.Clear();
+        _notesBubbles.Clear();
         _displayOffset = 0;
         TranscriptList.Visibility = Visibility.Collapsed;
         NewSessionButton.Visibility = Visibility.Collapsed;
+        NotesEmptyLabel.Visibility = Visibility.Visible;
         ActionStatus.Text = string.Empty;
         App.CaptionOverlay?.ClearLines();
         CurrentApp.SubtitleService.StartSession();
@@ -312,30 +316,39 @@ public sealed partial class LiveTranscriptPage : Page
         {
             _notesLastRefresh = DateTimeOffset.Now;
             NotesRefreshProgress.Value = 0;
-            KeyPointsList.ItemsSource = notes.KeyPoints;
-            DecisionsList.ItemsSource = notes.Decisions;
-            ActionItemsList.ItemsSource = notes.ActionItems;
 
-            KeyPointsSection.Visibility = ToVisibility(notes.KeyPoints.Count > 0);
-            DecisionsSection.Visibility = ToVisibility(notes.Decisions.Count > 0);
-            ActionItemsSection.Visibility = ToVisibility(notes.ActionItems.Count > 0);
+            var content = FormatNotesBubble(notes);
+            if (string.IsNullOrWhiteSpace(content)) return;
 
-            var hasNotes = notes.KeyPoints.Count > 0 || notes.Decisions.Count > 0 || notes.ActionItems.Count > 0;
-            NotesEmptyLabel.Visibility = ToVisibility(!hasNotes);
-            NotesUpdatedLabel.Text = hasNotes ? FormatUpdatedLabel(notes.GeneratedAt) : string.Empty;
+            _notesBubbles.Add(new NotesBubble(content, notes.GeneratedAt));
+            NotesEmptyLabel.Visibility = Visibility.Collapsed;
+            NotesUpdatedLabel.Text = "Updated just now";
         });
     }
 
     private static Visibility ToVisibility(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
 
-    private static string FormatUpdatedLabel(DateTimeOffset generatedAt)
+    private static string FormatNotesBubble(MeetingNotes notes)
     {
-        var elapsed = DateTimeOffset.Now - generatedAt;
-        if (elapsed < TimeSpan.FromMinutes(1))
-            return "Updated just now";
-        return elapsed < TimeSpan.FromHours(1)
-            ? $"Updated {(int)elapsed.TotalMinutes}m ago"
-            : $"Updated {(int)elapsed.TotalHours}h ago";
+        var sb = new System.Text.StringBuilder();
+        if (notes.KeyPoints.Count > 0)
+        {
+            sb.AppendLine("Key Points");
+            foreach (var p in notes.KeyPoints) sb.AppendLine($"• {p}");
+        }
+        if (notes.Decisions.Count > 0)
+        {
+            if (sb.Length > 0) sb.AppendLine();
+            sb.AppendLine("Decisions");
+            foreach (var d in notes.Decisions) sb.AppendLine($"• {d}");
+        }
+        if (notes.ActionItems.Count > 0)
+        {
+            if (sb.Length > 0) sb.AppendLine();
+            sb.AppendLine("Action Items");
+            foreach (var a in notes.ActionItems) sb.AppendLine($"• {a}");
+        }
+        return sb.ToString().TrimEnd();
     }
 
     private async void OnRefreshNotesClicked(object sender, RoutedEventArgs e)

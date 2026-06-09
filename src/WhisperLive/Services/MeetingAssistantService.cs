@@ -72,17 +72,11 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         _sessionId = null;
         _preContext = null;
 
-        var sessionPath = _recordingManager.CurrentSessionPath;
-        string? pendingDelta;
         lock (_bufferLock)
         {
-            pendingDelta = _notesDelta.Length > 0 ? _notesDelta.ToString() : null;
             _chatDelta.Clear();
             _notesDelta.Clear();
         }
-
-        if (pendingDelta is not null)
-            _ = FinalizeNotesAsync(sessionId, sessionPath, pendingDelta);
     }
 
     private void OnSegmentAdded(object? sender, SubtitleSegment seg)
@@ -161,23 +155,6 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         catch (OperationCanceledException) { }
     }
 
-    private async Task FinalizeNotesAsync(string sessionId, string? sessionPath, string transcriptDelta)
-    {
-        var notes = await GenerateNotesAsync(sessionId, transcriptDelta, CancellationToken.None);
-        if (notes is null || sessionPath is null) return;
-
-        try
-        {
-            var notesPath = Path.ChangeExtension(sessionPath, ".notes.md");
-            await File.WriteAllTextAsync(notesPath, RenderNotesMarkdown(notes));
-            AppLogger.Info("Meeting notes saved: {Path}", notesPath);
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Warning(ex, "Failed to save meeting notes file");
-        }
-    }
-
     private async Task<MeetingNotes?> GenerateNotesAsync(string sessionId, string transcriptDelta, CancellationToken ct)
     {
         var prompt =
@@ -237,24 +214,6 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
             if (item.GetString() is { Length: > 0 } s)
                 list.Add(s);
         return list;
-    }
-
-    private static string RenderNotesMarkdown(MeetingNotes notes)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"# Meeting notes — {notes.GeneratedAt:yyyy-MM-dd HH:mm}");
-        AppendSection(sb, "Key Points", notes.KeyPoints);
-        AppendSection(sb, "Decisions", notes.Decisions);
-        AppendSection(sb, "Action Items", notes.ActionItems);
-        return sb.ToString();
-
-        static void AppendSection(StringBuilder sb, string title, IReadOnlyList<string> items)
-        {
-            if (items.Count == 0) return;
-            sb.AppendLine().AppendLine($"## {title}");
-            foreach (var item in items)
-                sb.AppendLine($"- {item}");
-        }
     }
 
     // ── Claude Code subprocess ────────────────────────────────────────────────
