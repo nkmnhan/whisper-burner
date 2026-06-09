@@ -200,9 +200,19 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
 
     private static MeetingNotes ParseNotes(string json)
     {
+        // Strip markdown code fences — Claude sometimes wraps JSON despite the prompt
+        var trimmed = json.Trim();
+        if (trimmed.StartsWith("```"))
+        {
+            var firstNewline = trimmed.IndexOf('\n');
+            var lastFence = trimmed.LastIndexOf("```");
+            if (firstNewline >= 0 && lastFence > firstNewline)
+                trimmed = trimmed[(firstNewline + 1)..lastFence].Trim();
+        }
+
         try
         {
-            using var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(trimmed);
             var root = doc.RootElement;
             return new MeetingNotes(
                 ReadStringArray(root, "keyPoints"),
@@ -212,8 +222,8 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         }
         catch (JsonException)
         {
-            // Claude didn't follow the schema — keep the panel populated with raw text
-            return new MeetingNotes([json.Trim()], [], [], DateTimeOffset.Now);
+            // Claude didn't follow the schema — show raw text in key points
+            return new MeetingNotes([trimmed], [], [], DateTimeOffset.Now);
         }
     }
 
