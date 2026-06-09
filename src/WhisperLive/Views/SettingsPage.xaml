@@ -85,22 +85,38 @@
                 </ComboBox>
             </controls:SettingsCard>
 
-            <!-- Meeting assistant -->
-            <controls:SettingsCard Description="Optional folder (code repo or documents) the meeting assistant can read for extra context" Header="Meeting context folder">
-                <controls:SettingsCard.HeaderIcon>
+            <!-- Meeting context folders -->
+            <controls:SettingsExpander
+                x:Name="ContextFolderExpander"
+                Description="Folders (code repos, docs) the meeting assistant can read for extra context"
+                Header="Meeting context folders"
+                IsExpanded="True">
+                <controls:SettingsExpander.HeaderIcon>
                     <FontIcon Glyph="&#xE8B7;" />
+                </controls:SettingsExpander.HeaderIcon>
+                <controls:SettingsExpander.Content>
+                    <Button x:Name="AddContextFolderButton" Click="OnAddContextFolderClicked">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE8B7;" />
+                            <TextBlock Text="Add folder" />
+                        </StackPanel>
+                    </Button>
+                </controls:SettingsExpander.Content>
+            </controls:SettingsExpander>
+
+            <!-- Default meeting context -->
+            <controls:SettingsCard Description="Pre-fills the context box at the start of every new session" Header="Default meeting context">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8BD;" />
                 </controls:SettingsCard.HeaderIcon>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock
-                        x:Name="ContextFolderLabel"
-                        MaxWidth="280"
-                        VerticalAlignment="Center"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                        Text="Not set"
-                        TextTrimming="CharacterEllipsis" />
-                    <Button x:Name="BrowseContextFolderButton" Click="OnBrowseContextFolderClicked" Content="Browse…" />
-                    <Button x:Name="ClearContextFolderButton" Click="OnClearContextFolderClicked" Content="Clear" />
-                </StackPanel>
+                <TextBox
+                    x:Name="DefaultContextBox"
+                    Width="360"
+                    MaxHeight="100"
+                    AcceptsReturn="True"
+                    PlaceholderText="Role, team, common abbreviations — shared across all sessions"
+                    TextWrapping="Wrap"
+                    TextChanged="OnDefaultContextChanged" />
             </controls:SettingsCard>
 
             <!-- Allowed read paths -->

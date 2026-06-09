@@ -22,6 +22,7 @@ public sealed partial class LiveTranscriptPage : Page
     private readonly ObservableCollection<string> _segments = [];
     private readonly ObservableCollection<AssistantMessage> _assistantMessages = [];
     private readonly ObservableCollection<NotesBubble> _notesBubbles = [];
+    private readonly List<NotesBubble> _notesHistory = [];
     private bool _isAsking;
     private int _displayOffset;
 
@@ -57,6 +58,7 @@ public sealed partial class LiveTranscriptPage : Page
         Manager.StateChanged += OnStateChanged;
         Manager.SegmentAdded += OnSegmentAdded;
         Assistant.NotesUpdated += OnNotesUpdated;
+        Assistant.NotesRefreshStarted += OnNotesRefreshStarted;
         CorrectionService.BatchCorrected += OnBatchCorrected;
 
         // Restore transcript that accumulated while we were away
@@ -64,6 +66,9 @@ public sealed partial class LiveTranscriptPage : Page
         _displayOffset = 0;
         foreach (var s in Manager.GetRecentSegments())
             _segments.Add(s);
+
+        if (string.IsNullOrEmpty(PreContextBox.Text))
+            PreContextBox.Text = _settings.DefaultMeetingContext;
 
         ApplyState(Manager.State);
 
@@ -77,6 +82,7 @@ public sealed partial class LiveTranscriptPage : Page
         Manager.StateChanged -= OnStateChanged;
         Manager.SegmentAdded -= OnSegmentAdded;
         Assistant.NotesUpdated -= OnNotesUpdated;
+        Assistant.NotesRefreshStarted -= OnNotesRefreshStarted;
         CorrectionService.BatchCorrected -= OnBatchCorrected;
     }
 
@@ -170,24 +176,37 @@ public sealed partial class LiveTranscriptPage : Page
                 ApiUrl: _settings.ApiUrl,
                 Model: _settings.Model);
 
+            var contextText = PreContextBox.Text.Trim();
+            if (!string.IsNullOrEmpty(contextText))
+            {
+                _settings.RecentMeetingContexts.RemoveAll(p => p == contextText);
+                _settings.RecentMeetingContexts.Insert(0, contextText);
+                if (_settings.RecentMeetingContexts.Count > 10)
+                    _settings.RecentMeetingContexts.RemoveRange(10, _settings.RecentMeetingContexts.Count - 10);
+                _ = _settings.SaveAsync();
+            }
+
             App.CaptionOverlay?.ClearLines();
             App.CaptionOverlay?.SetLanguage(_settings.Language);
             App.CaptionOverlay?.UpdatePauseState(false);
             Assistant.StartSession(PreContextBox.Text);
             CorrectionService.StartSession();
             _notesLastRefresh = DateTimeOffset.Now;
-            NotesRefreshProgress.Visibility = Visibility.Visible;
             NotesCountdownLabel.Visibility = Visibility.Visible;
+            NotesEmptyLabel.Text = "Claude is listening — first notes in ~3 min";
+            NotesWaitingRing.IsActive = true;
+            NotesWaitingRing.Visibility = Visibility.Visible;
             _notesTimer?.Start();
             await Manager.StartAsync(options);
         }
         else
         {
             _notesTimer?.Stop();
-            NotesRefreshProgress.Value = 0;
-            NotesRefreshProgress.Visibility = Visibility.Collapsed;
             NotesCountdownLabel.Visibility = Visibility.Collapsed;
             NotesCountdownLabel.Text = string.Empty;
+            NotesWaitingRing.IsActive = false;
+            NotesWaitingRing.Visibility = Visibility.Collapsed;
+            NotesEmptyLabel.Text = "Notes appear here — updated every 3 minutes";
             await Manager.StopAsync();
             Assistant.EndSession();
             CorrectionService.EndSession();
@@ -219,11 +238,13 @@ public sealed partial class LiveTranscriptPage : Page
     {
         _segments.Clear();
         _notesBubbles.Clear();
+        _notesHistory.Clear();
         _displayOffset = 0;
         TranscriptList.Visibility = Visibility.Collapsed;
         NewSessionButton.Visibility = Visibility.Collapsed;
-        NotesEmptyLabel.Visibility = Visibility.Visible;
+        NotesEmptyPanel.Visibility = Visibility.Visible;
         ActionStatus.Text = string.Empty;
+        PreContextBox.Text = _settings.DefaultMeetingContext;
         App.CaptionOverlay?.ClearLines();
         CurrentApp.SubtitleService.StartSession();
     }
@@ -232,6 +253,79 @@ public sealed partial class LiveTranscriptPage : Page
     {
         App.CaptionOverlay?.AppWindow.Show();
         ShowOverlayButton.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnContextHistoryClicked(object sender, RoutedEventArgs e)
+    {
+        var flyout = new MenuFlyout();
+        var hasRecent = _settings.RecentMeetingContexts.Count > 0;
+        var hasSaved = _settings.SavedMeetingContexts.Count > 0;
+
+        if (!hasRecent && !hasSaved)
+        {
+            flyout.Items.Add(new MenuFlyoutItem { Text = "No prompts saved yet", IsEnabled = false });
+        }
+        else
+        {
+            if (hasRecent)
+            {
+                foreach (var prompt in _settings.RecentMeetingContexts)
+                {
+                    var display = prompt.Length > 60 ? prompt[..60] + "…" : prompt;
+                    var item = new MenuFlyoutItem { Text = display, Icon = new FontIcon { Glyph = "" } };
+                    var captured = prompt;
+                    item.Click += (_, _) => PreContextBox.Text = captured;
+                    flyout.Items.Add(item);
+                }
+            }
+
+            if (hasSaved)
+            {
+                if (hasRecent) flyout.Items.Add(new MenuFlyoutSeparator());
+                foreach (var saved in _settings.SavedMeetingContexts)
+                {
+                    var item = new MenuFlyoutItem { Text = saved.Name, Icon = new FontIcon { Glyph = "" } };
+                    var captured = saved.Text;
+                    item.Click += (_, _) => PreContextBox.Text = captured;
+                    flyout.Items.Add(item);
+                }
+            }
+        }
+
+        flyout.ShowAt((FrameworkElement)sender);
+    }
+
+    private async void OnSaveContextClicked(object sender, RoutedEventArgs e)
+    {
+        var text = PreContextBox.Text.Trim();
+        if (string.IsNullOrEmpty(text)) return;
+
+        var nameBox = new TextBox
+        {
+            PlaceholderText = "e.g. Daily standup",
+            Text = text.Length > 50 ? text[..50] : text,
+            MaxLength = 60,
+            Margin = new Microsoft.UI.Xaml.Thickness(0, 8, 0, 0),
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = "Save as preset",
+            Content = nameBox,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var name = nameBox.Text.Trim();
+        if (string.IsNullOrEmpty(name)) return;
+
+        _settings.SavedMeetingContexts.RemoveAll(p => p.Name == name);
+        _settings.SavedMeetingContexts.Add(new SavedPrompt(name, text));
+        await _settings.SaveAsync();
     }
 
     // ── Segment display ───────────────────────────────────────────────────────
@@ -256,9 +350,7 @@ public sealed partial class LiveTranscriptPage : Page
     private void OnNotesTimerTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
     {
         var elapsed = (DateTimeOffset.Now - _notesLastRefresh).TotalSeconds;
-        var cycleElapsed = elapsed % NotesIntervalSeconds;
-        var remaining = NotesIntervalSeconds - cycleElapsed;
-        NotesRefreshProgress.Value = cycleElapsed / NotesIntervalSeconds * 100;
+        var remaining = NotesIntervalSeconds - elapsed % NotesIntervalSeconds;
         var mins = (int)(remaining / 60);
         var secs = (int)(remaining % 60);
         NotesCountdownLabel.Text = $"Next in {mins}:{secs:D2}";
@@ -266,7 +358,7 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void OnBatchCorrected(object? sender, IReadOnlyList<CorrectedSegment> corrections)
     {
-        DispatcherQueue.TryEnqueue(async () =>
+        DispatcherQueue.TryEnqueue(() =>
         {
             var applied = 0;
             foreach (var correction in corrections)
@@ -279,13 +371,16 @@ public sealed partial class LiveTranscriptPage : Page
                 }
             }
             if (applied > 0)
-            {
-                ActionStatus.Text = $"AI corrected {applied} line{(applied == 1 ? "" : "s")}";
-                await Task.Delay(4000);
-                if (ActionStatus.Text.StartsWith("AI corrected"))
-                    ActionStatus.Text = string.Empty;
-            }
+                _ = ClearCorrectionStatusAsync(applied);
         });
+    }
+
+    private async Task ClearCorrectionStatusAsync(int applied)
+    {
+        ActionStatus.Text = $"AI corrected {applied} line{(applied == 1 ? "" : "s")}";
+        await Task.Delay(4000);
+        if (ActionStatus.Text.StartsWith("AI corrected"))
+            ActionStatus.Text = string.Empty;
     }
 
     // ── Assistant panel ───────────────────────────────────────────────────────
@@ -310,18 +405,39 @@ public sealed partial class LiveTranscriptPage : Page
         NotesTabButton.ClearValue(StyleProperty);
     }
 
+    private void OnNotesRefreshStarted(object? sender, EventArgs e)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            NotesRefreshRing.IsActive = true;
+            NotesRefreshRing.Visibility = Visibility.Visible;
+            NotesUpdatedLabel.Text = "Updating…";
+        });
+    }
+
     private void OnNotesUpdated(object? sender, MeetingNotes notes)
     {
         DispatcherQueue.TryEnqueue(() =>
         {
             _notesLastRefresh = DateTimeOffset.Now;
-            NotesRefreshProgress.Value = 0;
+            NotesWaitingRing.IsActive = false;
+            NotesWaitingRing.Visibility = Visibility.Collapsed;
+            NotesRefreshRing.IsActive = false;
+            NotesRefreshRing.Visibility = Visibility.Collapsed;
 
             var content = FormatNotesBubble(notes);
             if (string.IsNullOrWhiteSpace(content)) return;
 
-            _notesBubbles.Add(new NotesBubble(content, notes.GeneratedAt));
-            NotesEmptyLabel.Visibility = Visibility.Collapsed;
+            var bubble = new NotesBubble(content, notes.GeneratedAt);
+            _notesHistory.Add(bubble);
+
+            // Replace-in-place so the panel shows the current state, not a growing stack of duplicates
+            if (_notesBubbles.Count > 0)
+                _notesBubbles[0] = bubble;
+            else
+                _notesBubbles.Add(bubble);
+
+            NotesEmptyPanel.Visibility = Visibility.Collapsed;
             NotesUpdatedLabel.Text = "Updated just now";
         });
     }
@@ -348,10 +464,10 @@ public sealed partial class LiveTranscriptPage : Page
 
     private async void OnExpandNotesClicked(object sender, RoutedEventArgs e)
     {
-        if (_notesBubbles.Count == 0) return;
+        if (_notesHistory.Count == 0) return;
 
         var sb = new System.Text.StringBuilder();
-        foreach (var bubble in _notesBubbles)
+        foreach (var bubble in _notesHistory)
         {
             sb.AppendLine($"── {bubble.TimeLabel} ──");
             sb.AppendLine(bubble.Content);
@@ -364,17 +480,18 @@ public sealed partial class LiveTranscriptPage : Page
             CloseButtonText = "Close",
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = XamlRoot,
+            MinWidth = 480,
         };
 
-        var scroll = new ScrollViewer { MaxHeight = 500 };
         var text = new TextBlock
         {
             Text = sb.ToString().TrimEnd(),
             TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap,
             IsTextSelectionEnabled = true,
             FontSize = 13,
+            Margin = new Microsoft.UI.Xaml.Thickness(0, 0, 12, 0),
         };
-        scroll.Content = text;
+        var scroll = new ScrollViewer { MaxHeight = 520, Content = text };
         dialog.Content = scroll;
 
         await dialog.ShowAsync();

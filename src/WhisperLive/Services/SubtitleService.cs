@@ -41,6 +41,7 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     public void EndSession()
     {
+        WriteFinalSrt();
         _writer?.Flush();
         _writer?.Dispose();
         _writer = null;
@@ -121,6 +122,27 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
             }
             catch (Exception ex) { AppLogger.Warning(ex, "Failed to write corrected segment"); }
         }
+    }
+
+    private void WriteFinalSrt()
+    {
+        if (CurrentSessionPath is null) return;
+        List<SubtitleSegment> snapshot;
+        lock (_segLock)
+        {
+            if (_segments.Count == 0) return;
+            snapshot = [.._segments];
+        }
+        var finalPath = Path.ChangeExtension(CurrentSessionPath, ".final.srt");
+        try
+        {
+            var sb = new StringBuilder();
+            for (var i = 0; i < snapshot.Count; i++)
+                sb.AppendLine((snapshot[i] with { Id = i + 1 }).ToSrtEntry());
+            File.WriteAllText(finalPath, sb.ToString(), Encoding.UTF8);
+            AppLogger.Info("Final SRT written: {Path}", finalPath);
+        }
+        catch (Exception ex) { AppLogger.Warning(ex, "Failed to write final SRT"); }
     }
 
     public async Task ExportSrtAsync(string path)

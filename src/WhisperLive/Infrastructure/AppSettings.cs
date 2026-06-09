@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+using WhisperLive.Models;
 
 namespace WhisperLive.Infrastructure;
 
@@ -18,8 +20,11 @@ public sealed class AppSettings
     public string Model { get; set; } = "small";
     public int ChunkDurationSeconds { get; set; } = 5;
     public string Theme { get; set; } = "Default";
-    public string? ContextFolderPath { get; set; }
+    public List<string> ContextFolderPaths { get; set; } = [];
     public List<string> AllowedReadPaths { get; set; } = [];
+    public string DefaultMeetingContext { get; set; } = "";
+    public List<string> RecentMeetingContexts { get; set; } = [];
+    public List<SavedPrompt> SavedMeetingContexts { get; set; } = [];
 
     public static async Task<AppSettings> LoadAsync()
     {

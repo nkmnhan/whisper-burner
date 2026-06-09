@@ -23,9 +23,15 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
 
     private const string SystemPromptBase =
         "You are a meeting assistant embedded in a live-transcription desktop app. " +
-        "You'll receive fragments of a live meeting transcript as it's captured, plus questions " +
-        "or requests to regenerate meeting notes. Be concise and concrete — the user may be " +
-        "mid-meeting and needs quick, actionable answers without preamble.";
+        "You operate within a persistent Claude Code session (--session-id) so you retain full " +
+        "transcript history across calls — you are never starting from scratch mid-meeting.\n\n" +
+        "Two modes of work:\n" +
+        "1. Q&A: the user asks a question mid-meeting. Respond in 1-3 sentences max. No preamble.\n" +
+        "2. Notes refresh: regenerate consolidated meeting notes as strict JSON with exactly these " +
+        "four keys — reasons (why the meeting is happening), goals (what we're trying to achieve), " +
+        "approaches (how we plan to get there), decisions (concrete decisions made). " +
+        "Each value is a JSON array of short strings. No prose, no markdown fences, no extra keys.\n\n" +
+        "The user is mid-meeting. Keep every response brief and actionable.";
 
     private readonly RecordingManager _recordingManager;
     private readonly object _bufferLock = new();
@@ -38,6 +44,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
     private string? _preContext;
 
     public event EventHandler<MeetingNotes>? NotesUpdated;
+    public event EventHandler? NotesRefreshStarted;
 
     public MeetingAssistantService(RecordingManager recordingManager)
     {
@@ -125,10 +132,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
 
         string delta;
         lock (_bufferLock)
-        {
             delta = _notesDelta.ToString();
-            _notesDelta.Clear();
-        }
 
         if (delta.Length == 0)
         {
@@ -139,7 +143,24 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
             if (delta.Length == 0) return;
         }
 
-        var notes = await GenerateNotesAsync(sessionId, delta, cancellationToken);
+        // Clear the consumed delta only after we've captured it — restored on failure so no transcript is lost
+        lock (_bufferLock)
+            _notesDelta.Remove(0, delta.Length);
+
+        NotesRefreshStarted?.Invoke(this, EventArgs.Empty);
+        MeetingNotes? notes;
+        try
+        {
+            notes = await GenerateNotesAsync(sessionId, delta, cancellationToken);
+        }
+        catch
+        {
+            // Restore delta so the next refresh includes this transcript
+            lock (_bufferLock)
+                _notesDelta.Insert(0, delta);
+            throw;
+        }
+
         if (notes is not null)
             NotesUpdated?.Invoke(this, notes);
     }
@@ -159,12 +180,8 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
     {
         var prompt =
             "[New transcript since the last notes update]\n" + transcriptDelta +
-            "\n\nRegenerate the consolidated meeting notes so far as strict JSON with this exact " +
-            "shape (no prose, no markdown fences): " +
-            "{\"reasons\": [\"why this meeting is happening\"], " +
-            "\"goals\": [\"what we are trying to achieve\"], " +
-            "\"approaches\": [\"how we plan to get there\"], " +
-            "\"decisions\": [\"concrete decisions made\"]}";
+            "\n\nRegenerate consolidated meeting notes as JSON (reasons/goals/approaches/decisions). " +
+            "Incorporate all transcript so far — not just this delta.";
 
         try
         {
@@ -242,6 +259,8 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
                     RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true,
+                    StandardOutputEncoding = System.Text.Encoding.UTF8,
+                    StandardErrorEncoding = System.Text.Encoding.UTF8,
                 };
                 foreach (var arg in args)
                     psi.ArgumentList.Add(arg);
@@ -339,8 +358,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         if (patterns.Count > 0)
             return string.Join(",", patterns);
 
-        // Fallback: if a context folder is set but no explicit path list, allow unrestricted reads
-        if (!string.IsNullOrWhiteSpace(settings.ContextFolderPath))
+        if (settings.ContextFolderPaths.Count > 0)
             return "Read";
         return null;
     }
@@ -369,11 +387,12 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
             systemPrompt += $"\n\nThe current meeting transcript is being written live to \"{sessionSrtPath.Replace('\\', '/')}\". " +
                             "It is an SRT file — read it when you need the complete history of this conversation.";
 
-        if (!string.IsNullOrWhiteSpace(settings.ContextFolderPath) && Directory.Exists(settings.ContextFolderPath))
+        foreach (var folder in settings.ContextFolderPaths)
         {
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) continue;
             args.Add("--add-dir");
-            args.Add(settings.ContextFolderPath);
-            systemPrompt += $"\n\nYou have read access to a project folder at \"{settings.ContextFolderPath}\" — " +
+            args.Add(folder);
+            systemPrompt += $"\n\nYou have read access to a project folder at \"{folder.Replace('\\', '/')}\" — " +
                             "consult it when the question relates to code or documents there.";
         }
 

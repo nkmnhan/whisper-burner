@@ -167,9 +167,31 @@
                     MaxHeight="120"
                     Margin="0,8,0,0"
                     AcceptsReturn="True"
-                    Header="Meeting context (optional)"
                     PlaceholderText="Agenda, participants, background — Claude reads this before the meeting starts"
-                    TextWrapping="Wrap" />
+                    TextWrapping="Wrap">
+                    <TextBox.Header>
+                        <StackPanel Margin="0,0,0,4" Orientation="Horizontal" Spacing="4">
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{ThemeResource BodyTextBlockStyle}"
+                                Text="Meeting context (optional)" />
+                            <Button
+                                x:Name="ContextHistoryButton"
+                                Style="{StaticResource GhostButtonStyle}"
+                                ToolTipService.ToolTip="Recent &amp; saved prompts"
+                                Click="OnContextHistoryClicked">
+                                <FontIcon FontSize="16" Glyph="&#xE81C;" />
+                            </Button>
+                            <Button
+                                x:Name="SaveContextButton"
+                                Style="{StaticResource GhostButtonStyle}"
+                                ToolTipService.ToolTip="Save as preset"
+                                Click="OnSaveContextClicked">
+                                <FontIcon FontSize="16" Glyph="&#xE718;" />
+                            </Button>
+                        </StackPanel>
+                    </TextBox.Header>
+                </TextBox>
             </StackPanel>
 
             <ListView
@@ -266,57 +288,63 @@
                             </ListView.ItemTemplate>
                         </ListView>
 
-                        <!-- Empty state (hidden once first bubble arrives) -->
-                        <TextBlock
-                            x:Name="NotesEmptyLabel"
+                        <!-- Empty / waiting state -->
+                        <StackPanel
+                            x:Name="NotesEmptyPanel"
                             Grid.Row="0"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
-                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                            Style="{StaticResource CaptionTextBlockStyle}"
-                            Text="Notes appear here — updated every 3 minutes"
-                            TextWrapping="Wrap" />
-
-                        <Grid Grid.Row="1" Margin="0,6,0,0">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <ProgressBar
-                                x:Name="NotesRefreshProgress"
-                                Grid.Row="0"
-                                Height="2"
-                                Maximum="100"
-                                Minimum="0"
-                                Value="0"
+                            Spacing="12">
+                            <ProgressRing
+                                x:Name="NotesWaitingRing"
+                                Width="28"
+                                Height="28"
+                                HorizontalAlignment="Center"
+                                IsActive="False"
                                 Visibility="Collapsed" />
-                            <StackPanel Grid.Row="1" Margin="0,4,0,0" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <TextBlock
-                                    x:Name="NotesCountdownLabel"
-                                    VerticalAlignment="Center"
-                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                    Style="{StaticResource CaptionTextBlockStyle}"
-                                    Visibility="Collapsed" />
-                                <TextBlock
-                                    x:Name="NotesUpdatedLabel"
-                                    VerticalAlignment="Center"
-                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                    Style="{StaticResource CaptionTextBlockStyle}" />
-                                <ProgressRing
-                                    x:Name="NotesRefreshRing"
-                                    Width="16"
-                                    Height="16"
-                                    VerticalAlignment="Center"
-                                    IsActive="False"
-                                    Visibility="Collapsed" />
-                                <Button x:Name="RefreshNotesButton" Click="OnRefreshNotesClicked" ToolTipService.ToolTip="Regenerate notes now">
-                                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
-                                </Button>
-                                <Button Click="OnExpandNotesClicked" ToolTipService.ToolTip="View full notes">
-                                    <FontIcon FontSize="14" Glyph="&#xE740;" />
-                                </Button>
-                            </StackPanel>
-                        </Grid>
+                            <TextBlock
+                                x:Name="NotesEmptyLabel"
+                                HorizontalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="Notes appear here — updated every 3 minutes"
+                                TextAlignment="Center"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Margin="0,6,0,0" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                            <TextBlock
+                                x:Name="NotesCountdownLabel"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Visibility="Collapsed" />
+                            <TextBlock
+                                x:Name="NotesUpdatedLabel"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}" />
+                            <ProgressRing
+                                x:Name="NotesRefreshRing"
+                                Width="16"
+                                Height="16"
+                                VerticalAlignment="Center"
+                                IsActive="False"
+                                Visibility="Collapsed" />
+                            <Button
+                                x:Name="RefreshNotesButton"
+                                Style="{StaticResource GhostButtonStyle}"
+                                ToolTipService.ToolTip="Refresh notes now"
+                                Click="OnRefreshNotesClicked">
+                                <FontIcon FontSize="16" Glyph="&#xE72C;" />
+                            </Button>
+                            <Button
+                                Style="{StaticResource GhostButtonStyle}"
+                                ToolTipService.ToolTip="View full notes"
+                                Click="OnExpandNotesClicked">
+                                <FontIcon FontSize="16" Glyph="&#xE740;" />
+                            </Button>
+                        </StackPanel>
                     </Grid>
 
                     <!-- Chat view: freeform "what did I miss" Q&A -->

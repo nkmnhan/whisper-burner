@@ -20,10 +20,14 @@ public sealed partial class SettingsPage : Page
     private AppSettings _settings = new();
     private bool _loaded;
     private readonly ObservableCollection<string> _allowedPaths = [];
+    private readonly ObservableCollection<SettingsCard> _pathCards = [];
+    private readonly ObservableCollection<SettingsCard> _contextFolderCards = [];
 
     public SettingsPage()
     {
         InitializeComponent();
+        AllowedPathsExpander.ItemsSource = _pathCards;
+        ContextFolderExpander.ItemsSource = _contextFolderCards;
         Loaded += OnLoaded;
     }
 
@@ -38,13 +42,14 @@ public sealed partial class SettingsPage : Page
         SelectComboItem(ModelBox, _settings.Model);
         SelectComboItem(LanguageBox, _settings.Language);
         SelectThemeCombo(_settings.Theme);
-        ContextFolderLabel.Text = string.IsNullOrWhiteSpace(_settings.ContextFolderPath)
-            ? "Not set" : _settings.ContextFolderPath;
+        RebuildContextFolderItems();
 
         _allowedPaths.Clear();
         foreach (var p in _settings.AllowedReadPaths)
             _allowedPaths.Add(p);
         RebuildPathItems();
+
+        DefaultContextBox.Text = _settings.DefaultMeetingContext;
 
         _loaded = true;
     }
@@ -55,6 +60,13 @@ public sealed partial class SettingsPage : Page
     {
         if (!_loaded) return;
         _settings.ApiUrl = ApiUrlBox.Text.Trim();
+        _ = _settings.SaveAsync();
+    }
+
+    private void OnDefaultContextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        _settings.DefaultMeetingContext = DefaultContextBox.Text;
         _ = _settings.SaveAsync();
     }
 
@@ -80,27 +92,32 @@ public sealed partial class SettingsPage : Page
         _ = _settings.SaveAsync();
     }
 
-    private async void OnBrowseContextFolderClicked(object sender, RoutedEventArgs e)
+    private async void OnAddContextFolderClicked(object sender, RoutedEventArgs e)
     {
         if (WindowHelper.GetWindowForElement(this) is not Window window) return;
 
-        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.ComputerFolder };
+        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
         picker.FileTypeFilter.Add("*");
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(window));
 
         var folder = await picker.PickSingleFolderAsync();
         if (folder is null) return;
+        if (_settings.ContextFolderPaths.Contains(folder.Path)) return;
 
-        _settings.ContextFolderPath = folder.Path;
-        ContextFolderLabel.Text = folder.Path;
+        _settings.ContextFolderPaths.Add(folder.Path);
         await _settings.SaveAsync();
+        RebuildContextFolderItems();
+        RebuildPathItems();
     }
 
-    private async void OnClearContextFolderClicked(object sender, RoutedEventArgs e)
+    private async void OnRemoveContextFolderClicked(object sender, RoutedEventArgs e)
     {
-        _settings.ContextFolderPath = null;
-        ContextFolderLabel.Text = "Not set";
+        if (((Button)sender).Tag is not string path) return;
+
+        _settings.ContextFolderPaths.Remove(path);
         await _settings.SaveAsync();
+        RebuildContextFolderItems();
+        RebuildPathItems();
     }
 
     // Gallery-pattern: null-safe cast, no _loaded guard needed (guard is the null check itself)
@@ -127,7 +144,7 @@ public sealed partial class SettingsPage : Page
     {
         if (WindowHelper.GetWindowForElement(this) is not Window window) return;
 
-        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.ComputerFolder };
+        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
         picker.FileTypeFilter.Add("*");
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(window));
 
@@ -171,28 +188,37 @@ public sealed partial class SettingsPage : Page
 
     // ── Path list ─────────────────────────────────────────────────────────────
 
-    private void RebuildPathItems()
+    private void RebuildContextFolderItems()
     {
-        AllowedPathsExpander.Items.Clear();
-        AllowedPathsExpander.Items.Add(MakeBuiltInCard(BuiltInDataPath));
-        foreach (var path in _allowedPaths)
-            AllowedPathsExpander.Items.Add(MakeUserCard(path));
+        _contextFolderCards.Clear();
+        foreach (var path in _settings.ContextFolderPaths)
+            _contextFolderCards.Add(MakeUserCard(path, OnRemoveContextFolderClicked));
     }
 
-    private static SettingsCard MakeBuiltInCard(string path) => new()
+    private void RebuildPathItems()
+    {
+        _pathCards.Clear();
+        _pathCards.Add(MakeBuiltInCard(BuiltInDataPath, "Built-in — sessions, settings, logs"));
+        foreach (var path in _settings.ContextFolderPaths)
+            _pathCards.Add(MakeBuiltInCard(path, "Context folder — set in Meeting context folders above"));
+        foreach (var path in _allowedPaths)
+            _pathCards.Add(MakeUserCard(path, OnRemovePathClicked));
+    }
+
+    private static SettingsCard MakeBuiltInCard(string path, string description) => new()
     {
         Header = path,
-        Description = "Built-in — always allowed (sessions, settings, logs)",
+        Description = description,
         Content = new FontIcon { Glyph = "", FontSize = 14 },
     };
 
-    private SettingsCard MakeUserCard(string path)
+    private static SettingsCard MakeUserCard(string path, RoutedEventHandler removeHandler)
     {
         var btn = new Button();
         ToolTipService.SetToolTip(btn, "Remove");
         btn.Content = new FontIcon { Glyph = "", FontSize = 12 };
         btn.Tag = path;
-        btn.Click += OnRemovePathClicked;
+        btn.Click += removeHandler;
         return new SettingsCard { Header = path, Content = btn };
     }
 
