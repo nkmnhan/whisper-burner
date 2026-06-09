@@ -159,6 +159,8 @@ public sealed class TranscriptCorrectionService : ITranscriptCorrectionService, 
                     corrected.Add(new CorrectedSegment(batch[i].Id, item.GetString() ?? batch[i].Text));
                 i++;
             }
+            if (i != batch.Count)
+                AppLogger.Warning("Correction batch count mismatch: sent {Sent}, received {Received}", batch.Count, i);
             return corrected;
         }
     }
