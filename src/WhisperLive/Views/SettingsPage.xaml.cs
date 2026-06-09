@@ -128,10 +128,11 @@ public sealed partial class SettingsPage : Page
 
         var folder = await picker.PickSingleFolderAsync();
         if (folder is null) return;
+        if (_allowedPaths.Contains(folder.Path)) return;
 
         _allowedPaths.Add(folder.Path);
         _settings.AllowedReadPaths.Add(folder.Path);
-        _ = _settings.SaveAsync();
+        await _settings.SaveAsync();
     }
 
     private async void OnAddFileClicked(object sender, RoutedEventArgs e)
@@ -144,19 +145,20 @@ public sealed partial class SettingsPage : Page
 
         var file = await picker.PickSingleFileAsync();
         if (file is null) return;
+        if (_allowedPaths.Contains(file.Path)) return;
 
         _allowedPaths.Add(file.Path);
         _settings.AllowedReadPaths.Add(file.Path);
-        _ = _settings.SaveAsync();
+        await _settings.SaveAsync();
     }
 
-    private void OnRemovePathClicked(object sender, RoutedEventArgs e)
+    private async void OnRemovePathClicked(object sender, RoutedEventArgs e)
     {
         if (((Button)sender).Tag is not string path) return;
 
         _allowedPaths.Remove(path);
         _settings.AllowedReadPaths.Remove(path);
-        _ = _settings.SaveAsync();
+        await _settings.SaveAsync();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
