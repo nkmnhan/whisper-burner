@@ -40,6 +40,7 @@ public sealed partial class SettingsPage : Page
         foreach (var p in _settings.AllowedReadPaths)
             _allowedPaths.Add(p);
         AllowedPathsExpander.ItemsSource = _allowedPaths;
+        AllowedPathsExpander.IsExpanded = _allowedPaths.Count > 0;
 
         _loaded = true;
     }

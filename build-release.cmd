@@ -22,6 +22,12 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+:: dotnet publish -o does not copy WinUI 3 XAML resources (.xbf, .pri).
+:: Copy them from the build output so ms-appx:/// URI resolution works at runtime.
+set BUILD_BIN=src\WhisperLive\bin\x64\Release\net9.0-windows10.0.22621.0\win-x64
+xcopy /y /s /q "%BUILD_BIN%\*.xbf" "release\"
+copy /y "%BUILD_BIN%\WhisperLive.pri" "release\" > nul
+
 echo.
 echo  Build succeeded.
 echo  App: %~dp0release\WhisperLive.exe
