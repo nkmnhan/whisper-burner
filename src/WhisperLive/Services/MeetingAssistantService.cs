@@ -161,7 +161,10 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
             "[New transcript since the last notes update]\n" + transcriptDelta +
             "\n\nRegenerate the consolidated meeting notes so far as strict JSON with this exact " +
             "shape (no prose, no markdown fences): " +
-            "{\"keyPoints\": [\"...\"], \"decisions\": [\"...\"], \"actionItems\": [\"...\"]}";
+            "{\"reasons\": [\"why this meeting is happening\"], " +
+            "\"goals\": [\"what we are trying to achieve\"], " +
+            "\"approaches\": [\"how we plan to get there\"], " +
+            "\"decisions\": [\"concrete decisions made\"]}";
 
         try
         {
@@ -192,15 +195,16 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
             using var doc = JsonDocument.Parse(trimmed);
             var root = doc.RootElement;
             return new MeetingNotes(
-                ReadStringArray(root, "keyPoints"),
+                ReadStringArray(root, "reasons"),
+                ReadStringArray(root, "goals"),
+                ReadStringArray(root, "approaches"),
                 ReadStringArray(root, "decisions"),
-                ReadStringArray(root, "actionItems"),
                 DateTimeOffset.Now);
         }
         catch (JsonException)
         {
-            // Claude didn't follow the schema — show raw text in key points
-            return new MeetingNotes([trimmed], [], [], DateTimeOffset.Now);
+            // Claude didn't follow the schema — show raw text in reasons
+            return new MeetingNotes([trimmed], [], [], [], DateTimeOffset.Now);
         }
     }
 

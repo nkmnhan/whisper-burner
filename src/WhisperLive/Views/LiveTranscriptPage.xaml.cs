@@ -331,24 +331,53 @@ public sealed partial class LiveTranscriptPage : Page
     private static string FormatNotesBubble(MeetingNotes notes)
     {
         var sb = new System.Text.StringBuilder();
-        if (notes.KeyPoints.Count > 0)
-        {
-            sb.AppendLine("Key Points");
-            foreach (var p in notes.KeyPoints) sb.AppendLine($"• {p}");
-        }
-        if (notes.Decisions.Count > 0)
-        {
-            if (sb.Length > 0) sb.AppendLine();
-            sb.AppendLine("Decisions");
-            foreach (var d in notes.Decisions) sb.AppendLine($"• {d}");
-        }
-        if (notes.ActionItems.Count > 0)
-        {
-            if (sb.Length > 0) sb.AppendLine();
-            sb.AppendLine("Action Items");
-            foreach (var a in notes.ActionItems) sb.AppendLine($"• {a}");
-        }
+        AppendSection(sb, "Reasons", notes.Reasons);
+        AppendSection(sb, "Goals", notes.Goals);
+        AppendSection(sb, "Approaches", notes.Approaches);
+        AppendSection(sb, "Decisions", notes.Decisions);
         return sb.ToString().TrimEnd();
+
+        static void AppendSection(System.Text.StringBuilder b, string title, IReadOnlyList<string> items)
+        {
+            if (items.Count == 0) return;
+            if (b.Length > 0) b.AppendLine();
+            b.AppendLine(title);
+            foreach (var item in items) b.AppendLine($"• {item}");
+        }
+    }
+
+    private async void OnExpandNotesClicked(object sender, RoutedEventArgs e)
+    {
+        if (_notesBubbles.Count == 0) return;
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var bubble in _notesBubbles)
+        {
+            sb.AppendLine($"── {bubble.TimeLabel} ──");
+            sb.AppendLine(bubble.Content);
+            sb.AppendLine();
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = "Meeting Notes",
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+
+        var scroll = new ScrollViewer { MaxHeight = 500 };
+        var text = new TextBlock
+        {
+            Text = sb.ToString().TrimEnd(),
+            TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap,
+            IsTextSelectionEnabled = true,
+            FontSize = 13,
+        };
+        scroll.Content = text;
+        dialog.Content = scroll;
+
+        await dialog.ShowAsync();
     }
 
     private async void OnRefreshNotesClicked(object sender, RoutedEventArgs e)

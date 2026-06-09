@@ -312,6 +312,9 @@
                                 <Button x:Name="RefreshNotesButton" Click="OnRefreshNotesClicked" ToolTipService.ToolTip="Regenerate notes now">
                                     <FontIcon FontSize="14" Glyph="&#xE72C;" />
                                 </Button>
+                                <Button Click="OnExpandNotesClicked" ToolTipService.ToolTip="View full notes">
+                                    <FontIcon FontSize="14" Glyph="&#xE740;" />
+                                </Button>
                             </StackPanel>
                         </Grid>
                     </Grid>
