@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using System;
+using System.Collections.ObjectModel;
 using WhisperLive.Helpers;
 using WhisperLive.Infrastructure;
 using Windows.Storage.Pickers;
@@ -13,6 +14,7 @@ public sealed partial class SettingsPage : Page
 {
     private AppSettings _settings = new();
     private bool _loaded;
+    private readonly ObservableCollection<string> _allowedPaths = [];
 
     public SettingsPage()
     {
@@ -33,6 +35,11 @@ public sealed partial class SettingsPage : Page
         SelectThemeCombo(_settings.Theme);
         ContextFolderLabel.Text = string.IsNullOrWhiteSpace(_settings.ContextFolderPath)
             ? "Not set" : _settings.ContextFolderPath;
+
+        _allowedPaths.Clear();
+        foreach (var p in _settings.AllowedReadPaths)
+            _allowedPaths.Add(p);
+        AllowedPathsExpander.ItemsSource = _allowedPaths;
 
         _loaded = true;
     }
@@ -109,6 +116,47 @@ public sealed partial class SettingsPage : Page
         // Gallery: update caption button colours after theme change (workaround for SDK bug)
         if (WindowHelper.GetWindowForElement(this) is Window w)
             TitleBarHelper.ApplySystemThemeToCaptionButtons(w, ThemeHelper.ActualTheme);
+    }
+
+    private async void OnAddFolderClicked(object sender, RoutedEventArgs e)
+    {
+        if (WindowHelper.GetWindowForElement(this) is not Window window) return;
+
+        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.ComputerFolder };
+        picker.FileTypeFilter.Add("*");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(window));
+
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder is null) return;
+
+        _allowedPaths.Add(folder.Path);
+        _settings.AllowedReadPaths.Add(folder.Path);
+        _ = _settings.SaveAsync();
+    }
+
+    private async void OnAddFileClicked(object sender, RoutedEventArgs e)
+    {
+        if (WindowHelper.GetWindowForElement(this) is not Window window) return;
+
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.ComputerFolder };
+        picker.FileTypeFilter.Add("*");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(window));
+
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+
+        _allowedPaths.Add(file.Path);
+        _settings.AllowedReadPaths.Add(file.Path);
+        _ = _settings.SaveAsync();
+    }
+
+    private void OnRemovePathClicked(object sender, RoutedEventArgs e)
+    {
+        if (((Button)sender).Tag is not string path) return;
+
+        _allowedPaths.Remove(path);
+        _settings.AllowedReadPaths.Remove(path);
+        _ = _settings.SaveAsync();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
