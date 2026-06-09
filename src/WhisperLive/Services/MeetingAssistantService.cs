@@ -35,6 +35,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
 
     private CancellationTokenSource? _sessionCts;
     private string? _sessionId;
+    private string? _preContext;
 
     public event EventHandler<MeetingNotes>? NotesUpdated;
 
@@ -45,8 +46,9 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    public void StartSession()
+    public void StartSession(string? preContext = null)
     {
+        _preContext = string.IsNullOrWhiteSpace(preContext) ? null : preContext.Trim();
         _sessionId = Guid.NewGuid().ToString();
         lock (_bufferLock)
         {
@@ -68,6 +70,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         _sessionCts?.Dispose();
         _sessionCts = null;
         _sessionId = null;
+        _preContext = null;
 
         var sessionPath = _recordingManager.CurrentSessionPath;
         string? pendingDelta;
@@ -336,7 +339,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         return null;
     }
 
-    private static async Task<List<string>> BuildArgumentsAsync(string sessionId)
+    private async Task<List<string>> BuildArgumentsAsync(string sessionId)
     {
         var args = new List<string> { "-p", "--session-id", sessionId, "--output-format", "json" };
         var settings = await AppSettings.LoadAsync();
@@ -349,11 +352,14 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         }
 
         var systemPrompt = SystemPromptBase;
+        if (_preContext is not null)
+            systemPrompt += $"\n\nContext for this meeting (provided before the session started):\n{_preContext}";
+
         if (!string.IsNullOrWhiteSpace(settings.ContextFolderPath) && Directory.Exists(settings.ContextFolderPath))
         {
             args.Add("--add-dir");
             args.Add(settings.ContextFolderPath);
-            systemPrompt += $" You have read access to a project folder at \"{settings.ContextFolderPath}\" — " +
+            systemPrompt += $"\n\nYou have read access to a project folder at \"{settings.ContextFolderPath}\" — " +
                             "consult it when the question relates to code or documents there.";
         }
 

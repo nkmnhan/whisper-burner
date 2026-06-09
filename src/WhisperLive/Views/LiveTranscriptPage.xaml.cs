@@ -162,7 +162,7 @@ public sealed partial class LiveTranscriptPage : Page
             App.CaptionOverlay?.ClearLines();
             App.CaptionOverlay?.SetLanguage(_settings.Language);
             App.CaptionOverlay?.UpdatePauseState(false);
-            Assistant.StartSession();
+            Assistant.StartSession(PreContextBox.Text);
             CorrectionService.StartSession();
             await Manager.StartAsync(options);
         }

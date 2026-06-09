@@ -8,7 +8,7 @@ namespace WhisperLive.Services;
 public interface IMeetingAssistantService
 {
     event EventHandler<MeetingNotes>? NotesUpdated;
-    void StartSession();
+    void StartSession(string? preContext = null);
     Task<string> AskAsync(string question, CancellationToken cancellationToken = default);
     Task RefreshNotesAsync(CancellationToken cancellationToken = default, bool force = false);
     void EndSession();

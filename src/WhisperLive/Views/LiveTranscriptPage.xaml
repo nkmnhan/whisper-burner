@@ -161,6 +161,15 @@
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
                     Text="Capture system audio as live transcript" />
+                <TextBox
+                    x:Name="PreContextBox"
+                    Width="400"
+                    MaxHeight="120"
+                    Margin="0,8,0,0"
+                    AcceptsReturn="True"
+                    Header="Meeting context (optional)"
+                    PlaceholderText="Agenda, participants, background — Claude reads this before the meeting starts"
+                    TextWrapping="Wrap" />
             </StackPanel>
 
             <ListView
