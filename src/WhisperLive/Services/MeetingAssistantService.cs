@@ -351,9 +351,16 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         }
     }
 
+    private static readonly string AppDataFolder = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        "whisper.live");
+
     private static string? BuildAllowedTools(AppSettings settings, string? sessionSrtPath)
     {
         var patterns = new List<string>();
+
+        // Always allow reading the app's own data folder (sessions, settings, logs)
+        patterns.Add($"Read({AppDataFolder.Replace('\\', '/')}/**)");
 
         // Always allow reading the live SRT file when a session is active
         if (sessionSrtPath is not null)
@@ -392,9 +399,12 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         if (_preContext is not null)
             systemPrompt += $"\n\nContext for this meeting (provided before the session started):\n{_preContext}";
 
+        systemPrompt += $"\n\nThe app stores all data under \"{AppDataFolder.Replace('\\', '/')}/\": " +
+                        "sessions/ contains SRT transcripts of past meetings, settings.json has user preferences.";
+
         if (sessionSrtPath is not null)
-            systemPrompt += $"\n\nThe full meeting transcript is being written live to \"{sessionSrtPath.Replace('\\', '/')}\". " +
-                            "It is an SRT file — read it when you need the complete history of the conversation.";
+            systemPrompt += $"\n\nThe current meeting transcript is being written live to \"{sessionSrtPath.Replace('\\', '/')}\". " +
+                            "It is an SRT file — read it when you need the complete history of this conversation.";
 
         if (!string.IsNullOrWhiteSpace(settings.ContextFolderPath) && Directory.Exists(settings.ContextFolderPath))
         {
