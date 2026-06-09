@@ -294,12 +294,34 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         }
     }
 
+    private static string? BuildAllowedTools(AppSettings settings)
+    {
+        if (settings.AllowedReadPaths.Count > 0)
+        {
+            var patterns = settings.AllowedReadPaths
+                .Select(p => Directory.Exists(p) ? $"Read({p}/**)" : $"Read({p})")
+                .ToList();
+            return string.Join(",", patterns);
+        }
+        // Fallback: if a context folder is set but no explicit path list, allow unrestricted reads
+        if (!string.IsNullOrWhiteSpace(settings.ContextFolderPath))
+            return "Read";
+        return null;
+    }
+
     private static async Task<List<string>> BuildArgumentsAsync(string sessionId)
     {
-        var systemPrompt = SystemPromptBase;
         var args = new List<string> { "-p", "--session-id", sessionId, "--output-format", "json" };
-
         var settings = await AppSettings.LoadAsync();
+
+        var allowedTools = BuildAllowedTools(settings);
+        if (allowedTools is not null)
+        {
+            args.Add("--allowedTools");
+            args.Add(allowedTools);
+        }
+
+        var systemPrompt = SystemPromptBase;
         if (!string.IsNullOrWhiteSpace(settings.ContextFolderPath) && Directory.Exists(settings.ContextFolderPath))
         {
             args.Add("--add-dir");
