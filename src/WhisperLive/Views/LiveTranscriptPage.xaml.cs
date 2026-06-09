@@ -22,6 +22,7 @@ public sealed partial class LiveTranscriptPage : Page
     private readonly ObservableCollection<string> _segments = [];
     private readonly ObservableCollection<AssistantMessage> _assistantMessages = [];
     private bool _isAsking;
+    private int _displayOffset;
 
     public LiveTranscriptPage()
     {
@@ -50,6 +51,7 @@ public sealed partial class LiveTranscriptPage : Page
 
         // Restore transcript that accumulated while we were away
         _segments.Clear();
+        _displayOffset = 0;
         foreach (var s in Manager.GetRecentSegments())
             _segments.Add(s);
 
@@ -196,6 +198,7 @@ public sealed partial class LiveTranscriptPage : Page
     private void OnNewSessionClicked(object sender, RoutedEventArgs e)
     {
         _segments.Clear();
+        _displayOffset = 0;
         TranscriptList.Visibility = Visibility.Collapsed;
         NewSessionButton.Visibility = Visibility.Collapsed;
         ActionStatus.Text = string.Empty;
@@ -217,7 +220,10 @@ public sealed partial class LiveTranscriptPage : Page
         {
             _segments.Add(seg.Text);
             if (_segments.Count > 500)
+            {
                 _segments.RemoveAt(0);
+                _displayOffset++;
+            }
 
             if (Manager.State == RecordingState.Recording &&
                 App.CaptionOverlay?.AppWindow.IsVisible == false)
@@ -231,7 +237,7 @@ public sealed partial class LiveTranscriptPage : Page
         {
             foreach (var correction in corrections)
             {
-                var index = correction.OriginalId - 1; // IDs are 1-based
+                var index = correction.OriginalId - 1 - _displayOffset;
                 if (index >= 0 && index < _segments.Count)
                     _segments[index] = correction.CorrectedText;
             }
