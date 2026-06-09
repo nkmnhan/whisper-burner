@@ -310,9 +310,10 @@ public sealed partial class LiveTranscriptPage : Page
     private async void OnRefreshNotesClicked(object sender, RoutedEventArgs e)
     {
         RefreshNotesButton.IsEnabled = false;
+        NotesUpdatedLabel.Text = "Refreshing…";
         try
         {
-            await Assistant.RefreshNotesAsync();
+            await Assistant.RefreshNotesAsync(force: true);
         }
         finally
         {

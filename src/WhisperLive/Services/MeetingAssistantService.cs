@@ -122,7 +122,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
 
     // ── Notes ─────────────────────────────────────────────────────────────────
 
-    public async Task RefreshNotesAsync(CancellationToken cancellationToken = default)
+    public async Task RefreshNotesAsync(CancellationToken cancellationToken = default, bool force = false)
     {
         if (_sessionId is not { } sessionId) return;
 
@@ -133,7 +133,14 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
             _notesDelta.Clear();
         }
 
-        if (delta.Length == 0) return;
+        if (delta.Length == 0)
+        {
+            if (!force) return;
+            // Manual refresh with no new delta — resend recent transcript so the user gets a response
+            var recent = _recordingManager.GetRecentSegments();
+            delta = string.Join("\n", recent);
+            if (delta.Length == 0) return;
+        }
 
         var notes = await GenerateNotesAsync(sessionId, delta, cancellationToken);
         if (notes is not null)
