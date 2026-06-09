@@ -351,20 +351,24 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         }
     }
 
-    private static string? BuildAllowedTools(AppSettings settings)
+    private static string? BuildAllowedTools(AppSettings settings, string? sessionSrtPath)
     {
-        if (settings.AllowedReadPaths.Count > 0)
+        var patterns = new List<string>();
+
+        // Always allow reading the live SRT file when a session is active
+        if (sessionSrtPath is not null)
+            patterns.Add($"Read({sessionSrtPath.Replace('\\', '/')})");
+
+        // User-configured paths — Claude CLI needs forward slashes for glob matching
+        foreach (var p in settings.AllowedReadPaths)
         {
-            var patterns = settings.AllowedReadPaths
-                .Select(p =>
-                {
-                    // Claude CLI is Node.js — its glob matcher requires forward slashes
-                    var fwd = p.Replace('\\', '/');
-                    return Directory.Exists(p) ? $"Read({fwd}/**)" : $"Read({fwd})";
-                })
-                .ToList();
-            return string.Join(",", patterns);
+            var fwd = p.Replace('\\', '/');
+            patterns.Add(Directory.Exists(p) ? $"Read({fwd}/**)" : $"Read({fwd})");
         }
+
+        if (patterns.Count > 0)
+            return string.Join(",", patterns);
+
         // Fallback: if a context folder is set but no explicit path list, allow unrestricted reads
         if (!string.IsNullOrWhiteSpace(settings.ContextFolderPath))
             return "Read";
@@ -376,7 +380,8 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         var args = new List<string> { "-p", "--session-id", sessionId, "--output-format", "json" };
         var settings = await AppSettings.LoadAsync();
 
-        var allowedTools = BuildAllowedTools(settings);
+        var sessionSrtPath = _recordingManager.CurrentSessionPath;
+        var allowedTools = BuildAllowedTools(settings, sessionSrtPath);
         if (allowedTools is not null)
         {
             args.Add("--allowedTools");
@@ -386,6 +391,10 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
         var systemPrompt = SystemPromptBase;
         if (_preContext is not null)
             systemPrompt += $"\n\nContext for this meeting (provided before the session started):\n{_preContext}";
+
+        if (sessionSrtPath is not null)
+            systemPrompt += $"\n\nThe full meeting transcript is being written live to \"{sessionSrtPath.Replace('\\', '/')}\". " +
+                            "It is an SRT file — read it when you need the complete history of the conversation.";
 
         if (!string.IsNullOrWhiteSpace(settings.ContextFolderPath) && Directory.Exists(settings.ContextFolderPath))
         {
