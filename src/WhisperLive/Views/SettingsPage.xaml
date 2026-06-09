@@ -108,7 +108,7 @@
                 x:Name="AllowedPathsExpander"
                 Description="Files and folders Claude can read during a meeting session"
                 Header="Allowed Read Paths"
-                IsExpanded="False">
+                IsExpanded="True">
                 <controls:SettingsExpander.HeaderIcon>
                     <FontIcon Glyph="&#xE8F4;" />
                 </controls:SettingsExpander.HeaderIcon>
@@ -128,18 +128,6 @@
                         </Button>
                     </StackPanel>
                 </controls:SettingsExpander.Content>
-                <controls:SettingsExpander.ItemTemplate>
-                    <DataTemplate>
-                        <controls:SettingsCard Header="{Binding}">
-                            <Button
-                                Click="OnRemovePathClicked"
-                                Tag="{Binding}"
-                                ToolTipService.ToolTip="Remove">
-                                <FontIcon FontSize="12" Glyph="&#xE711;" />
-                            </Button>
-                        </controls:SettingsCard>
-                    </DataTemplate>
-                </controls:SettingsExpander.ItemTemplate>
             </controls:SettingsExpander>
 
             <!-- Appearance -->

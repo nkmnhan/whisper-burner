@@ -1,8 +1,10 @@
+using CommunityToolkit.WinUI.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using System;
 using System.Collections.ObjectModel;
+using System.IO;
 using WhisperLive.Helpers;
 using WhisperLive.Infrastructure;
 using Windows.Storage.Pickers;
@@ -12,6 +14,9 @@ namespace WhisperLive.Views;
 
 public sealed partial class SettingsPage : Page
 {
+    private static readonly string BuiltInDataPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "whisper.live");
+
     private AppSettings _settings = new();
     private bool _loaded;
     private readonly ObservableCollection<string> _allowedPaths = [];
@@ -39,8 +44,7 @@ public sealed partial class SettingsPage : Page
         _allowedPaths.Clear();
         foreach (var p in _settings.AllowedReadPaths)
             _allowedPaths.Add(p);
-        AllowedPathsExpander.ItemsSource = _allowedPaths;
-        AllowedPathsExpander.IsExpanded = _allowedPaths.Count > 0;
+        RebuildPathItems();
 
         _loaded = true;
     }
@@ -134,6 +138,7 @@ public sealed partial class SettingsPage : Page
         _allowedPaths.Add(folder.Path);
         _settings.AllowedReadPaths.Add(folder.Path);
         await _settings.SaveAsync();
+        RebuildPathItems();
     }
 
     private async void OnAddFileClicked(object sender, RoutedEventArgs e)
@@ -151,6 +156,7 @@ public sealed partial class SettingsPage : Page
         _allowedPaths.Add(file.Path);
         _settings.AllowedReadPaths.Add(file.Path);
         await _settings.SaveAsync();
+        RebuildPathItems();
     }
 
     private async void OnRemovePathClicked(object sender, RoutedEventArgs e)
@@ -160,6 +166,34 @@ public sealed partial class SettingsPage : Page
         _allowedPaths.Remove(path);
         _settings.AllowedReadPaths.Remove(path);
         await _settings.SaveAsync();
+        RebuildPathItems();
+    }
+
+    // ── Path list ─────────────────────────────────────────────────────────────
+
+    private void RebuildPathItems()
+    {
+        AllowedPathsExpander.Items.Clear();
+        AllowedPathsExpander.Items.Add(MakeBuiltInCard(BuiltInDataPath));
+        foreach (var path in _allowedPaths)
+            AllowedPathsExpander.Items.Add(MakeUserCard(path));
+    }
+
+    private static SettingsCard MakeBuiltInCard(string path) => new()
+    {
+        Header = path,
+        Description = "Built-in — always allowed (sessions, settings, logs)",
+        Content = new FontIcon { Glyph = "", FontSize = 14 },
+    };
+
+    private SettingsCard MakeUserCard(string path)
+    {
+        var btn = new Button();
+        ToolTipService.SetToolTip(btn, "Remove");
+        btn.Content = new FontIcon { Glyph = "", FontSize = 12 };
+        btn.Tag = path;
+        btn.Click += OnRemovePathClicked;
+        return new SettingsCard { Header = path, Content = btn };
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
