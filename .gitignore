@@ -58,3 +58,4 @@ BundleArtifacts/
 *.msixupload
 *.appxupload
 *.cer
+release/
