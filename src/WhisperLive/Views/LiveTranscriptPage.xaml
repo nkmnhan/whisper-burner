@@ -250,16 +250,36 @@
                                     TextWrapping="Wrap" />
                             </StackPanel>
                         </ScrollViewer>
-                        <StackPanel Grid.Row="1" Margin="0,8,0,0" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <TextBlock
-                                x:Name="NotesUpdatedLabel"
-                                VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}" />
-                            <Button x:Name="RefreshNotesButton" Click="OnRefreshNotesClicked" ToolTipService.ToolTip="Regenerate notes now">
-                                <FontIcon FontSize="14" Glyph="&#xE72C;" />
-                            </Button>
-                        </StackPanel>
+                        <Grid Grid.Row="1" Margin="0,6,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <ProgressBar
+                                x:Name="NotesRefreshProgress"
+                                Grid.Row="0"
+                                Height="2"
+                                Maximum="100"
+                                Minimum="0"
+                                Value="0"
+                                Visibility="Collapsed" />
+                            <StackPanel Grid.Row="1" Margin="0,4,0,0" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <TextBlock
+                                    x:Name="NotesCountdownLabel"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Visibility="Collapsed" />
+                                <TextBlock
+                                    x:Name="NotesUpdatedLabel"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}" />
+                                <Button x:Name="RefreshNotesButton" Click="OnRefreshNotesClicked" ToolTipService.ToolTip="Regenerate notes now">
+                                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
                     </Grid>
 
                     <!-- Chat view: freeform "what did I miss" Q&A -->

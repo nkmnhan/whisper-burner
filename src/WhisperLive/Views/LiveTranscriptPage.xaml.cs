@@ -24,6 +24,10 @@ public sealed partial class LiveTranscriptPage : Page
     private bool _isAsking;
     private int _displayOffset;
 
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _notesTimer;
+    private DateTimeOffset _notesLastRefresh;
+    private const double NotesIntervalSeconds = 180.0;
+
     public LiveTranscriptPage()
     {
         InitializeComponent();
@@ -44,6 +48,10 @@ public sealed partial class LiveTranscriptPage : Page
     {
         _settings = await AppSettings.LoadAsync();
 
+        _notesTimer = DispatcherQueue.CreateTimer();
+        _notesTimer.Interval = TimeSpan.FromSeconds(1);
+        _notesTimer.Tick += OnNotesTimerTick;
+
         Manager.StateChanged += OnStateChanged;
         Manager.SegmentAdded += OnSegmentAdded;
         Assistant.NotesUpdated += OnNotesUpdated;
@@ -63,6 +71,7 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        _notesTimer?.Stop();
         Manager.StateChanged -= OnStateChanged;
         Manager.SegmentAdded -= OnSegmentAdded;
         Assistant.NotesUpdated -= OnNotesUpdated;
@@ -164,10 +173,19 @@ public sealed partial class LiveTranscriptPage : Page
             App.CaptionOverlay?.UpdatePauseState(false);
             Assistant.StartSession(PreContextBox.Text);
             CorrectionService.StartSession();
+            _notesLastRefresh = DateTimeOffset.Now;
+            NotesRefreshProgress.Visibility = Visibility.Visible;
+            NotesCountdownLabel.Visibility = Visibility.Visible;
+            _notesTimer?.Start();
             await Manager.StartAsync(options);
         }
         else
         {
+            _notesTimer?.Stop();
+            NotesRefreshProgress.Value = 0;
+            NotesRefreshProgress.Visibility = Visibility.Collapsed;
+            NotesCountdownLabel.Visibility = Visibility.Collapsed;
+            NotesCountdownLabel.Text = string.Empty;
             await Manager.StopAsync();
             Assistant.EndSession();
             CorrectionService.EndSession();
@@ -231,6 +249,17 @@ public sealed partial class LiveTranscriptPage : Page
         });
     }
 
+    private void OnNotesTimerTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+    {
+        var elapsed = (DateTimeOffset.Now - _notesLastRefresh).TotalSeconds;
+        var cycleElapsed = elapsed % NotesIntervalSeconds;
+        var remaining = NotesIntervalSeconds - cycleElapsed;
+        NotesRefreshProgress.Value = cycleElapsed / NotesIntervalSeconds * 100;
+        var mins = (int)(remaining / 60);
+        var secs = (int)(remaining % 60);
+        NotesCountdownLabel.Text = $"Next in {mins}:{secs:D2}";
+    }
+
     private void OnBatchCorrected(object? sender, IReadOnlyList<CorrectedSegment> corrections)
     {
         DispatcherQueue.TryEnqueue(async () =>
@@ -281,6 +310,8 @@ public sealed partial class LiveTranscriptPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
+            _notesLastRefresh = DateTimeOffset.Now;
+            NotesRefreshProgress.Value = 0;
             KeyPointsList.ItemsSource = notes.KeyPoints;
             DecisionsList.ItemsSource = notes.Decisions;
             ActionItemsList.ItemsSource = notes.ActionItems;
