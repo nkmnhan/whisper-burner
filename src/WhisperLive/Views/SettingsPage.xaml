@@ -89,7 +89,7 @@
             <!-- AI Assistant -->
             <controls:SettingsExpander
                 x:Name="AssistantExpander"
-                Description="Claude AI for meeting notes and in-session Q&amp;A"
+                Description="Claude AI for session Q&amp;A and context"
                 Header="AI Assistant"
                 IsExpanded="True">
                 <controls:SettingsExpander.HeaderIcon>
@@ -105,11 +105,11 @@
                 </controls:SettingsExpander.Items>
             </controls:SettingsExpander>
 
-            <!-- Meeting context folders -->
+            <!-- Context folders -->
             <controls:SettingsExpander
                 x:Name="ContextFolderExpander"
-                Description="Folders (code repos, docs) the meeting assistant can read for extra context"
-                Header="Meeting context folders"
+                Description="Folders (code repos, docs) the session assistant can read for extra context"
+                Header="Context folders"
                 IsExpanded="True">
                 <controls:SettingsExpander.HeaderIcon>
                     <FontIcon Glyph="&#xE8B7;" />
@@ -124,8 +124,8 @@
                 </controls:SettingsExpander.Content>
             </controls:SettingsExpander>
 
-            <!-- Default meeting context -->
-            <controls:SettingsCard Description="Pre-fills the context box at the start of every new session" Header="Default meeting context">
+            <!-- Default session context -->
+            <controls:SettingsCard Description="Pre-fills the context box at the start of every new session" Header="Default session context">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE8BD;" />
                 </controls:SettingsCard.HeaderIcon>
@@ -142,7 +142,7 @@
             <!-- Allowed read paths -->
             <controls:SettingsExpander
                 x:Name="AllowedPathsExpander"
-                Description="Files and folders Claude can read during a meeting session"
+                Description="Files and folders Claude can read during a session"
                 Header="Allowed Read Paths"
                 IsExpanded="True">
                 <controls:SettingsExpander.HeaderIcon>

@@ -48,7 +48,7 @@ public sealed partial class LiveTranscriptPage : Page
 
     private static App CurrentApp => (App)Application.Current;
     private static IRecordingManager Manager => CurrentApp.RecordingManager;
-    private static IMeetingAssistantService Assistant => CurrentApp.MeetingAssistant;
+    private static ISessionAssistantService Assistant => CurrentApp.SessionAssistant;
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -63,7 +63,7 @@ public sealed partial class LiveTranscriptPage : Page
             _segments.Add(s);
 
         if (string.IsNullOrEmpty(PreContextBox.Text))
-            PreContextBox.Text = _settings.DefaultMeetingContext;
+            PreContextBox.Text = _settings.DefaultSessionContext;
 
         AssistantToggleButton.Visibility = _settings.EnableAssistant
             ? Visibility.Visible : Visibility.Collapsed;
@@ -180,10 +180,10 @@ public sealed partial class LiveTranscriptPage : Page
             var contextText = PreContextBox.Text.Trim();
             if (!string.IsNullOrEmpty(contextText))
             {
-                _settings.RecentMeetingContexts.RemoveAll(p => p == contextText);
-                _settings.RecentMeetingContexts.Insert(0, contextText);
-                if (_settings.RecentMeetingContexts.Count > 10)
-                    _settings.RecentMeetingContexts.RemoveRange(10, _settings.RecentMeetingContexts.Count - 10);
+                _settings.RecentSessionContexts.RemoveAll(p => p == contextText);
+                _settings.RecentSessionContexts.Insert(0, contextText);
+                if (_settings.RecentSessionContexts.Count > 10)
+                    _settings.RecentSessionContexts.RemoveRange(10, _settings.RecentSessionContexts.Count - 10);
                 _ = _settings.SaveAsync();
             }
 
@@ -233,7 +233,7 @@ public sealed partial class LiveTranscriptPage : Page
         TranscriptList.Visibility = Visibility.Collapsed;
         NewSessionButton.Visibility = Visibility.Collapsed;
         ActionStatus.Text = string.Empty;
-        PreContextBox.Text = _settings.DefaultMeetingContext;
+        PreContextBox.Text = _settings.DefaultSessionContext;
         App.CaptionOverlay?.ClearLines();
         CurrentApp.SubtitleService.StartSession();
     }
@@ -247,8 +247,8 @@ public sealed partial class LiveTranscriptPage : Page
     private void OnContextHistoryClicked(object sender, RoutedEventArgs e)
     {
         var flyout = new MenuFlyout();
-        var hasRecent = _settings.RecentMeetingContexts.Count > 0;
-        var hasSaved = _settings.SavedMeetingContexts.Count > 0;
+        var hasRecent = _settings.RecentSessionContexts.Count > 0;
+        var hasSaved = _settings.SavedSessionContexts.Count > 0;
 
         if (!hasRecent && !hasSaved)
         {
@@ -258,7 +258,7 @@ public sealed partial class LiveTranscriptPage : Page
         {
             if (hasRecent)
             {
-                foreach (var prompt in _settings.RecentMeetingContexts)
+                foreach (var prompt in _settings.RecentSessionContexts)
                 {
                     var display = prompt.Length > 60 ? prompt[..60] + "…" : prompt;
                     var item = new MenuFlyoutItem { Text = display, Icon = new FontIcon { Glyph = "" } };
@@ -273,7 +273,7 @@ public sealed partial class LiveTranscriptPage : Page
                 if (hasRecent)
                     flyout.Items.Add(new MenuFlyoutSeparator());
 
-                foreach (var saved in _settings.SavedMeetingContexts)
+                foreach (var saved in _settings.SavedSessionContexts)
                 {
                     var item = new MenuFlyoutItem { Text = saved.Name, Icon = new FontIcon { Glyph = "" } };
                     var captured = saved.Text;
@@ -314,8 +314,8 @@ public sealed partial class LiveTranscriptPage : Page
         var name = nameBox.Text.Trim();
         if (string.IsNullOrEmpty(name)) return;
 
-        _settings.SavedMeetingContexts.RemoveAll(p => p.Name == name);
-        _settings.SavedMeetingContexts.Add(new SavedPrompt(name, text));
+        _settings.SavedSessionContexts.RemoveAll(p => p.Name == name);
+        _settings.SavedSessionContexts.Add(new SavedPrompt(name, text));
         await _settings.SaveAsync();
     }
 

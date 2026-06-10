@@ -213,7 +213,7 @@ public sealed class ClaudeCliProvider : IAiProvider
             var prompt = systemPromptBase;
 
             prompt += $"\n\nThe app stores all data under \"{AppDataFolder.Replace('\\', '/')}/\": " +
-                      "sessions/ contains SRT transcripts of past meetings, settings.json has user preferences.";
+                      "sessions/ contains SRT transcripts of past sessions, settings.json has user preferences.";
 
             foreach (var folder in context?.ContextPaths ?? [])
             {

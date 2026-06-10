@@ -263,7 +263,7 @@
                     AutomationProperties.Name="Assistant"
                     Checked="OnAssistantToggleChecked"
                     HorizontalContentAlignment="Stretch"
-                    ToolTipService.ToolTip="Meeting assistant — Q&amp;A"
+                    ToolTipService.ToolTip="Session assistant — Q&amp;A"
                     Unchecked="OnAssistantToggleUnchecked"
                     VerticalContentAlignment="Stretch">
                     <Grid
@@ -333,14 +333,14 @@
                     MaxHeight="120"
                     Margin="0,8,0,0"
                     AcceptsReturn="True"
-                    PlaceholderText="Agenda, participants, background — Claude reads this before the meeting starts"
+                    PlaceholderText="Agenda, participants, background — Claude reads this before the session starts"
                     TextWrapping="Wrap">
                     <TextBox.Header>
                         <StackPanel Margin="0,0,0,4" Orientation="Horizontal" Spacing="4">
                             <TextBlock
                                 VerticalAlignment="Center"
                                 Style="{ThemeResource BodyTextBlockStyle}"
-                                Text="Meeting context (optional)" />
+                                Text="Session context (optional)" />
                             <components:GhostButton
                                 x:Name="ContextHistoryButton"
                                 Style="{StaticResource GhostButtonStyle}"
@@ -496,24 +496,24 @@
                             <Button
                                 Content="Summarize"
                                 Style="{StaticResource SuggestionChipButtonStyle}"
-                                Tag="Summarize the meeting so far"
+                                Tag="Summarize the session so far"
                                 Click="OnSuggestionClicked" />
                             <Button
                                 Content="Action items"
                                 Style="{StaticResource SuggestionChipButtonStyle}"
-                                Tag="What are the action items from this meeting?"
+                                Tag="What are the action items from this session?"
                                 Click="OnSuggestionClicked" />
                         </StackPanel>
                         <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
                             <Button
                                 Content="Decisions"
                                 Style="{StaticResource SuggestionChipButtonStyle}"
-                                Tag="What decisions were made in this meeting?"
+                                Tag="What decisions were made in this session?"
                                 Click="OnSuggestionClicked" />
                             <Button
                                 Content="Catch me up"
                                 Style="{StaticResource SuggestionChipButtonStyle}"
-                                Tag="Catch me up on the last few minutes of the meeting"
+                                Tag="Catch me up on the last few minutes of the session"
                                 Click="OnSuggestionClicked" />
                         </StackPanel>
                     </StackPanel>
@@ -560,7 +560,7 @@
                             AcceptsReturn="False"
                             AutomationProperties.HelpText="Press Enter or the send button to submit"
                             KeyDown="OnAssistantQuestionKeyDown"
-                            PlaceholderText="Ask about the meeting…"
+                            PlaceholderText="Ask about the session…"
                             TextWrapping="Wrap" />
                         <Button
                             x:Name="SendQuestionButton"

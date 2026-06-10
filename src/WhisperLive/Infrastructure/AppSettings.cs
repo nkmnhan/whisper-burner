@@ -22,9 +22,9 @@ public sealed class AppSettings
     public string Theme { get; set; } = "Default";
     public List<string> ContextFolderPaths { get; set; } = [];
     public List<string> AllowedReadPaths { get; set; } = [];
-    public string DefaultMeetingContext { get; set; } = "";
-    public List<string> RecentMeetingContexts { get; set; } = [];
-    public List<SavedPrompt> SavedMeetingContexts { get; set; } = [];
+    public string DefaultSessionContext { get; set; } = "";
+    public List<string> RecentSessionContexts { get; set; } = [];
+    public List<SavedPrompt> SavedSessionContexts { get; set; } = [];
     public bool EnableAssistant { get; set; } = true;
     public bool AllowFullTranscriptPrompts { get; set; } = false;
 

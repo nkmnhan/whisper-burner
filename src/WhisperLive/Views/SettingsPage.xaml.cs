@@ -51,7 +51,7 @@ public sealed partial class SettingsPage : Page
             _allowedPaths.Add(p);
         RebuildPathItems();
 
-        DefaultContextBox.Text = _settings.DefaultMeetingContext;
+        DefaultContextBox.Text = _settings.DefaultSessionContext;
 
         _loaded = true;
     }
@@ -68,7 +68,7 @@ public sealed partial class SettingsPage : Page
     private void OnDefaultContextChanged(object sender, TextChangedEventArgs e)
     {
         if (!_loaded) return;
-        _settings.DefaultMeetingContext = DefaultContextBox.Text;
+        _settings.DefaultSessionContext = DefaultContextBox.Text;
         _ = _settings.SaveAsync();
     }
 
@@ -217,7 +217,7 @@ public sealed partial class SettingsPage : Page
         _pathCards.Clear();
         _pathCards.Add(MakeBuiltInCard(BuiltInDataPath, "Built-in — sessions, settings, logs"));
         foreach (var path in _settings.ContextFolderPaths)
-            _pathCards.Add(MakeBuiltInCard(path, "Context folder — set in Meeting context folders above"));
+            _pathCards.Add(MakeBuiltInCard(path, "Context folder — set in Context folders above"));
         foreach (var path in _allowedPaths)
             _pathCards.Add(MakeUserCard(path, OnRemovePathClicked));
     }
