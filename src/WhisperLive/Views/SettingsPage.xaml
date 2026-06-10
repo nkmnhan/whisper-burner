@@ -86,6 +86,25 @@
                 </ComboBox>
             </controls:SettingsCard>
 
+            <!-- AI Assistant -->
+            <controls:SettingsExpander
+                x:Name="AssistantExpander"
+                Description="Claude AI for meeting notes and in-session Q&amp;A"
+                Header="AI Assistant"
+                IsExpanded="True">
+                <controls:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE8BD;" />
+                </controls:SettingsExpander.HeaderIcon>
+                <controls:SettingsExpander.Items>
+                    <controls:SettingsCard Description="Show the Assistant panel during sessions" Header="Enable assistant">
+                        <ToggleSwitch x:Name="EnableAssistantToggle" Toggled="OnEnableAssistantToggled" />
+                    </controls:SettingsCard>
+                    <controls:SettingsCard Description="Send the full session transcript with every question (uses more tokens)" Header="Full transcript prompts">
+                        <ToggleSwitch x:Name="AllowFullTranscriptToggle" Toggled="OnAllowFullTranscriptToggled" />
+                    </controls:SettingsCard>
+                </controls:SettingsExpander.Items>
+            </controls:SettingsExpander>
+
             <!-- Meeting context folders -->
             <controls:SettingsExpander
                 x:Name="ContextFolderExpander"

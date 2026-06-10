@@ -65,6 +65,9 @@ public sealed partial class LiveTranscriptPage : Page
         if (string.IsNullOrEmpty(PreContextBox.Text))
             PreContextBox.Text = _settings.DefaultMeetingContext;
 
+        AssistantToggleButton.Visibility = _settings.EnableAssistant
+            ? Visibility.Visible : Visibility.Collapsed;
+
         ApplyState(Manager.State);
 
         if (Manager.State == RecordingState.Idle)
@@ -188,14 +191,16 @@ public sealed partial class LiveTranscriptPage : Page
             App.CaptionOverlay?.SetLanguage(_settings.Language);
             App.CaptionOverlay?.UpdatePauseState(false);
 
-            Assistant.StartSession(PreContextBox.Text);
+            if (_settings.EnableAssistant)
+                Assistant.StartSession(PreContextBox.Text);
 
             await Manager.StartAsync(options);
         }
         else
         {
             await Manager.StopAsync();
-            Assistant.EndSession();
+            if (_settings.EnableAssistant)
+                Assistant.EndSession();
 
             var saved = Manager.CurrentSessionPath is { } p
                 ? $"Saved → {System.IO.Path.GetFileName(p)}" : null;
@@ -355,11 +360,11 @@ public sealed partial class LiveTranscriptPage : Page
             return;
 
         e.Handled = true;
-        await SubmitQuestionAsync();
+        await SubmitQuestionAsync(_settings.AllowFullTranscriptPrompts);
     }
 
     private async void OnSendQuestionClicked(object sender, RoutedEventArgs e) =>
-        await SubmitQuestionAsync();
+        await SubmitQuestionAsync(_settings.AllowFullTranscriptPrompts);
 
     private async Task SubmitQuestionAsync(bool includeFullTranscript = false)
     {

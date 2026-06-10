@@ -25,9 +25,8 @@ public sealed class AppSettings
     public string DefaultMeetingContext { get; set; } = "";
     public List<string> RecentMeetingContexts { get; set; } = [];
     public List<SavedPrompt> SavedMeetingContexts { get; set; } = [];
-
-    // AI feature flag — off by default to prevent unexpected token usage
-    // Assistant Q&A is always available — it only runs when the user sends a question.
+    public bool EnableAssistant { get; set; } = true;
+    public bool AllowFullTranscriptPrompts { get; set; } = false;
 
     public static async Task<AppSettings> LoadAsync()
     {

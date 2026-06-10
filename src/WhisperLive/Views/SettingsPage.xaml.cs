@@ -42,6 +42,8 @@ public sealed partial class SettingsPage : Page
         SelectComboItem(ModelBox, _settings.Model);
         SelectComboItem(LanguageBox, _settings.Language);
         SelectThemeCombo(_settings.Theme);
+        EnableAssistantToggle.IsOn = _settings.EnableAssistant;
+        AllowFullTranscriptToggle.IsOn = _settings.AllowFullTranscriptPrompts;
         RebuildContextFolderItems();
 
         _allowedPaths.Clear();
@@ -108,6 +110,20 @@ public sealed partial class SettingsPage : Page
         await _settings.SaveAsync();
         RebuildContextFolderItems();
         RebuildPathItems();
+    }
+
+    private void OnEnableAssistantToggled(object sender, RoutedEventArgs e)
+    {
+        if (!_loaded) return;
+        _settings.EnableAssistant = EnableAssistantToggle.IsOn;
+        _ = _settings.SaveAsync();
+    }
+
+    private void OnAllowFullTranscriptToggled(object sender, RoutedEventArgs e)
+    {
+        if (!_loaded) return;
+        _settings.AllowFullTranscriptPrompts = AllowFullTranscriptToggle.IsOn;
+        _ = _settings.SaveAsync();
     }
 
     private async void OnRemoveContextFolderClicked(object sender, RoutedEventArgs e)
