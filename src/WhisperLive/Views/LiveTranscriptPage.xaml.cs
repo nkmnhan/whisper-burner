@@ -425,6 +425,13 @@ public sealed partial class LiveTranscriptPage : Page
         await SubmitQuestionAsync();
     }
 
+    private void OnSuggestionStripWheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        var delta = e.GetCurrentPoint(SuggestionStripScroller).Properties.MouseWheelDelta;
+        SuggestionStripScroller.ChangeView(SuggestionStripScroller.HorizontalOffset - delta, null, null);
+        e.Handled = true;
+    }
+
     private void OnClearChatClicked(object sender, RoutedEventArgs e)
     {
         _chatMessages.Clear();
