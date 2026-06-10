@@ -212,22 +212,15 @@ public sealed class ClaudeCliProvider : IAiProvider
 
         private static string BuildSystemPromptSuffix(string systemPromptBase, AiCallContext? context)
         {
-            var dataDir = AppDataFolder.Replace('\\', '/');
             var prompt = systemPromptBase;
 
-            prompt += $"\n\nApp data is stored under \"{dataDir}/\": " +
-                      "sessions/ contains SRT transcripts (past and current), settings.json has user preferences. " +
-                      "You can Read, Grep, and Glob files under this directory.";
-
             if (context?.LiveTranscriptPath is { } srtPath && File.Exists(srtPath))
-                prompt += $"\n\nThe current session SRT is being written live to \"{srtPath.Replace('\\', '/')}\" " +
-                          "— read it when the question needs the full transcript.";
+                prompt += $"\n\nCurrent session SRT: \"{srtPath.Replace('\\', '/')}\"";
 
             foreach (var folder in context?.ContextPaths ?? [])
             {
                 if (!string.IsNullOrWhiteSpace(folder))
-                    prompt += $"\n\nYou have read access to a project folder at " +
-                              $"\"{folder.Replace('\\', '/')}\" — consult it when the question relates to code or documents there.";
+                    prompt += $"\n\nProject folder: \"{folder.Replace('\\', '/')}\"";
             }
 
             return prompt;
