@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace WhisperLive.Models;
 
-public record MeetingNotes(
+public record SessionNotes(
     IReadOnlyList<string> Reasons,
     IReadOnlyList<string> Goals,
     IReadOnlyList<string> Approaches,
