@@ -612,6 +612,7 @@
                         x:Name="SuggestionStripScroller"
                         Grid.Row="3"
                         Margin="12,4,12,0"
+                        Padding="0,0,0,10"
                         HorizontalScrollBarVisibility="Auto"
                         VerticalScrollBarVisibility="Disabled"
                         Visibility="Collapsed">
