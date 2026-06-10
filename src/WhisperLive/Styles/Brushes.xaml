@@ -14,6 +14,7 @@
             <SolidColorBrush x:Key="CaptionOverlayTextForegroundBrush" Color="White" />
             <SolidColorBrush x:Key="AssistantUserBubbleBrush" Color="#E0E7FF" />
             <SolidColorBrush x:Key="AssistantResponseBubbleBrush" Color="#F2F2F2" />
+            <SolidColorBrush x:Key="AssistantErrorBubbleBrush" Color="#FDE7E9" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
             <SolidColorBrush x:Key="RecordingActiveBrush" Color="#FF6B6B" />
@@ -27,6 +28,7 @@
             <SolidColorBrush x:Key="CaptionOverlayTextForegroundBrush" Color="White" />
             <SolidColorBrush x:Key="AssistantUserBubbleBrush" Color="#3A3F5C" />
             <SolidColorBrush x:Key="AssistantResponseBubbleBrush" Color="#2D2D2D" />
+            <SolidColorBrush x:Key="AssistantErrorBubbleBrush" Color="#442726" />
         </ResourceDictionary>
         <ResourceDictionary x:Key="HighContrast">
             <SolidColorBrush x:Key="RecordingActiveBrush" Color="{ThemeResource SystemColorHighlightColor}" />
@@ -40,6 +42,7 @@
             <SolidColorBrush x:Key="CaptionOverlayTextForegroundBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="AssistantUserBubbleBrush" Color="{ThemeResource SystemColorHighlightColor}" />
             <SolidColorBrush x:Key="AssistantResponseBubbleBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="AssistantErrorBubbleBrush" Color="{ThemeResource SystemColorHighlightColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 

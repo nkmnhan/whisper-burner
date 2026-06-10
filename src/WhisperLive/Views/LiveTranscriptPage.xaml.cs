@@ -386,6 +386,10 @@ public sealed partial class LiveTranscriptPage : Page
             var answer = await Assistant.AskAsync(question, includeFullTranscript);
             _chatMessages.Add(new AssistantMessage("Claude", answer, DateTimeOffset.Now));
         }
+        catch (Exception ex)
+        {
+            _chatMessages.Add(new AssistantMessage("Error", $"Could not get a response. {ex.Message}", DateTimeOffset.Now));
+        }
         finally
         {
             _isAsking = false;
@@ -403,6 +407,15 @@ public sealed partial class LiveTranscriptPage : Page
 
         AssistantQuestionBox.Text = prompt;
         await SubmitQuestionAsync(includeFullTranscript: true);
+    }
+
+    private void OnClearChatClicked(object sender, RoutedEventArgs e)
+    {
+        _chatMessages.Clear();
+        if (_isAsking) return;
+        Assistant.EndSession();
+        if (_settings.EnableAssistant)
+            Assistant.StartSession(PreContextBox.Text);
     }
 
     private void OnCopyResponseClicked(object sender, RoutedEventArgs e)

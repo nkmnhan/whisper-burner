@@ -8,17 +8,33 @@
     <Page.Resources>
         <!-- Assistant chat bubbles — picked by AssistantMessageTemplateSelector based on Role -->
         <DataTemplate x:Key="AssistantUserMessageTemplate" x:DataType="models:AssistantMessage">
-            <Border
-                Margin="40,0,0,0"
-                Padding="10,6"
-                HorizontalAlignment="Right"
-                Background="{ThemeResource AssistantUserBubbleBrush}"
-                CornerRadius="{StaticResource ControlCornerRadius}">
-                <TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" />
-            </Border>
+            <StackPanel Margin="40,0,0,0" Spacing="2">
+                <TextBlock
+                    HorizontalAlignment="Right"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="You" />
+                <Border
+                    Padding="10,6"
+                    HorizontalAlignment="Right"
+                    Background="{ThemeResource AssistantUserBubbleBrush}"
+                    CornerRadius="{StaticResource ControlCornerRadius}">
+                    <TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" />
+                </Border>
+                <TextBlock
+                    HorizontalAlignment="Right"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind TimeDisplay}" />
+            </StackPanel>
         </DataTemplate>
         <DataTemplate x:Key="AssistantResponseMessageTemplate" x:DataType="models:AssistantMessage">
-            <StackPanel Margin="0,0,40,0" Spacing="4">
+            <StackPanel Margin="0,0,40,0" Spacing="2">
+                <TextBlock
+                    HorizontalAlignment="Left"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Claude" />
                 <Border
                     Padding="10,6"
                     HorizontalAlignment="Left"
@@ -52,10 +68,48 @@
                         </StackPanel>
                     </components:GhostButton>
                 </StackPanel>
+                <TextBlock
+                    HorizontalAlignment="Left"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind TimeDisplay}" />
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="AssistantErrorMessageTemplate" x:DataType="models:AssistantMessage">
+            <StackPanel Margin="0,0,40,0" Spacing="2">
+                <TextBlock
+                    HorizontalAlignment="Left"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Claude" />
+                <Border
+                    Padding="10,6"
+                    HorizontalAlignment="Left"
+                    Background="{ThemeResource AssistantErrorBubbleBrush}"
+                    CornerRadius="{StaticResource ControlCornerRadius}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon
+                            Margin="0,2,0,0"
+                            VerticalAlignment="Top"
+                            FontSize="12"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Glyph="&#xE783;" />
+                        <TextBlock
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Text="{x:Bind Text}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <TextBlock
+                    HorizontalAlignment="Left"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind TimeDisplay}" />
             </StackPanel>
         </DataTemplate>
         <helpers:AssistantMessageTemplateSelector
             x:Key="AssistantMessageSelector"
+            ErrorTemplate="{StaticResource AssistantErrorMessageTemplate}"
             ResponseTemplate="{StaticResource AssistantResponseMessageTemplate}"
             UserTemplate="{StaticResource AssistantUserMessageTemplate}" />
         <!-- Waveform storyboard — 5 bars staggered by 80 ms each -->
@@ -391,7 +445,7 @@
             <Border
                 x:Name="AssistantPanel"
                 Grid.Column="1"
-                Width="320"
+                Width="360"
                 Margin="16,0,0,0"
                 Padding="0"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -409,6 +463,7 @@
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <!--
@@ -421,6 +476,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBlock
                             Grid.Column="0"
@@ -429,6 +485,14 @@
                             Text="Ask Claude" />
                         <components:GhostButton
                             Grid.Column="1"
+                            AutomationProperties.Name="Clear conversation"
+                            Style="{StaticResource GhostButtonStyle}"
+                            Click="OnClearChatClicked"
+                            ToolTipService.ToolTip="Clear conversation">
+                            <FontIcon FontSize="14" Glyph="&#xE74D;" />
+                        </components:GhostButton>
+                        <components:GhostButton
+                            Grid.Column="2"
                             AutomationProperties.Name="Save conversation"
                             Style="{StaticResource GhostButtonStyle}"
                             Click="OnSaveConversationClicked"
@@ -543,13 +607,37 @@
                             Text="Thinking" />
                     </StackPanel>
 
-                    <!--
-                        Suggestion chips: 3 chips fit in the 296px panel interior without scrolling
-                        (approx: "Summarize"~80 + "Action items"~88 + "Decisions"~80 + 2×8 = 264px < 296px).
-                        SuggestionChipButtonStyle: SubtleButtonStyle + CornerRadius=8 + FontSize=12.
-                    -->
+                    <!-- Persistent suggestion chips — always visible above input -->
+                    <ScrollViewer
+                        Grid.Row="3"
+                        Margin="12,4,12,0"
+                        HorizontalScrollBarVisibility="Auto"
+                        VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button
+                                Content="Summarize"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="Summarize the session so far"
+                                Click="OnSuggestionClicked" />
+                            <Button
+                                Content="Action items"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="What are the action items from this session?"
+                                Click="OnSuggestionClicked" />
+                            <Button
+                                Content="Decisions"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="What decisions were made in this session?"
+                                Click="OnSuggestionClicked" />
+                            <Button
+                                Content="Catch me up"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="Catch me up on the last few minutes of the session"
+                                Click="OnSuggestionClicked" />
+                        </StackPanel>
+                    </ScrollViewer>
 
-                    <Grid Grid.Row="3" Margin="12,8,12,12" ColumnSpacing="8">
+                    <Grid Grid.Row="4" Margin="12,8,12,12" ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -557,6 +645,7 @@
                         <TextBox
                             x:Name="AssistantQuestionBox"
                             Grid.Column="0"
+                            MaxHeight="80"
                             AcceptsReturn="False"
                             AutomationProperties.HelpText="Press Enter or the send button to submit"
                             KeyDown="OnAssistantQuestionKeyDown"
