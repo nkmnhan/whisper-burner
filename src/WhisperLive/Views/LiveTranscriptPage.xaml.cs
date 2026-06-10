@@ -4,9 +4,8 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using WhisperLive.Infrastructure;
 using WhisperLive.Models;
@@ -21,31 +20,25 @@ public sealed partial class LiveTranscriptPage : Page
     private AppSettings _settings = new();
     private readonly ObservableCollection<string> _segments = [];
     private readonly ObservableCollection<AssistantMessage> _chatMessages = [];
-    private readonly ObservableCollection<NotesBubble> _notesBubbles = [];
-    private readonly List<NotesBubble> _notesHistory = [];
     private bool _isAsking;
     private int _displayOffset;
-    private int _activeRefreshCount;
-
-    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _notesTimer;
-    private DateTimeOffset _notesLastRefresh;
-    private const double NotesIntervalSeconds = 180.0;
 
     public LiveTranscriptPage()
     {
         InitializeComponent();
         TranscriptList.ItemsSource = _segments;
         AssistantChatList.ItemsSource = _chatMessages;
-        NotesChatList.ItemsSource = _notesBubbles;
+        _chatMessages.CollectionChanged += (_, _) =>
+            ChatEmptyState.Visibility = _chatMessages.Count > 0
+                ? Visibility.Collapsed
+                : Visibility.Visible;
 
-        // Collapse ThinkingIndicator after its fade-out finishes, then stop the dots animation.
         HideThinkingStoryboard.Completed += (_, _) =>
         {
             ThinkingIndicator.Visibility = Visibility.Collapsed;
             ThinkingDotsStoryboard.Stop();
         };
 
-        // Collapse the assistant panel only after the fade-out animation completes (EaseIn 150ms).
         PanelHideStoryboard.Completed += (_, _) =>
             AssistantPanel.Visibility = Visibility.Collapsed;
 
@@ -56,25 +49,14 @@ public sealed partial class LiveTranscriptPage : Page
     private static App CurrentApp => (App)Application.Current;
     private static IRecordingManager Manager => CurrentApp.RecordingManager;
     private static IMeetingAssistantService Assistant => CurrentApp.MeetingAssistant;
-    private static ITranscriptCorrectionService CorrectionService => CurrentApp.CorrectionService;
-
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = await AppSettings.LoadAsync();
 
-        _notesTimer = DispatcherQueue.CreateTimer();
-        _notesTimer.Interval = TimeSpan.FromSeconds(1);
-        _notesTimer.Tick += OnNotesTimerTick;
-
         Manager.StateChanged += OnStateChanged;
         Manager.SegmentAdded += OnSegmentAdded;
-        Assistant.NotesUpdated += OnNotesUpdated;
-        Assistant.NotesRefreshStarted += OnNotesRefreshStarted;
-        CorrectionService.BatchCorrected += OnBatchCorrected;
 
-        // Restore transcript that accumulated while we were away
         _segments.Clear();
         _displayOffset = 0;
         foreach (var s in Manager.GetRecentSegments())
@@ -91,15 +73,9 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        _notesTimer?.Stop();
         Manager.StateChanged -= OnStateChanged;
         Manager.SegmentAdded -= OnSegmentAdded;
-        Assistant.NotesUpdated -= OnNotesUpdated;
-        Assistant.NotesRefreshStarted -= OnNotesRefreshStarted;
-        CorrectionService.BatchCorrected -= OnBatchCorrected;
     }
-
-    // ── API health ────────────────────────────────────────────────────────────
 
     private async Task CheckApiHealthAsync()
     {
@@ -131,14 +107,11 @@ public sealed partial class LiveTranscriptPage : Page
         StatusLabel.Text = label;
     }
 
-    // Fades ActionStatus in from zero opacity (StatusFadeInStoryboard: EaseOut 200ms).
     private void ShowActionStatus(string text)
     {
         ActionStatus.Text = text;
         StatusFadeInStoryboard.Begin();
     }
-
-    // ── State ─────────────────────────────────────────────────────────────────
 
     private void OnStateChanged(object? sender, RecordingState state) =>
         DispatcherQueue.TryEnqueue(() => ApplyState(state));
@@ -156,7 +129,6 @@ public sealed partial class LiveTranscriptPage : Page
                 ShowOverlayButton.Visibility = Visibility.Collapsed;
                 NewSessionButton.Visibility = _segments.Count > 0
                     ? Visibility.Visible : Visibility.Collapsed;
-                RefreshNotesButton.IsEnabled = false;
                 WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
                 AutomationProperties.SetName(MainButton, "Start recording");
@@ -170,11 +142,10 @@ public sealed partial class LiveTranscriptPage : Page
                 WaveformInButton.Visibility = Visibility.Visible;
                 PauseButton.Visibility = Visibility.Visible;
                 NewSessionButton.Visibility = Visibility.Collapsed;
-                PauseIcon.Glyph = ""; // Pause
+                PauseIcon.Glyph = "";
                 AutomationProperties.SetName(PauseButton, "Pause recording");
                 ToolTipService.SetToolTip(PauseButton, "Pause recording");
                 WaveformStoryboard.Begin();
-                RefreshNotesButton.IsEnabled = true;
                 DotPulseStoryboard.Begin();
                 AutomationProperties.SetName(MainButton, "Stop recording");
                 SetStatusDot("StatusDotErrorBrush", "Recording");
@@ -182,10 +153,9 @@ public sealed partial class LiveTranscriptPage : Page
                 break;
 
             case RecordingState.Paused:
-                PauseIcon.Glyph = ""; // Resume
+                PauseIcon.Glyph = "";
                 AutomationProperties.SetName(PauseButton, "Resume recording");
                 ToolTipService.SetToolTip(PauseButton, "Resume recording");
-                RefreshNotesButton.IsEnabled = true;
                 WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
                 SetStatusDot("StatusDotCautionBrush", "Paused");
@@ -193,8 +163,6 @@ public sealed partial class LiveTranscriptPage : Page
                 break;
         }
     }
-
-    // ── Controls ─────────────────────────────────────────────────────────────
 
     private async void OnMainButtonClicked(object sender, RoutedEventArgs e)
     {
@@ -219,27 +187,15 @@ public sealed partial class LiveTranscriptPage : Page
             App.CaptionOverlay?.ClearLines();
             App.CaptionOverlay?.SetLanguage(_settings.Language);
             App.CaptionOverlay?.UpdatePauseState(false);
+
             Assistant.StartSession(PreContextBox.Text);
-            CorrectionService.StartSession();
-            _notesLastRefresh = DateTimeOffset.Now;
-            NotesCountdownLabel.Visibility = Visibility.Visible;
-            NotesEmptyLabel.Text = "Claude is listening — first notes in ~3 min";
-            NotesWaitingRing.IsActive = true;
-            NotesWaitingRing.Visibility = Visibility.Visible;
-            _notesTimer?.Start();
+
             await Manager.StartAsync(options);
         }
         else
         {
-            _notesTimer?.Stop();
-            NotesCountdownLabel.Visibility = Visibility.Collapsed;
-            NotesCountdownLabel.Text = string.Empty;
-            NotesWaitingRing.IsActive = false;
-            NotesWaitingRing.Visibility = Visibility.Collapsed;
-            NotesEmptyLabel.Text = "Notes appear here — updated every 3 minutes";
             await Manager.StopAsync();
             Assistant.EndSession();
-            CorrectionService.EndSession();
 
             var saved = Manager.CurrentSessionPath is { } p
                 ? $"Saved → {System.IO.Path.GetFileName(p)}" : null;
@@ -267,14 +223,10 @@ public sealed partial class LiveTranscriptPage : Page
     private void OnNewSessionClicked(object sender, RoutedEventArgs e)
     {
         _segments.Clear();
-        _notesBubbles.Clear();
-        _notesHistory.Clear();
         _chatMessages.Clear();
         _displayOffset = 0;
         TranscriptList.Visibility = Visibility.Collapsed;
         NewSessionButton.Visibility = Visibility.Collapsed;
-        NotesEmptyPanel.Visibility = Visibility.Visible;
-        ExpandNotesButton.IsEnabled = false;
         ActionStatus.Text = string.Empty;
         PreContextBox.Text = _settings.DefaultMeetingContext;
         App.CaptionOverlay?.ClearLines();
@@ -313,7 +265,9 @@ public sealed partial class LiveTranscriptPage : Page
 
             if (hasSaved)
             {
-                if (hasRecent) flyout.Items.Add(new MenuFlyoutSeparator());
+                if (hasRecent)
+                    flyout.Items.Add(new MenuFlyoutSeparator());
+
                 foreach (var saved in _settings.SavedMeetingContexts)
                 {
                     var item = new MenuFlyoutItem { Text = saved.Name, Icon = new FontIcon { Glyph = "" } };
@@ -337,7 +291,7 @@ public sealed partial class LiveTranscriptPage : Page
             PlaceholderText = "e.g. Daily standup",
             Text = text.Length > 50 ? text[..50] : text,
             MaxLength = 60,
-            Margin = new Microsoft.UI.Xaml.Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
         };
 
         var dialog = new ContentDialog
@@ -360,8 +314,6 @@ public sealed partial class LiveTranscriptPage : Page
         await _settings.SaveAsync();
     }
 
-    // ── Segment display ───────────────────────────────────────────────────────
-
     private void OnSegmentAdded(object? sender, SubtitleSegment seg)
     {
         DispatcherQueue.TryEnqueue(() =>
@@ -375,54 +327,17 @@ public sealed partial class LiveTranscriptPage : Page
 
             if (Manager.State == RecordingState.Recording &&
                 App.CaptionOverlay?.AppWindow.IsVisible == false)
-                ShowOverlayButton.Visibility = Visibility.Visible;
-        });
-    }
-
-    private void OnNotesTimerTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
-    {
-        var elapsed = (DateTimeOffset.Now - _notesLastRefresh).TotalSeconds;
-        var remaining = NotesIntervalSeconds - elapsed % NotesIntervalSeconds;
-        var mins = (int)(remaining / 60);
-        var secs = (int)(remaining % 60);
-        NotesCountdownLabel.Text = $"Next in {mins}:{secs:D2}";
-    }
-
-    private void OnBatchCorrected(object? sender, IReadOnlyList<CorrectedSegment> corrections)
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            var applied = 0;
-            foreach (var correction in corrections)
             {
-                var index = correction.OriginalId - 1 - _displayOffset;
-                if (index >= 0 && index < _segments.Count)
-                {
-                    _segments[index] = correction.CorrectedText;
-                    applied++;
-                }
+                ShowOverlayButton.Visibility = Visibility.Visible;
             }
-            if (applied > 0)
-                _ = ClearCorrectionStatusAsync(applied);
         });
     }
-
-    private async Task ClearCorrectionStatusAsync(int applied)
-    {
-        ShowActionStatus($"AI corrected {applied} line{(applied == 1 ? "" : "s")}");
-        await Task.Delay(4000);
-        if (ActionStatus.Text.StartsWith("AI corrected"))
-            ActionStatus.Text = string.Empty;
-    }
-
-    // ── Assistant panel ───────────────────────────────────────────────────────
 
     private void OnAssistantToggleChecked(object sender, RoutedEventArgs e) => ShowAssistantPanel();
     private void OnAssistantToggleUnchecked(object sender, RoutedEventArgs e) => HideAssistantPanel();
 
     private void ShowAssistantPanel()
     {
-        // Clear the "new notes" badge whenever the user opens the panel.
         AssistantBadge.Visibility = Visibility.Collapsed;
         AutomationProperties.SetName(AssistantToggleButton, "Assistant");
         AssistantPanel.Visibility = Visibility.Visible;
@@ -431,136 +346,7 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void HideAssistantPanel()
     {
-        // Visibility is set to Collapsed in PanelHideStoryboard.Completed.
         PanelHideStoryboard.Begin();
-    }
-
-    // SelectorBar handler — Gallery pattern: compare sender.SelectedItem to named SelectorBarItems.
-    private void OnPanelTabSelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
-    {
-        var isNotes = sender.SelectedItem == NotesTabItem;
-        NotesView.Visibility = isNotes ? Visibility.Visible : Visibility.Collapsed;
-        ChatView.Visibility = isNotes ? Visibility.Collapsed : Visibility.Visible;
-    }
-
-    private void OnNotesRefreshStarted(object? sender, EventArgs e)
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            _activeRefreshCount++;
-            NotesRefreshRing.IsActive = true;
-            NotesRefreshRing.Visibility = Visibility.Visible;
-            NotesUpdatedLabel.Text = "Updating…";
-        });
-    }
-
-    private void OnNotesUpdated(object? sender, MeetingNotes notes)
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            _notesLastRefresh = DateTimeOffset.Now;
-            NotesWaitingRing.IsActive = false;
-            NotesWaitingRing.Visibility = Visibility.Collapsed;
-            _activeRefreshCount = Math.Max(0, _activeRefreshCount - 1);
-            if (_activeRefreshCount == 0)
-            {
-                NotesRefreshRing.IsActive = false;
-                NotesRefreshRing.Visibility = Visibility.Collapsed;
-            }
-
-            var content = FormatNotesBubble(notes);
-            if (string.IsNullOrWhiteSpace(content)) return;
-
-            var bubble = new NotesBubble(content, notes.GeneratedAt);
-            _notesHistory.Add(bubble);
-
-            // Replace-in-place so the panel shows the current state, not a growing stack of duplicates
-            if (_notesBubbles.Count > 0)
-                _notesBubbles[0] = bubble;
-            else
-                _notesBubbles.Add(bubble);
-
-            NotesEmptyPanel.Visibility = Visibility.Collapsed;
-            NotesUpdatedLabel.Text = "Updated just now";
-            ExpandNotesButton.IsEnabled = true;
-
-            // If the panel is hidden, surface a dot badge on the toggle button so the user
-            // knows notes have refreshed without opening the panel. AutomationProperties.Name
-            // is updated to announce the state to screen readers (Gallery NavigationView InfoBadge pattern).
-            if (AssistantPanel.Visibility != Visibility.Visible)
-            {
-                AssistantBadge.Visibility = Visibility.Visible;
-                AutomationProperties.SetName(AssistantToggleButton, "Assistant, new notes available");
-            }
-        });
-    }
-
-    private static Visibility ToVisibility(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
-
-    private static string FormatNotesBubble(MeetingNotes notes)
-    {
-        var sb = new System.Text.StringBuilder();
-        AppendSection(sb, "Reasons", notes.Reasons);
-        AppendSection(sb, "Goals", notes.Goals);
-        AppendSection(sb, "Approaches", notes.Approaches);
-        AppendSection(sb, "Decisions", notes.Decisions);
-        return sb.ToString().TrimEnd();
-
-        static void AppendSection(System.Text.StringBuilder b, string title, IReadOnlyList<string> items)
-        {
-            if (items.Count == 0) return;
-            if (b.Length > 0) b.AppendLine();
-            b.AppendLine(title);
-            foreach (var item in items) b.AppendLine($"• {item}");
-        }
-    }
-
-    private async void OnExpandNotesClicked(object sender, RoutedEventArgs e)
-    {
-        if (_notesHistory.Count == 0) return;
-
-        var sb = new System.Text.StringBuilder();
-        foreach (var bubble in _notesHistory)
-        {
-            sb.AppendLine($"── {bubble.TimeLabel} ──");
-            sb.AppendLine(bubble.Content);
-            sb.AppendLine();
-        }
-
-        var dialog = new ContentDialog
-        {
-            Title = "Meeting Notes",
-            CloseButtonText = "Close",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = XamlRoot,
-            MinWidth = 480,
-        };
-
-        var text = new TextBlock
-        {
-            Text = sb.ToString().TrimEnd(),
-            TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap,
-            IsTextSelectionEnabled = true,
-            FontSize = 13,
-            Margin = new Microsoft.UI.Xaml.Thickness(0, 0, 12, 0),
-        };
-        var scroll = new ScrollViewer { MaxHeight = 520, Content = text };
-        dialog.Content = scroll;
-
-        await dialog.ShowAsync();
-    }
-
-    private async void OnRefreshNotesClicked(object sender, RoutedEventArgs e)
-    {
-        RefreshNotesButton.IsEnabled = false;
-        try
-        {
-            await Assistant.RefreshNotesAsync(force: true);
-        }
-        finally
-        {
-            RefreshNotesButton.IsEnabled = true;
-        }
     }
 
     private async void OnAssistantQuestionKeyDown(object sender, KeyRoutedEventArgs e)
@@ -575,12 +361,12 @@ public sealed partial class LiveTranscriptPage : Page
     private async void OnSendQuestionClicked(object sender, RoutedEventArgs e) =>
         await SubmitQuestionAsync();
 
-    private async Task SubmitQuestionAsync()
+    private async Task SubmitQuestionAsync(bool includeFullTranscript = false)
     {
         if (_isAsking) return;
 
         var question = AssistantQuestionBox.Text.Trim();
-        if (question.Length == 0) return;
+        if (string.IsNullOrEmpty(question)) return;
 
         _isAsking = true;
         AssistantQuestionBox.Text = string.Empty;
@@ -592,7 +378,7 @@ public sealed partial class LiveTranscriptPage : Page
 
         try
         {
-            var answer = await Assistant.AskAsync(question);
+            var answer = await Assistant.AskAsync(question, includeFullTranscript);
             _chatMessages.Add(new AssistantMessage("Claude", answer, DateTimeOffset.Now));
         }
         finally
@@ -605,6 +391,69 @@ public sealed partial class LiveTranscriptPage : Page
         }
     }
 
+    private async void OnSuggestionClicked(object sender, RoutedEventArgs e)
+    {
+        if (_isAsking) return;
+        if (((Button)sender).Tag is not string prompt) return;
+
+        AssistantQuestionBox.Text = prompt;
+        await SubmitQuestionAsync(includeFullTranscript: true);
+    }
+
+    private void OnCopyResponseClicked(object sender, RoutedEventArgs e)
+    {
+        if (((Button)sender).Tag is not string text) return;
+
+        var dataPackage = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        dataPackage.SetText(text);
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dataPackage);
+        ShowActionStatus("Copied to clipboard");
+    }
+
+    private async void OnSaveResponseClicked(object sender, RoutedEventArgs e)
+    {
+        if (((Button)sender).Tag is not string text) return;
+
+        var fileName = $"assistant-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.txt";
+        await SaveAssistantTextAsync(fileName, text);
+    }
+
+    private async void OnSaveConversationClicked(object sender, RoutedEventArgs e)
+    {
+        if (_chatMessages.Count == 0)
+        {
+            ShowActionStatus("Nothing to save yet");
+            return;
+        }
+
+        var builder = new StringBuilder();
+        foreach (var message in _chatMessages)
+        {
+            builder.Append('[')
+                .Append(message.Timestamp.ToLocalTime().ToString("HH:mm:ss"))
+                .Append("] ")
+                .Append(message.Role)
+                .AppendLine();
+            builder.AppendLine(message.Text);
+            builder.AppendLine();
+        }
+
+        var fileName = $"assistant-chat-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.txt";
+        await SaveAssistantTextAsync(fileName, builder.ToString().TrimEnd());
+    }
+
+    private async Task SaveAssistantTextAsync(string fileName, string text)
+    {
+        var sessionDir = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "whisper.live", "sessions");
+        System.IO.Directory.CreateDirectory(sessionDir);
+
+        var path = System.IO.Path.Combine(sessionDir, fileName);
+        await System.IO.File.WriteAllTextAsync(path, text);
+        ShowActionStatus($"Saved → {fileName}");
+    }
+
     private void ShowThinking()
     {
         ThinkingIndicator.Visibility = Visibility.Visible;
@@ -614,7 +463,6 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void HideThinking()
     {
-        // Fade out; Completed handler collapses Visibility and stops the dots storyboard.
         HideThinkingStoryboard.Begin();
     }
 }

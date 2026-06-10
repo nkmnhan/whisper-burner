@@ -57,6 +57,7 @@ public sealed class TranscriptionClient : ITranscriptionClient
 
         var segments = result?.Segments?
             .Where(s => !string.IsNullOrWhiteSpace(s.Text))
+            .Where(s => !IsHallucination(s.Text))
             .Where(s => s.End > chunk.OverlapSeconds)
             .Select(s => new SubtitleSegment(
                 s.Id,
@@ -67,6 +68,14 @@ public sealed class TranscriptionClient : ITranscriptionClient
 
         AppLogger.Debug("Chunk #{Index} → {Count} segment(s)", chunk.ChunkIndex, segments.Count);
         return segments;
+    }
+
+    // Whisper hallucinates punctuation-only segments on silence or noise.
+    // Bracket/paren annotations like [Music] or (applause) are kept — they carry real context.
+    private static bool IsHallucination(string text)
+    {
+        var t = text.Trim();
+        return t.All(c => c is '.' or ',' or '!' or '?' or '-' or '–' or '—' or ' ' or '\u266a' or '\u266b');
     }
 
     private record TranscribeResponse(string Text, List<SegmentDto> Segments);

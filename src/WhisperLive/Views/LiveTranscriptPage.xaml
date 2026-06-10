@@ -18,14 +18,41 @@
             </Border>
         </DataTemplate>
         <DataTemplate x:Key="AssistantResponseMessageTemplate" x:DataType="models:AssistantMessage">
-            <Border
-                Margin="0,0,40,0"
-                Padding="10,6"
-                HorizontalAlignment="Left"
-                Background="{ThemeResource AssistantResponseBubbleBrush}"
-                CornerRadius="{StaticResource ControlCornerRadius}">
-                <TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" />
-            </Border>
+            <StackPanel Margin="0,0,40,0" Spacing="4">
+                <Border
+                    Padding="10,6"
+                    HorizontalAlignment="Left"
+                    Background="{ThemeResource AssistantResponseBubbleBrush}"
+                    CornerRadius="{StaticResource ControlCornerRadius}">
+                    <RichTextBlock
+                        helpers:MarkdownHelper.Text="{x:Bind Text}"
+                        IsTextSelectionEnabled="True"
+                        TextWrapping="Wrap" />
+                </Border>
+                <!-- Inline actions: GhostButton enforces arrow cursor inside the text-containing ListView -->
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <components:GhostButton
+                        Style="{StaticResource InlineActionButtonStyle}"
+                        Tag="{x:Bind Text}"
+                        Click="OnCopyResponseClicked"
+                        ToolTipService.ToolTip="Copy">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <FontIcon FontSize="12" Glyph="&#xE8C8;" />
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Copy" />
+                        </StackPanel>
+                    </components:GhostButton>
+                    <components:GhostButton
+                        Style="{StaticResource InlineActionButtonStyle}"
+                        Tag="{x:Bind Text}"
+                        Click="OnSaveResponseClicked"
+                        ToolTipService.ToolTip="Save to file">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <FontIcon FontSize="12" Glyph="&#xE74E;" />
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Save" />
+                        </StackPanel>
+                    </components:GhostButton>
+                </StackPanel>
+            </StackPanel>
         </DataTemplate>
         <helpers:AssistantMessageTemplateSelector
             x:Key="AssistantMessageSelector"
@@ -193,6 +220,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Row 0: Status bar — dot + label, assistant toggle, API error InfoBar -->
@@ -235,7 +263,7 @@
                     AutomationProperties.Name="Assistant"
                     Checked="OnAssistantToggleChecked"
                     HorizontalContentAlignment="Stretch"
-                    ToolTipService.ToolTip="Meeting assistant — notes and Q&amp;A"
+                    ToolTipService.ToolTip="Meeting assistant — Q&amp;A"
                     Unchecked="OnAssistantToggleUnchecked"
                     VerticalContentAlignment="Stretch">
                     <Grid
@@ -275,12 +303,8 @@
                 Title="Whisper API offline" />
         </StackPanel>
 
-        <!-- Row 1: live transcript (always visible) + collapsible assistant panel -->
+        <!-- Row 1: live transcript + collapsible assistant panel — no button row here -->
         <Grid Grid.Row="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -363,258 +387,197 @@
                 </ListView.ItemTemplate>
             </ListView>
 
-            <!-- Assistant panel: Notes (auto-generated outline) / Ask (live Q&A chat) -->
+            <!-- Assistant panel: Copilot Chat style Q&A -->
             <Border
                 x:Name="AssistantPanel"
                 Grid.Column="1"
-                Grid.RowSpan="2"
                 Width="320"
                 Margin="16,0,0,0"
-                Padding="12"
+                Padding="0"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="{StaticResource OverlayCornerRadius}"
                 Visibility="Collapsed">
-                <!--
-                    TranslateTransform is the target for PanelShowStoryboard (X: 32→0, EaseOut 250ms)
-                    and PanelHideStoryboard (Opacity: 1→0, EaseIn 150ms). Visibility is set to
-                    Collapsed in PanelHideStoryboard.Completed in code-behind.
-                -->
                 <Border.RenderTransform>
                     <TranslateTransform x:Name="AssistantPanelTranslate" />
                 </Border.RenderTransform>
+
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <!--
-                        SelectorBar: Gallery-recommended tab switcher (Navigation group).
-                        Gives keyboard navigation, selection state, and the underline indicator
-                        for free — replaces the manual AccentButtonStyle toggling on two Buttons.
-                        IsSelected="True" on first item sets the initial selection in XAML
-                        so no code-behind initialization is needed (Gallery SelectorBarPage pattern).
+                        Panel header: title left + save icon right.
+                        BodyStrongTextBlockStyle matches the weight used by VS Code's chat panel title.
+                        GhostButton keeps the save action discoverable without competing with the
+                        primary input at the bottom.
                     -->
-                    <SelectorBar
-                        x:Name="PanelTabBar"
-                        Grid.Row="0"
-                        Margin="0,0,0,12"
-                        SelectionChanged="OnPanelTabSelectionChanged">
-                        <SelectorBarItem x:Name="NotesTabItem" IsSelected="True" Text="Notes" />
-                        <SelectorBarItem x:Name="AskTabItem" Text="Ask" />
-                    </SelectorBar>
-
-                    <!-- Notes view: scrolling chat-bubble snapshots, UI only (not saved to disk) -->
-                    <Grid x:Name="NotesView" Grid.Row="1">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <!-- Bubble list -->
-                        <ListView
-                            x:Name="NotesChatList"
-                            Grid.Row="0"
-                            SelectionMode="None">
-                            <ListView.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
-                                </ItemsPanelTemplate>
-                            </ListView.ItemsPanel>
-                            <!--
-                                AddDeleteThemeTransition: matches AssistantChatList — notes
-                                snapshots slide in with a fade when added, consistent with the
-                                chat list. Gallery pattern: Collections > ListView.
-                            -->
-                            <ListView.ItemContainerTransitions>
-                                <TransitionCollection>
-                                    <AddDeleteThemeTransition />
-                                </TransitionCollection>
-                            </ListView.ItemContainerTransitions>
-                            <ListView.ItemContainerStyle>
-                                <Style TargetType="ListViewItem">
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                    <Setter Property="MinHeight" Value="0" />
-                                    <Setter Property="Padding" Value="0,4,0,4" />
-                                </Style>
-                            </ListView.ItemContainerStyle>
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="models:NotesBubble">
-                                    <Border
-                                        Margin="0,0,8,0"
-                                        Padding="10,8"
-                                        HorizontalAlignment="Left"
-                                        Background="{ThemeResource AssistantResponseBubbleBrush}"
-                                        CornerRadius="{StaticResource ControlCornerRadius}">
-                                        <StackPanel Spacing="4">
-                                            <TextBlock
-                                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                                Style="{StaticResource CaptionTextBlockStyle}"
-                                                Text="{x:Bind TimeLabel}" />
-                                            <TextBlock Text="{x:Bind Content}" TextWrapping="Wrap" />
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-
-                        <!-- Empty / waiting state -->
-                        <StackPanel
-                            x:Name="NotesEmptyPanel"
-                            Grid.Row="0"
-                            HorizontalAlignment="Center"
+                    <Grid Grid.Row="0" Margin="12,12,8,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            Grid.Column="0"
                             VerticalAlignment="Center"
-                            Spacing="12">
-                            <ProgressRing
-                                x:Name="NotesWaitingRing"
-                                Width="28"
-                                Height="28"
-                                HorizontalAlignment="Center"
-                                AutomationProperties.Name="Generating notes"
-                                IsActive="False"
-                                Visibility="Collapsed" />
-                            <TextBlock
-                                x:Name="NotesEmptyLabel"
-                                HorizontalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Text="Notes appear here — updated every 3 minutes"
-                                TextAlignment="Center"
-                                TextWrapping="Wrap" />
-                        </StackPanel>
-
-                        <StackPanel Grid.Row="1" Margin="0,6,0,0" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                            <TextBlock
-                                x:Name="NotesCountdownLabel"
-                                VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Visibility="Collapsed" />
-                            <TextBlock
-                                x:Name="NotesUpdatedLabel"
-                                VerticalAlignment="Center"
-                                AutomationProperties.LiveSetting="Polite"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}" />
-                            <ProgressRing
-                                x:Name="NotesRefreshRing"
-                                Width="16"
-                                Height="16"
-                                VerticalAlignment="Center"
-                                AutomationProperties.Name="Refreshing notes"
-                                IsActive="False"
-                                Visibility="Collapsed" />
-                            <components:GhostButton
-                                x:Name="RefreshNotesButton"
-                                IsEnabled="False"
-                                AutomationProperties.Name="Refresh notes now"
-                                Style="{StaticResource GhostButtonStyle}"
-                                ToolTipService.ToolTip="Refresh notes now"
-                                Click="OnRefreshNotesClicked">
-                                <FontIcon FontSize="16" Glyph="&#xE72C;" />
-                            </components:GhostButton>
-                            <components:GhostButton
-                                x:Name="ExpandNotesButton"
-                                IsEnabled="False"
-                                AutomationProperties.Name="View full notes"
-                                Style="{StaticResource GhostButtonStyle}"
-                                ToolTipService.ToolTip="View full notes"
-                                Click="OnExpandNotesClicked">
-                                <FontIcon FontSize="16" Glyph="&#xE740;" />
-                            </components:GhostButton>
-                        </StackPanel>
+                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                            Text="Ask Claude" />
+                        <components:GhostButton
+                            Grid.Column="1"
+                            AutomationProperties.Name="Save conversation"
+                            Style="{StaticResource GhostButtonStyle}"
+                            Click="OnSaveConversationClicked"
+                            ToolTipService.ToolTip="Save conversation">
+                            <FontIcon FontSize="14" Glyph="&#xE74E;" />
+                        </components:GhostButton>
                     </Grid>
 
-                    <!-- Chat view: freeform "what did I miss" Q&A -->
-                    <Grid x:Name="ChatView" Grid.Row="1" Visibility="Collapsed">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+                    <!--
+                        Chat messages list.
+                        ChatEmptyState overlays the same row — visible when list is empty,
+                        collapsed by code-behind (_chatMessages.CollectionChanged handler).
+                    -->
+                    <ListView
+                        x:Name="AssistantChatList"
+                        Grid.Row="1"
+                        Padding="12,0,12,0"
+                        ItemTemplateSelector="{StaticResource AssistantMessageSelector}"
+                        SelectionMode="None">
+                        <ListView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
+                            </ItemsPanelTemplate>
+                        </ListView.ItemsPanel>
+                        <ListView.ItemContainerTransitions>
+                            <TransitionCollection>
+                                <AddDeleteThemeTransition />
+                            </TransitionCollection>
+                        </ListView.ItemContainerTransitions>
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="MinHeight" Value="0" />
+                                <Setter Property="Padding" Value="0,4,0,4" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                    </ListView>
 
-                        <ListView
-                            x:Name="AssistantChatList"
-                            Grid.Row="0"
-                            ItemTemplateSelector="{StaticResource AssistantMessageSelector}"
-                            SelectionMode="None">
-                            <ListView.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
-                                </ItemsPanelTemplate>
-                            </ListView.ItemsPanel>
-                            <!--
-                                AddDeleteThemeTransition: Gallery-recommended transition for ListView items
-                                being added. Each new message slides in with a fade — no code-behind needed.
-                            -->
-                            <ListView.ItemContainerTransitions>
-                                <TransitionCollection>
-                                    <AddDeleteThemeTransition />
-                                </TransitionCollection>
-                            </ListView.ItemContainerTransitions>
-                            <ListView.ItemContainerStyle>
-                                <Style TargetType="ListViewItem">
-                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                    <Setter Property="MinHeight" Value="0" />
-                                    <Setter Property="Padding" Value="0,4,0,4" />
-                                </Style>
-                            </ListView.ItemContainerStyle>
-                        </ListView>
-                        <!-- Thinking indicator: shown while Claude call is in flight -->
-                        <StackPanel
-                            x:Name="ThinkingIndicator"
-                            Grid.Row="1"
-                            Margin="0,6,0,0"
-                            Opacity="0"
-                            AutomationProperties.Name="Claude is thinking"
-                            AutomationProperties.LiveSetting="Assertive"
-                            Orientation="Horizontal"
-                            Spacing="8"
-                            Visibility="Collapsed">
-                            <ProgressRing
-                                Width="16"
-                                Height="16"
-                                VerticalAlignment="Center"
-                                AutomationProperties.AccessibilityView="Raw"
-                                IsActive="True" />
-                            <TextBlock
-                                x:Name="ThinkingDotsText"
-                                VerticalAlignment="Center"
-                                AutomationProperties.AccessibilityView="Raw"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Text="Thinking" />
-                        </StackPanel>
-                        <Grid Grid.Row="2" Margin="0,8,0,0" ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBox
-                                x:Name="AssistantQuestionBox"
-                                Grid.Column="0"
-                                AcceptsReturn="False"
-                                AutomationProperties.HelpText="Press Enter or the send button to submit"
-                                KeyDown="OnAssistantQuestionKeyDown"
-                                PlaceholderText="Ask about the meeting…"
-                                TextWrapping="Wrap" />
+                    <!--
+                        Empty state: shown until first message arrives (code-behind: _chatMessages.CollectionChanged).
+                        Chips live here — VS Code pattern: suggestions appear only when chat is empty,
+                        in the chat area itself. 2×2 wrapped layout avoids any scrollbar.
+                    -->
+                    <StackPanel
+                        x:Name="ChatEmptyState"
+                        Grid.Row="1"
+                        Margin="24,0"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="12">
+                        <FontIcon
+                            HorizontalAlignment="Center"
+                            FontSize="32"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Glyph="&#xE8BD;" />
+                        <TextBlock
+                            MaxWidth="220"
+                            HorizontalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Try a suggestion or ask your own question"
+                            TextAlignment="Center"
+                            TextWrapping="Wrap" />
+                        <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
                             <Button
-                                x:Name="SendQuestionButton"
-                                Grid.Column="1"
-                                Click="OnSendQuestionClicked"
-                                Style="{StaticResource AccentButtonStyle}">
-                                <FontIcon FontSize="14" Glyph="&#xE724;" />
-                            </Button>
-                        </Grid>
+                                Content="Summarize"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="Summarize the meeting so far"
+                                Click="OnSuggestionClicked" />
+                            <Button
+                                Content="Action items"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="What are the action items from this meeting?"
+                                Click="OnSuggestionClicked" />
+                        </StackPanel>
+                        <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
+                            <Button
+                                Content="Decisions"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="What decisions were made in this meeting?"
+                                Click="OnSuggestionClicked" />
+                            <Button
+                                Content="Catch me up"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="Catch me up on the last few minutes of the meeting"
+                                Click="OnSuggestionClicked" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel
+                        x:Name="ThinkingIndicator"
+                        Grid.Row="2"
+                        Margin="12,6,12,0"
+                        Opacity="0"
+                        AutomationProperties.Name="Claude is thinking"
+                        AutomationProperties.LiveSetting="Assertive"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        Visibility="Collapsed">
+                        <ProgressRing
+                            Width="16"
+                            Height="16"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AccessibilityView="Raw"
+                            IsActive="True" />
+                        <TextBlock
+                            x:Name="ThinkingDotsText"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AccessibilityView="Raw"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Thinking" />
+                    </StackPanel>
+
+                    <!--
+                        Suggestion chips: 3 chips fit in the 296px panel interior without scrolling
+                        (approx: "Summarize"~80 + "Action items"~88 + "Decisions"~80 + 2×8 = 264px < 296px).
+                        SuggestionChipButtonStyle: SubtleButtonStyle + CornerRadius=8 + FontSize=12.
+                    -->
+
+                    <Grid Grid.Row="3" Margin="12,8,12,12" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            x:Name="AssistantQuestionBox"
+                            Grid.Column="0"
+                            AcceptsReturn="False"
+                            AutomationProperties.HelpText="Press Enter or the send button to submit"
+                            KeyDown="OnAssistantQuestionKeyDown"
+                            PlaceholderText="Ask about the meeting…"
+                            TextWrapping="Wrap" />
+                        <Button
+                            x:Name="SendQuestionButton"
+                            Grid.Column="1"
+                            AutomationProperties.Name="Send"
+                            Click="OnSendQuestionClicked"
+                            Style="{StaticResource AccentButtonStyle}">
+                            <FontIcon FontSize="14" Glyph="&#xE724;" />
+                        </Button>
                     </Grid>
                 </Grid>
             </Border>
         </Grid>
 
-        <!-- Row 1 / Column 0: actions — inside left column so it centers with the content above -->
-        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" HorizontalAlignment="Center" Spacing="12">
+        <!-- Row 2: button bar — spans full outer-grid width so HorizontalAlignment="Center"
+             always means page center, independent of NavigationView width or AssistantPanel state -->
+        <StackPanel Grid.Row="2" Margin="0,16,0,0" HorizontalAlignment="Center" Spacing="12">
             <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
 
                 <!-- New session: idle only, when prior transcript exists -->

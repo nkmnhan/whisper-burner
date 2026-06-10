@@ -186,6 +186,7 @@ public sealed partial class SettingsPage : Page
         RebuildPathItems();
     }
 
+
     // ── Path list ─────────────────────────────────────────────────────────────
 
     private void RebuildContextFolderItems()

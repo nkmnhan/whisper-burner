@@ -18,7 +18,6 @@ sealed partial class App : Application
     internal ISubtitleService SubtitleService { get; }
     internal IRecordingManager RecordingManager { get; }
     internal IMeetingAssistantService MeetingAssistant { get; }
-    internal ITranscriptCorrectionService CorrectionService { get; }
 
     public App()
     {
@@ -32,7 +31,6 @@ sealed partial class App : Application
         SubtitleService = new Services.Audio.SubtitleService();
         RecordingManager = new Services.Audio.RecordingManager(RecordingService, TranscriptionClient, SubtitleService);
         MeetingAssistant = new MeetingAssistantService(RecordingManager, aiProvider);
-        CorrectionService = new TranscriptCorrectionService(RecordingManager, SubtitleService, aiProvider);
 
         UnhandledException += (_, e) =>
         {
@@ -60,7 +58,6 @@ sealed partial class App : Application
         {
             await RecordingManager.StopAsync();
             MeetingAssistant.EndSession();
-            CorrectionService.Dispose();
 
             CaptionOverlay?.Close();
 
@@ -84,4 +81,3 @@ sealed partial class App : Application
         TitleBarHelper.ApplySystemThemeToCaptionButtons(MainWindow, ThemeHelper.ActualTheme);
     }
 }
-

@@ -198,9 +198,6 @@ public sealed class ClaudeCliProvider : IAiProvider
                 $"Read({AppDataFolder.Replace('\\', '/')}/**)"
             };
 
-            if (context?.LiveTranscriptPath is { } srt)
-                patterns.Add($"Read({srt.Replace('\\', '/')})");
-
             foreach (var p in context?.AllowedReadPaths ?? [])
             {
                 var fwd = p.Replace('\\', '/');
@@ -217,10 +214,6 @@ public sealed class ClaudeCliProvider : IAiProvider
 
             prompt += $"\n\nThe app stores all data under \"{AppDataFolder.Replace('\\', '/')}/\": " +
                       "sessions/ contains SRT transcripts of past meetings, settings.json has user preferences.";
-
-            if (context?.LiveTranscriptPath is { } srt)
-                prompt += $"\n\nThe current meeting transcript is being written live to " +
-                          $"\"{srt.Replace('\\', '/')}\". It is an SRT file — read it when you need the complete history.";
 
             foreach (var folder in context?.ContextPaths ?? [])
             {

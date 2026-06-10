@@ -56,4 +56,28 @@
         <Setter Property="MinWidth" Value="0" />
     </Style>
 
+    <!--
+        Inline action button (Copy, Save) rendered beside chat bubbles.
+        Based on GhostButtonStyle so hover/pressed states and arrow cursor are inherited.
+        Compact Padding="8,4" is on the 4px grid and acceptable for supplementary inline actions.
+        Use with components:GhostButton (not plain Button) to enforce arrow cursor inside the
+        text-containing chat ListView.
+    -->
+    <Style x:Key="InlineActionButtonStyle" BasedOn="{StaticResource GhostButtonStyle}" TargetType="Button">
+        <Setter Property="Padding" Value="8,4" />
+    </Style>
+
+    <!--
+        Suggestion chip — quick-prompt buttons above the chat input.
+        Based on SubtleButtonStyle (Gallery-recommended for low-emphasis actions).
+        CornerRadius="8" (2×4px grid) gives a legible pill shape without a custom geometry.
+        FontSize="12" matches CaptionTextBlockStyle for chip-scale labels.
+    -->
+    <Style x:Key="SuggestionChipButtonStyle" BasedOn="{StaticResource SubtleButtonStyle}" TargetType="Button">
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
 </ResourceDictionary>
