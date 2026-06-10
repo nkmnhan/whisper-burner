@@ -608,12 +608,13 @@
                     </StackPanel>
 
                     <!-- Persistent skill chips — visible only when chat has messages; populated from defaults + custom skills -->
-                    <!-- Gallery pattern: HorizontalScrollBarVisibility="Hidden" — no overlay scrollbar; mouse wheel wired in code-behind -->
+                    <!-- HorizontalScrollBarVisibility="Disabled" reserves no layout space (Hidden does, clipping descenders).
+                         HorizontalScrollMode="Enabled" keeps touch + programmatic ChangeView working. -->
                     <ScrollViewer
                         x:Name="SuggestionStripScroller"
                         Grid.Row="3"
-                        Margin="12,6,12,4"
-                        HorizontalScrollBarVisibility="Hidden"
+                        Margin="12,4,12,2"
+                        HorizontalScrollBarVisibility="Disabled"
                         HorizontalScrollMode="Enabled"
                         VerticalScrollBarVisibility="Disabled"
                         VerticalScrollMode="Disabled"
