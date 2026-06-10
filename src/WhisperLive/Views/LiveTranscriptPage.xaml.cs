@@ -29,9 +29,11 @@ public sealed partial class LiveTranscriptPage : Page
         TranscriptList.ItemsSource = _segments;
         AssistantChatList.ItemsSource = _chatMessages;
         _chatMessages.CollectionChanged += (_, _) =>
-            ChatEmptyState.Visibility = _chatMessages.Count > 0
-                ? Visibility.Collapsed
-                : Visibility.Visible;
+        {
+            var hasMessages = _chatMessages.Count > 0;
+            ChatEmptyState.Visibility = hasMessages ? Visibility.Collapsed : Visibility.Visible;
+            SuggestionStrip.Visibility = hasMessages ? Visibility.Visible : Visibility.Collapsed;
+        };
 
         HideThinkingStoryboard.Completed += (_, _) =>
         {

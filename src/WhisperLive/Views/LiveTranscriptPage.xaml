@@ -607,12 +607,14 @@
                             Text="Thinking" />
                     </StackPanel>
 
-                    <!-- Persistent suggestion chips — always visible above input -->
+                    <!-- Persistent suggestion chips — visible only when chat has messages (empty state has its own chips) -->
                     <ScrollViewer
+                        x:Name="SuggestionStrip"
                         Grid.Row="3"
                         Margin="12,4,12,0"
                         HorizontalScrollBarVisibility="Auto"
-                        VerticalScrollBarVisibility="Disabled">
+                        VerticalScrollBarVisibility="Disabled"
+                        Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <Button
                                 Content="Summarize"
