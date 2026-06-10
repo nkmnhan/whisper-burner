@@ -8,14 +8,14 @@ using WhisperLive.Services.Audio;
 
 namespace WhisperLive.Services.Assistant;
 
-public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposable
+public sealed class SessionAssistantService : ISessionAssistantService, IDisposable
 {
     private const string SystemPromptBase =
-        "You are a meeting assistant embedded in a live-transcription desktop app. " +
-        "Answer questions about the current meeting transcript concisely and accurately. " +
-        "Respond in 1-5 sentences unless the user asks for a detailed summary or list. " +
-        "The meeting transcript will be provided inline — do not look for external files. " +
-        "You may use Markdown formatting (bold, italic, lists, tables, headings) — it will be rendered.";
+        "You are a session assistant embedded in a live-transcription desktop app. " +
+        "Answer questions about the current session transcript concisely and accurately. " +
+        "Respond in 1-5 sentences unless the user asks for a detailed summary, list, email, or minutes. " +
+        "You may use Markdown formatting (bold, italic, lists, tables, headings) — it will be rendered. " +
+        "When the question needs full context, read the session SRT file provided in your instructions.";
 
     private readonly IRecordingManager _recordingManager;
     private readonly IAiProvider _aiProvider;
@@ -32,7 +32,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
     // Guard lazy creation of the chat session against concurrent first-asks.
     private readonly SemaphoreSlim _sessionCreateLock = new(1, 1);
 
-    public MeetingAssistantService(IRecordingManager recordingManager, IAiProvider aiProvider)
+    public SessionAssistantService(IRecordingManager recordingManager, IAiProvider aiProvider)
     {
         _recordingManager = recordingManager;
         _aiProvider = aiProvider;
@@ -77,24 +77,16 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
 
     // ── Chat ──────────────────────────────────────────────────────────────────
 
-    public async Task<string> AskAsync(string question, bool includeFullTranscript = false, CancellationToken cancellationToken = default)
+    public async Task<string> AskAsync(string question, CancellationToken cancellationToken = default)
     {
         var session = await GetOrCreateChatSessionAsync(cancellationToken);
-        if (session is null) return "No active meeting session.";
+        if (session is null) return "No active session.";
 
         string delta;
         lock (_bufferLock)
         {
             delta = _chatDelta.ToString();
             _chatDelta.Clear();
-        }
-
-        if (includeFullTranscript)
-        {
-            var allSegments = _recordingManager.GetRecentSegments();
-            var fullTranscript = string.Join("\n", allSegments);
-            if (fullTranscript.Length > delta.Length)
-                delta = fullTranscript;
         }
 
         var prompt = BuildAskPrompt(question, delta);
@@ -115,7 +107,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
             lock (_bufferLock)
                 _chatDelta.Insert(0, delta);
 
-            AppLogger.Warning(ex, "Meeting assistant question failed");
+            AppLogger.Warning(ex, "Session assistant question failed");
             return $"⚠ Couldn't reach {_aiProvider.Name} — {ex.Message}";
         }
     }
@@ -146,7 +138,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
             return $"[Question]\n{question}";
 
         var sb = new StringBuilder();
-        sb.AppendLine("[Meeting transcript]");
+        sb.AppendLine("[Session transcript]");
         sb.AppendLine(delta);
         sb.AppendLine("[Question]");
         sb.Append(question);
@@ -169,7 +161,7 @@ public sealed class MeetingAssistantService : IMeetingAssistantService, IDisposa
     {
         var prompt = SystemPromptBase;
         if (preContext is not null)
-            prompt += $"\n\nContext for this meeting (provided before the session started):\n{preContext}";
+            prompt += $"\n\nContext for this session (provided before it started):\n{preContext}";
         return prompt;
     }
 

@@ -99,10 +99,26 @@
                     <controls:SettingsCard Description="Show the Assistant panel during sessions" Header="Enable assistant">
                         <ToggleSwitch x:Name="EnableAssistantToggle" Toggled="OnEnableAssistantToggled" />
                     </controls:SettingsCard>
-                    <controls:SettingsCard Description="Send the full session transcript with every question (uses more tokens)" Header="Full transcript prompts">
-                        <ToggleSwitch x:Name="AllowFullTranscriptToggle" Toggled="OnAllowFullTranscriptToggled" />
-                    </controls:SettingsCard>
                 </controls:SettingsExpander.Items>
+            </controls:SettingsExpander>
+
+            <!-- Session skills -->
+            <controls:SettingsExpander
+                x:Name="SkillsExpander"
+                Description="Custom skill prompts shown as quick-access chips in the Assistant panel"
+                Header="Session skills"
+                IsExpanded="False">
+                <controls:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE945;" />
+                </controls:SettingsExpander.HeaderIcon>
+                <controls:SettingsExpander.Content>
+                    <Button x:Name="AddSkillButton" Click="OnAddSkillClicked">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE710;" />
+                            <TextBlock Text="Add skill" />
+                        </StackPanel>
+                    </Button>
+                </controls:SettingsExpander.Content>
             </controls:SettingsExpander>
 
             <!-- Context folders -->

@@ -193,9 +193,12 @@ public sealed class ClaudeCliProvider : IAiProvider
 
         private static string? BuildAllowedTools(AiCallContext? context)
         {
+            var dataDir = AppDataFolder.Replace('\\', '/');
             var patterns = new List<string>
             {
-                $"Read({AppDataFolder.Replace('\\', '/')}/**)"
+                $"Read({dataDir}/**)",
+                $"Grep({dataDir}/**)",
+                $"Glob({dataDir}/**)",
             };
 
             foreach (var p in context?.AllowedReadPaths ?? [])
@@ -204,16 +207,21 @@ public sealed class ClaudeCliProvider : IAiProvider
                 patterns.Add(Directory.Exists(p) ? $"Read({fwd}/**)" : $"Read({fwd})");
             }
 
-            // Always emit — AppDataFolder read is always included
             return string.Join(",", patterns);
         }
 
         private static string BuildSystemPromptSuffix(string systemPromptBase, AiCallContext? context)
         {
+            var dataDir = AppDataFolder.Replace('\\', '/');
             var prompt = systemPromptBase;
 
-            prompt += $"\n\nThe app stores all data under \"{AppDataFolder.Replace('\\', '/')}/\": " +
-                      "sessions/ contains SRT transcripts of past sessions, settings.json has user preferences.";
+            prompt += $"\n\nApp data is stored under \"{dataDir}/\": " +
+                      "sessions/ contains SRT transcripts (past and current), settings.json has user preferences. " +
+                      "You can Read, Grep, and Glob files under this directory.";
+
+            if (context?.LiveTranscriptPath is { } srtPath && File.Exists(srtPath))
+                prompt += $"\n\nThe current session SRT is being written live to \"{srtPath.Replace('\\', '/')}\" " +
+                          "— read it when the question needs the full transcript.";
 
             foreach (var folder in context?.ContextPaths ?? [])
             {

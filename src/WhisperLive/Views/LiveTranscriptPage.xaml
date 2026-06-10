@@ -607,36 +607,30 @@
                             Text="Thinking" />
                     </StackPanel>
 
-                    <!-- Persistent suggestion chips — visible only when chat has messages (empty state has its own chips) -->
+                    <!-- Persistent skill chips — visible only when chat has messages; populated from defaults + custom skills -->
                     <ScrollViewer
-                        x:Name="SuggestionStrip"
+                        x:Name="SuggestionStripScroller"
                         Grid.Row="3"
                         Margin="12,4,12,0"
                         HorizontalScrollBarVisibility="Auto"
                         VerticalScrollBarVisibility="Disabled"
                         Visibility="Collapsed">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Button
-                                Content="Summarize"
-                                Style="{StaticResource SuggestionChipButtonStyle}"
-                                Tag="Summarize the session so far"
-                                Click="OnSuggestionClicked" />
-                            <Button
-                                Content="Action items"
-                                Style="{StaticResource SuggestionChipButtonStyle}"
-                                Tag="What are the action items from this session?"
-                                Click="OnSuggestionClicked" />
-                            <Button
-                                Content="Decisions"
-                                Style="{StaticResource SuggestionChipButtonStyle}"
-                                Tag="What decisions were made in this session?"
-                                Click="OnSuggestionClicked" />
-                            <Button
-                                Content="Catch me up"
-                                Style="{StaticResource SuggestionChipButtonStyle}"
-                                Tag="Catch me up on the last few minutes of the session"
-                                Click="OnSuggestionClicked" />
-                        </StackPanel>
+                        <ItemsControl x:Name="SuggestionStrip">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="6" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="models:SessionSkill">
+                                    <Button
+                                        Content="{x:Bind Name}"
+                                        Style="{StaticResource SuggestionChipButtonStyle}"
+                                        Tag="{x:Bind Prompt}"
+                                        Click="OnSuggestionClicked" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </ScrollViewer>
 
                     <Grid Grid.Row="4" Margin="12,8,12,12" ColumnSpacing="8">

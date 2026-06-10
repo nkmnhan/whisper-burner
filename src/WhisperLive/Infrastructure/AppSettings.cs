@@ -26,7 +26,7 @@ public sealed class AppSettings
     public List<string> RecentSessionContexts { get; set; } = [];
     public List<SavedPrompt> SavedSessionContexts { get; set; } = [];
     public bool EnableAssistant { get; set; } = true;
-    public bool AllowFullTranscriptPrompts { get; set; } = false;
+    public List<SessionSkill> CustomSkills { get; set; } = [];
 
     public static async Task<AppSettings> LoadAsync()
     {

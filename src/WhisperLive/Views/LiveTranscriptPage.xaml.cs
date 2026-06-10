@@ -20,6 +20,7 @@ public sealed partial class LiveTranscriptPage : Page
     private AppSettings _settings = new();
     private readonly ObservableCollection<string> _segments = [];
     private readonly ObservableCollection<AssistantMessage> _chatMessages = [];
+    private readonly ObservableCollection<SessionSkill> _skills = [];
     private bool _isAsking;
     private int _displayOffset;
 
@@ -28,11 +29,12 @@ public sealed partial class LiveTranscriptPage : Page
         InitializeComponent();
         TranscriptList.ItemsSource = _segments;
         AssistantChatList.ItemsSource = _chatMessages;
+        SuggestionStrip.ItemsSource = _skills;
         _chatMessages.CollectionChanged += (_, _) =>
         {
             var hasMessages = _chatMessages.Count > 0;
             ChatEmptyState.Visibility = hasMessages ? Visibility.Collapsed : Visibility.Visible;
-            SuggestionStrip.Visibility = hasMessages ? Visibility.Visible : Visibility.Collapsed;
+            SuggestionStripScroller.Visibility = hasMessages ? Visibility.Visible : Visibility.Collapsed;
         };
 
         HideThinkingStoryboard.Completed += (_, _) =>
@@ -69,6 +71,12 @@ public sealed partial class LiveTranscriptPage : Page
 
         AssistantToggleButton.Visibility = _settings.EnableAssistant
             ? Visibility.Visible : Visibility.Collapsed;
+
+        _skills.Clear();
+        foreach (var skill in SessionSkill.Defaults)
+            _skills.Add(skill);
+        foreach (var skill in _settings.CustomSkills)
+            _skills.Add(skill);
 
         ApplyState(Manager.State);
 
@@ -362,13 +370,13 @@ public sealed partial class LiveTranscriptPage : Page
             return;
 
         e.Handled = true;
-        await SubmitQuestionAsync(_settings.AllowFullTranscriptPrompts);
+        await SubmitQuestionAsync();
     }
 
     private async void OnSendQuestionClicked(object sender, RoutedEventArgs e) =>
-        await SubmitQuestionAsync(_settings.AllowFullTranscriptPrompts);
+        await SubmitQuestionAsync();
 
-    private async Task SubmitQuestionAsync(bool includeFullTranscript = false)
+    private async Task SubmitQuestionAsync()
     {
         if (_isAsking) return;
 
@@ -385,7 +393,7 @@ public sealed partial class LiveTranscriptPage : Page
 
         try
         {
-            var answer = await Assistant.AskAsync(question, includeFullTranscript);
+            var answer = await Assistant.AskAsync(question);
             _chatMessages.Add(new AssistantMessage("Claude", answer, DateTimeOffset.Now));
         }
         catch (Exception ex)
@@ -408,7 +416,7 @@ public sealed partial class LiveTranscriptPage : Page
         if (((Button)sender).Tag is not string prompt) return;
 
         AssistantQuestionBox.Text = prompt;
-        await SubmitQuestionAsync(includeFullTranscript: true);
+        await SubmitQuestionAsync();
     }
 
     private void OnClearChatClicked(object sender, RoutedEventArgs e)

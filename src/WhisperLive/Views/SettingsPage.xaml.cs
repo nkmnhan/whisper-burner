@@ -7,6 +7,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using WhisperLive.Helpers;
 using WhisperLive.Infrastructure;
+using WhisperLive.Models;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -22,12 +23,14 @@ public sealed partial class SettingsPage : Page
     private readonly ObservableCollection<string> _allowedPaths = [];
     private readonly ObservableCollection<SettingsCard> _pathCards = [];
     private readonly ObservableCollection<SettingsCard> _contextFolderCards = [];
+    private readonly ObservableCollection<SettingsCard> _skillCards = [];
 
     public SettingsPage()
     {
         InitializeComponent();
         AllowedPathsExpander.ItemsSource = _pathCards;
         ContextFolderExpander.ItemsSource = _contextFolderCards;
+        SkillsExpander.ItemsSource = _skillCards;
         Loaded += OnLoaded;
     }
 
@@ -43,8 +46,8 @@ public sealed partial class SettingsPage : Page
         SelectComboItem(LanguageBox, _settings.Language);
         SelectThemeCombo(_settings.Theme);
         EnableAssistantToggle.IsOn = _settings.EnableAssistant;
-        AllowFullTranscriptToggle.IsOn = _settings.AllowFullTranscriptPrompts;
         RebuildContextFolderItems();
+        RebuildSkillItems();
 
         _allowedPaths.Clear();
         foreach (var p in _settings.AllowedReadPaths)
@@ -119,11 +122,52 @@ public sealed partial class SettingsPage : Page
         _ = _settings.SaveAsync();
     }
 
-    private void OnAllowFullTranscriptToggled(object sender, RoutedEventArgs e)
+    private async void OnAddSkillClicked(object sender, RoutedEventArgs e)
     {
-        if (!_loaded) return;
-        _settings.AllowFullTranscriptPrompts = AllowFullTranscriptToggle.IsOn;
-        _ = _settings.SaveAsync();
+        var nameBox = new TextBox { PlaceholderText = "e.g. Key metrics", MaxLength = 40, Margin = new Thickness(0, 4, 0, 0) };
+        var promptBox = new TextBox
+        {
+            PlaceholderText = "e.g. List all metrics and numbers mentioned in this session",
+            AcceptsReturn = true,
+            TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap,
+            MaxHeight = 100,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+
+        var panel = new StackPanel { Spacing = 0 };
+        panel.Children.Add(new TextBlock { Text = "Name", Style = (Style)Application.Current.Resources["BodyTextBlockStyle"] });
+        panel.Children.Add(nameBox);
+        panel.Children.Add(new TextBlock { Text = "Prompt", Style = (Style)Application.Current.Resources["BodyTextBlockStyle"], Margin = new Thickness(0, 12, 0, 0) });
+        panel.Children.Add(promptBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Add skill",
+            Content = panel,
+            PrimaryButtonText = "Add",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var name = nameBox.Text.Trim();
+        var prompt = promptBox.Text.Trim();
+        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(prompt)) return;
+
+        _settings.CustomSkills.RemoveAll(s => s.Name == name);
+        _settings.CustomSkills.Add(new SessionSkill(name, prompt));
+        await _settings.SaveAsync();
+        RebuildSkillItems();
+    }
+
+    private async void OnRemoveSkillClicked(object sender, RoutedEventArgs e)
+    {
+        if (((Button)sender).Tag is not string name) return;
+        _settings.CustomSkills.RemoveAll(s => s.Name == name);
+        await _settings.SaveAsync();
+        RebuildSkillItems();
     }
 
     private async void OnRemoveContextFolderClicked(object sender, RoutedEventArgs e)
@@ -204,6 +248,20 @@ public sealed partial class SettingsPage : Page
 
 
     // ── Path list ─────────────────────────────────────────────────────────────
+
+    private void RebuildSkillItems()
+    {
+        _skillCards.Clear();
+        foreach (var skill in _settings.CustomSkills)
+        {
+            var btn = new Button();
+            ToolTipService.SetToolTip(btn, "Remove");
+            btn.Content = new FontIcon { Glyph = "", FontSize = 12 };
+            btn.Tag = skill.Name;
+            btn.Click += OnRemoveSkillClicked;
+            _skillCards.Add(new SettingsCard { Header = skill.Name, Description = skill.Prompt, Content = btn });
+        }
+    }
 
     private void RebuildContextFolderItems()
     {
