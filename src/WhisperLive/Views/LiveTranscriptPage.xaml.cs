@@ -181,11 +181,17 @@ public sealed partial class LiveTranscriptPage : Page
     {
         if (Manager.State == RecordingState.Idle)
         {
+            var globalContext = _settings.DefaultSessionContext?.Trim() ?? "";
+            var sessionContext = PreContextBox.Text.Trim();
+            var initialPrompt = string.Join("\n",
+                new[] { globalContext, sessionContext }.Where(s => s.Length > 0));
+
             var options = new RecordingOptions(
                 Language: _settings.Language,
                 ChunkDurationSeconds: _settings.ChunkDurationSeconds,
                 ApiUrl: _settings.ApiUrl,
-                Model: _settings.Model);
+                Model: _settings.Model,
+                InitialPrompt: initialPrompt.Length > 0 ? initialPrompt : null);
 
             var contextText = PreContextBox.Text.Trim();
             if (!string.IsNullOrEmpty(contextText))
