@@ -39,7 +39,7 @@ sealed partial class App : Application
 
         // Disabled placeholder — replaced by ApplySettings() in LiveTranscriptPage.OnLoaded
         // once AppSettings are loaded asynchronously on the UI thread.
-        TranslationService = BuildTranslationService(new AppSettings());
+        TranslationService = BuildTranslationService(new AppSettings(), () => SubtitleService.CurrentSessionPath);
 
         UnhandledException += (_, e) =>
         {
@@ -55,7 +55,7 @@ sealed partial class App : Application
     /// </summary>
     internal void ApplySettings(AppSettings settings)
     {
-        TranslationService = BuildTranslationService(settings);
+        TranslationService = BuildTranslationService(settings, () => SubtitleService.CurrentSessionPath);
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -71,6 +71,7 @@ sealed partial class App : Application
         // Wire subtitle segments to the overlay here (not inside RecordingManager) — SRP.
         // CaptionOverlayWindow.ShowSegment already marshals to the UI thread internally.
         RecordingManager.SegmentAdded += (_, seg) => CaptionOverlay?.ShowSegment(seg);
+        RecordingManager.SegmentAdded += (_, seg) => TranslationService.EnqueueSegment(seg);
 
         // Gallery pattern: close all tracked windows when main closes.
         MainWindow.Closed += async (s, _) =>
@@ -101,21 +102,21 @@ sealed partial class App : Application
         TitleBarHelper.ApplySystemThemeToCaptionButtons(MainWindow, ThemeHelper.ActualTheme);
     }
 
-    internal static ITranslationService BuildTranslationService(AppSettings settings)
+    internal static ITranslationService BuildTranslationService(AppSettings settings, Func<string?> getSessionPath)
     {
-        // Whisper built-in translate: task=translate sent with each audio chunk.
-        // No external API needed — the translation happens inside the Docker container.
-        if (settings.TranslationProvider == "whisper" && settings.EnableTranslation)
-            return new Services.Translation.PassThroughTranslationService();
+        if (!settings.EnableTranslation)
+            return new DisabledTranslationService();
 
         ITranslationProvider provider = settings.TranslationProvider switch
         {
-            "google" => new GoogleTranslationProvider(settings.GoogleTranslateApiKey),
-            _ => new DeepLTranslationProvider(settings.DeepLApiKey),
+            "google"  => new GoogleTranslationProvider(settings.GoogleTranslateApiKey),
+            "whisper" => new PassThroughTranslationProvider(),
+            _         => new DeepLTranslationProvider(settings.DeepLApiKey),
         };
-        return new Services.Translation.TranslationService(
+
+        return new TranslationService(
             provider,
-            isEnabled: settings.EnableTranslation,
-            targetLanguage: settings.TranslationTargetLanguage);
+            targetLanguage: settings.TranslationTargetLanguage,
+            getSessionPath: getSessionPath);
     }
 }
