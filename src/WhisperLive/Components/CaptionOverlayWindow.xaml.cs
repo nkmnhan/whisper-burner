@@ -1,4 +1,4 @@
-using Microsoft.UI.Composition;
+﻿using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -141,8 +141,8 @@ public sealed partial class CaptionOverlayWindow : Window
     private void OnExpandClicked(object sender, RoutedEventArgs e)
     {
         _isExpanded = !_isExpanded;
-        // Collapsed: ChevronDown (E70E) = prompt to expand; Expanded: ChevronUp (E70D) = prompt to collapse
-        ChevronIcon.Glyph = _isExpanded ? "" : "";
+        // Expanded: E70E (ChevronUp ^) = prompt to collapse; Collapsed: E70D (ChevronDown ∨) = prompt to expand
+        ChevronIcon.Glyph = _isExpanded ? "" : ""; // ^ collapse : ∨ expand
 
         int newHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
         int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;

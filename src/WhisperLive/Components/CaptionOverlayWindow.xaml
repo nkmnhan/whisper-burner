@@ -45,29 +45,21 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Language badge -->
+                <!-- Language badge — read-only indicator, no dropdown affordance -->
                 <Border
                     Grid.Column="0"
-                    Padding="8,4"
+                    Padding="8,3"
                     VerticalAlignment="Center"
                     Background="Transparent"
                     BorderBrush="{ThemeResource CaptionOverlayBadgeBorderBrush}"
                     BorderThickness="1"
                     CornerRadius="{StaticResource OverlayCornerRadius}">
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock
-                            x:Name="LanguageLabel"
-                            VerticalAlignment="Center"
-                            FontSize="12"
-                            Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
-                            Text="English" />
-                        <FontIcon
-                            VerticalAlignment="Center"
-                            FontSize="12"
-                            Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
-                            Glyph="&#xE70D;"
-                            Opacity="0.7" />
-                    </StackPanel>
+                    <TextBlock
+                        x:Name="LanguageLabel"
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                        Text="auto" />
                 </Border>
 
                 <!-- Pause / Resume button -->
@@ -161,6 +153,7 @@
                 CornerRadius="{StaticResource ControlCornerRadius}"
                 Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                 ToolTipService.ToolTip="Expand / Collapse">
+                <!-- E70E = ChevronUp (collapse) / E70D = ChevronDown (expand) -->
                 <FontIcon x:Name="ChevronIcon" FontSize="12" Glyph="&#xE70D;" />
             </Button>
         </Grid>

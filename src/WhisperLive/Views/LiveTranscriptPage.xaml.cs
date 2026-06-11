@@ -186,6 +186,7 @@ public sealed partial class LiveTranscriptPage : Page
                 AutomationProperties.SetName(MainButton, "Stop recording");
                 SetStatusDot("StatusDotErrorBrush", "Recording");
                 App.CaptionOverlay?.AppWindow.Show();
+                App.CaptionOverlay?.UpdatePauseState(false);
                 break;
 
             case RecordingState.Paused:
