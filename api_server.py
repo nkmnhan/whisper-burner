@@ -1,9 +1,11 @@
+import asyncio
 import os
 import tempfile
 from contextlib import asynccontextmanager
 
 import torch
 import whisper
+from deep_translator import GoogleTranslator
 from fastapi import FastAPI, Form, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -78,3 +80,14 @@ async def transcribe(
         for i, s in enumerate(result["segments"], 1)
     ]
     return {"text": result["text"].strip(), "segments": segments}
+
+
+@app.post("/translate")
+async def translate(
+    text: str = Form(...),
+    target: str = Form("vi"),
+):
+    translated = await asyncio.to_thread(
+        GoogleTranslator(source="auto", target=target).translate, text
+    )
+    return {"text": translated or text}

@@ -62,6 +62,22 @@
                                 Text="5 s" />
                         </StackPanel>
                     </controls:SettingsCard>
+                    <controls:SettingsCard Description="Language spoken in the audio (auto = Whisper detects)" Header="Spoken language">
+                        <ComboBox
+                            x:Name="LanguageBox"
+                            Width="160"
+                            HorizontalAlignment="Right"
+                            SelectionChanged="OnLanguageChanged">
+                            <ComboBoxItem Content="auto" />
+                            <ComboBoxItem Content="en" />
+                            <ComboBoxItem Content="vi" />
+                            <ComboBoxItem Content="ja" />
+                            <ComboBoxItem Content="zh" />
+                            <ComboBoxItem Content="fr" />
+                            <ComboBoxItem Content="de" />
+                            <ComboBoxItem Content="es" />
+                        </ComboBox>
+                    </controls:SettingsCard>
                 </controls:SettingsExpander.Items>
             </controls:SettingsExpander>
 
@@ -101,10 +117,18 @@
                             Width="160"
                             HorizontalAlignment="Right"
                             SelectionChanged="OnTranslationProviderChanged">
+                            <ComboBoxItem Content="docker (free)" />
                             <ComboBoxItem Content="deepl" />
                             <ComboBoxItem Content="google" />
                             <ComboBoxItem Content="whisper (built-in)" />
                         </ComboBox>
+                    </controls:SettingsCard>
+                    <controls:SettingsCard x:Name="DockerProviderInfoCard" Visibility="Collapsed">
+                        <InfoBar
+                            IsClosable="False"
+                            IsOpen="True"
+                            Message="Translates via the Docker API using Google Translate — no API key required. The Whisper container must be running."
+                            Severity="Informational" />
                     </controls:SettingsCard>
                     <controls:SettingsCard x:Name="WhisperProviderInfoCard" Visibility="Collapsed">
                         <InfoBar
@@ -131,27 +155,6 @@
                     </controls:SettingsCard>
                 </controls:SettingsExpander.Items>
             </controls:SettingsExpander>
-
-            <!-- Language -->
-            <controls:SettingsCard Description="Language spoken in the audio" Header="Language">
-                <controls:SettingsCard.HeaderIcon>
-                    <FontIcon Glyph="&#xF2B7;" />
-                </controls:SettingsCard.HeaderIcon>
-                <ComboBox
-                    x:Name="LanguageBox"
-                    Width="160"
-                    HorizontalAlignment="Right"
-                    SelectionChanged="OnLanguageChanged">
-                    <ComboBoxItem Content="auto" />
-                    <ComboBoxItem Content="en" />
-                    <ComboBoxItem Content="vi" />
-                    <ComboBoxItem Content="ja" />
-                    <ComboBoxItem Content="zh" />
-                    <ComboBoxItem Content="fr" />
-                    <ComboBoxItem Content="de" />
-                    <ComboBoxItem Content="es" />
-                </ComboBox>
-            </controls:SettingsCard>
 
             <!-- AI Assistant -->
             <controls:SettingsExpander

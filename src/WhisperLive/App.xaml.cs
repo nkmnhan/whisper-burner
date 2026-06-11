@@ -111,6 +111,7 @@ sealed partial class App : Application
         {
             "google"  => new GoogleTranslationProvider(settings.GoogleTranslateApiKey),
             "whisper" => new PassThroughTranslationProvider(),
+            "docker"  => new DockerTranslationProvider(settings.ApiUrl),
             _         => new DeepLTranslationProvider(settings.DeepLApiKey),
         };
 
