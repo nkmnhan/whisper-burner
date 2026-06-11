@@ -46,6 +46,7 @@ services:
     command: uvicorn api_server:app --host 0.0.0.0 --port 5000
     environment:
       - WHISPER_MODEL=small
+      - PYTHONDONTWRITEBYTECODE=1
     ports:
       - "5000:5000"
     dns:
@@ -78,6 +79,7 @@ services:
     command: uvicorn api_server:app --host 0.0.0.0 --port 5000
     environment:
       - WHISPER_MODEL=small
+      - PYTHONDONTWRITEBYTECODE=1
     ports:
       - "5000:5000"
     dns:
