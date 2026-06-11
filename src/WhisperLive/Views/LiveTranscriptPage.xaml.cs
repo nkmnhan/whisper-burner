@@ -236,11 +236,7 @@ public sealed partial class LiveTranscriptPage : Page
                 Assistant.EndSession();
 
             if (_settings.EnableTranslation)
-            {
                 TranslationSvc.EndSession();
-                if (Manager.CurrentSessionPath is { } srtPath)
-                    _ = TranslationSvc.WriteTranslatedSrtAsync(srtPath);
-            }
 
             var saved = Manager.CurrentSessionPath is { } p
                 ? $"Saved → {System.IO.Path.GetFileName(p)}" : null;
@@ -369,9 +365,10 @@ public sealed partial class LiveTranscriptPage : Page
             if (_segments.Count > 500)
                 _segments.RemoveAt(0);
 
-            // Enqueue for background translation — returns immediately, never blocks UI.
-            if (_settings.EnableTranslation)
-                TranslationSvc.EnqueueSegment(view);
+            // When translation is off the service is DisabledTranslationService (no-op EnqueueSegment),
+            // so no event will arrive — mark the row passthrough immediately at full opacity.
+            if (!TranslationSvc.IsEnabled)
+                view.MarkPassthrough();
 
             if (Manager.State == RecordingState.Recording &&
                 App.CaptionOverlay?.AppWindow.IsVisible == false)
@@ -388,7 +385,11 @@ public sealed partial class LiveTranscriptPage : Page
         // ApplyTranslation fires INPC — must be on the UI thread (WinUI 3 requirement).
         DispatcherQueue.TryEnqueue(() =>
         {
-            e.View.ApplyTranslation(e.TranslatedText);
+            // Find the view-model by segment ID. Segments scrolled past the 500-item cap are gone
+            // from the list but their translations were already written to the SRT file by
+            // TranslationService.
+            var view = _segments.FirstOrDefault(v => v.Original.Id == e.SegmentId);
+            view?.ApplyTranslation(e.TranslatedText);
             App.CaptionOverlay?.ShowTranslatedSegment(e.TranslatedText);
         });
     }
