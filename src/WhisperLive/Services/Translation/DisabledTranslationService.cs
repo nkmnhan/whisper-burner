@@ -13,7 +13,11 @@ public sealed class DisabledTranslationService : ITranslationService
     public string TargetLanguage => string.Empty;
     public bool IsEnabled => false;
 
-    public event EventHandler<SegmentTranslationReadyEventArgs>? SegmentTranslated;
+    public event EventHandler<SegmentTranslationReadyEventArgs>? SegmentTranslated
+    {
+        add { }
+        remove { }
+    }
 
     public void StartSession() { }
     public void EnqueueSegment(SubtitleSegment segment) { }
