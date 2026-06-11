@@ -5,6 +5,7 @@ using WhisperLive.Overlay;
 using WhisperLive.Services.Assistant;
 using WhisperLive.Services.Audio;
 using WhisperLive.Services.Translation;
+using WhisperLive.Services.Translation.Providers;
 using WhisperLive.Views;
 
 namespace WhisperLive;

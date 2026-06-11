@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace WhisperLive.Services.Translation;
+namespace WhisperLive.Services.Translation.Providers;
 
 /// <summary>
 /// Translates a single sentence to a target language.

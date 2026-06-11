@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace WhisperLive.Services.Translation;
+namespace WhisperLive.Services.Translation.Providers;
 
 /// <summary>
 /// Translates text via the Google Cloud Translation Basic API (v2).

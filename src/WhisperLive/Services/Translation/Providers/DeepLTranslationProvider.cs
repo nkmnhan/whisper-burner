@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using WhisperLive.Infrastructure;
 
-namespace WhisperLive.Services.Translation;
+namespace WhisperLive.Services.Translation.Providers;
 
 /// <summary>
 /// Translates text via the DeepL REST API v2.

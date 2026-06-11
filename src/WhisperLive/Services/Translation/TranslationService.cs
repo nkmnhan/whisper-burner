@@ -7,6 +7,7 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using WhisperLive.Infrastructure;
 using WhisperLive.Models;
+using WhisperLive.Services.Translation.Providers;
 
 namespace WhisperLive.Services.Translation;
 
