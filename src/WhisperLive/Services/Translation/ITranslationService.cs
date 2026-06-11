@@ -1,39 +1,37 @@
 using System;
-using System.Threading;
-using System.Threading.Tasks;
 using WhisperLive.Models;
 
 namespace WhisperLive.Services.Translation;
 
 public interface ITranslationService
 {
-    bool IsEnabled { get; }
+    /// <summary>ISO 639-1 target language code (e.g. "vi", "zh", "en").</summary>
     string TargetLanguage { get; }
 
     /// <summary>
+    /// Whether translation is active. False for <see cref="DisabledTranslationService"/>.
+    /// Callers may use this to decide UI state (e.g. show/hide translation chip).
+    /// </summary>
+    bool IsEnabled { get; }
+
+    /// <summary>
     /// Fired on a background thread when a translation is ready.
-    /// Handlers MUST marshal to the UI thread before calling
-    /// <see cref="Models.TranslatedSegmentView.ApplyTranslation"/> or touching any XAML element.
+    /// Handlers MUST marshal to the UI thread before touching any XAML element.
     /// </summary>
     event EventHandler<SegmentTranslationReadyEventArgs>? SegmentTranslated;
 
-    /// <summary>Prepare a new session. Clears any leftover queue.</summary>
+    /// <summary>Prepare a new session. Clears any leftover queue and resets the SRT writer.</summary>
     void StartSession();
 
     /// <summary>
-    /// Enqueues <paramref name="view"/> for translation.
-    /// Returns immediately — the view is updated in-place when translation arrives.
-    /// Oldest pending items are dropped if the queue is full (live-caption semantics).
+    /// Enqueues <paramref name="segment"/> for translation.
+    /// Returns immediately. The translated SRT is written incrementally as results arrive.
     /// </summary>
-    void EnqueueSegment(TranslatedSegmentView view);
+    void EnqueueSegment(SubtitleSegment segment);
 
     /// <summary>
-    /// Writes a translated SRT alongside the original.
-    /// Path example: original = "session.srt" → translated = "session.vi.srt".
-    /// Only segments with confirmed translations are written.
+    /// Ends the session: cancels in-flight work, writes any remaining segments
+    /// (with original-text fallback for untranslated), and closes the writer.
     /// </summary>
-    Task WriteTranslatedSrtAsync(string originalSrtPath, CancellationToken ct = default);
-
-    /// <summary>Cancels in-flight translations and drains the queue.</summary>
     void EndSession();
 }

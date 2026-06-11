@@ -62,13 +62,13 @@ public sealed class TranslatedSegmentView : INotifyPropertyChanged
     public bool HasTranslation =>
         _state == TranslationSegmentState.Translated && _translatedText is not null;
 
-    /// <summary>Italic while pending, Normal once confirmed or failed.</summary>
+    /// <summary>Italic while pending, Normal once confirmed, failed, or passthrough.</summary>
     public FontStyle OriginalFontStyle =>
         _state == TranslationSegmentState.Provisional
             ? FontStyle.Italic
             : FontStyle.Normal;
 
-    /// <summary>Dimmed while pending; further dimmed as secondary line when translated.</summary>
+    /// <summary>Dimmed while pending; further dimmed as secondary line when translated; full opacity otherwise.</summary>
     public double OriginalOpacity =>
         _state == TranslationSegmentState.Provisional ? 0.65 :
         HasTranslation ? 0.50 : 1.0;
@@ -102,6 +102,12 @@ public sealed class TranslatedSegmentView : INotifyPropertyChanged
     public void MarkFailed()
     {
         State = TranslationSegmentState.Failed;
+    }
+
+    /// <summary>Called when translation is disabled — shows original at full opacity, no italic.</summary>
+    public void MarkPassthrough()
+    {
+        State = TranslationSegmentState.Passthrough;
     }
 
     // ── INotifyPropertyChanged ────────────────────────────────────────────────
