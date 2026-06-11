@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Media;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -19,18 +20,17 @@ namespace WhisperLive.Views;
 public sealed partial class LiveTranscriptPage : Page
 {
     private AppSettings _settings = new();
-    private readonly ObservableCollection<TranslatedSegmentView> _segments = [];
     private readonly ObservableCollection<AssistantMessage> _chatMessages = [];
     private List<SessionSkill> _allSkills = [];
     private bool _isAsking;
     private CancellationTokenSource? _suggestDebounce;
     private bool _suppressNextFocus;
-    private readonly System.Collections.Specialized.NotifyCollectionChangedEventHandler _onChatCollectionChanged;
+    private readonly NotifyCollectionChangedEventHandler _onChatCollectionChanged;
 
     public LiveTranscriptPage()
     {
         InitializeComponent();
-        TranscriptList.ItemsSource = _segments;
+        TranscriptList.ItemsSource = CurrentApp.TranscriptViewModel.Segments;
         AssistantChatList.ItemsSource = _chatMessages;
         _onChatCollectionChanged = (_, _) =>
         {
@@ -62,16 +62,11 @@ public sealed partial class LiveTranscriptPage : Page
     {
         _settings = await AppSettings.LoadAsync();
 
-        // Rebuild TranslationService with real settings before subscribing to its events.
+        // Rebuild TranslationService with real settings; App re-wires SegmentTranslated to VM.
         CurrentApp.ApplySettings(_settings);
 
         Manager.StateChanged += OnStateChanged;
-        Manager.SegmentAdded += OnSegmentAdded;
-        TranslationSvc.SegmentTranslated += OnSegmentTranslated;
-
-        _segments.Clear();
-        foreach (var s in Manager.GetRecentSegments())
-            _segments.Add(new TranslatedSegmentView(new SubtitleSegment(0, 0, 0, s)));
+        CurrentApp.TranscriptViewModel.Segments.CollectionChanged += OnSegmentsChanged;
 
         if (string.IsNullOrEmpty(PreContextBox.Text))
             PreContextBox.Text = _settings.DefaultSessionContext;
@@ -79,7 +74,6 @@ public sealed partial class LiveTranscriptPage : Page
         AssistantToggleButton.Visibility = _settings.EnableAssistant
             ? Visibility.Visible : Visibility.Collapsed;
 
-        // Show translation chip in idle placeholder if translation is enabled.
         if (_settings.EnableTranslation)
         {
             TranslationChip.Visibility = Visibility.Visible;
@@ -97,9 +91,18 @@ public sealed partial class LiveTranscriptPage : Page
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         Manager.StateChanged -= OnStateChanged;
-        Manager.SegmentAdded -= OnSegmentAdded;
-        TranslationSvc.SegmentTranslated -= OnSegmentTranslated;
+        CurrentApp.TranscriptViewModel.Segments.CollectionChanged -= OnSegmentsChanged;
         _chatMessages.CollectionChanged -= _onChatCollectionChanged;
+    }
+
+    private void OnSegmentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action == NotifyCollectionChangedAction.Add &&
+            Manager.State == RecordingState.Recording &&
+            App.CaptionOverlay?.AppWindow.IsVisible == false)
+        {
+            ShowOverlayButton.Visibility = Visibility.Visible;
+        }
     }
 
     private async Task CheckApiHealthAsync()
@@ -152,7 +155,7 @@ public sealed partial class LiveTranscriptPage : Page
                 WaveformInButton.Visibility = Visibility.Collapsed;
                 PauseButton.Visibility = Visibility.Collapsed;
                 ShowOverlayButton.Visibility = Visibility.Collapsed;
-                NewSessionButton.Visibility = _segments.Count > 0
+                NewSessionButton.Visibility = CurrentApp.TranscriptViewModel.Segments.Count > 0
                     ? Visibility.Visible : Visibility.Collapsed;
                 WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
@@ -167,7 +170,7 @@ public sealed partial class LiveTranscriptPage : Page
                 WaveformInButton.Visibility = Visibility.Visible;
                 PauseButton.Visibility = Visibility.Visible;
                 NewSessionButton.Visibility = Visibility.Collapsed;
-                PauseIcon.Glyph = "";
+                PauseIcon.Glyph = "";
                 AutomationProperties.SetName(PauseButton, "Pause recording");
                 ToolTipService.SetToolTip(PauseButton, "Pause recording");
                 WaveformStoryboard.Begin();
@@ -178,7 +181,7 @@ public sealed partial class LiveTranscriptPage : Page
                 break;
 
             case RecordingState.Paused:
-                PauseIcon.Glyph = "";
+                PauseIcon.Glyph = "";
                 AutomationProperties.SetName(PauseButton, "Resume recording");
                 ToolTipService.SetToolTip(PauseButton, "Resume recording");
                 WaveformStoryboard.Stop();
@@ -217,7 +220,7 @@ public sealed partial class LiveTranscriptPage : Page
                 _ = _settings.SaveAsync();
             }
 
-            App.CaptionOverlay?.ClearLines();
+            CurrentApp.TranscriptViewModel.Clear();
             App.CaptionOverlay?.SetLanguage(_settings.Language);
             App.CaptionOverlay?.UpdatePauseState(false);
 
@@ -263,13 +266,12 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void OnNewSessionClicked(object sender, RoutedEventArgs e)
     {
-        _segments.Clear();
+        CurrentApp.TranscriptViewModel.Clear();
         _chatMessages.Clear();
         TranscriptList.Visibility = Visibility.Collapsed;
         NewSessionButton.Visibility = Visibility.Collapsed;
         ActionStatus.Text = string.Empty;
         PreContextBox.Text = _settings.DefaultSessionContext;
-        App.CaptionOverlay?.ClearLines();
         CurrentApp.SubtitleService.StartSession();
         if (_settings.EnableTranslation)
             TranslationSvc.StartSession();
@@ -298,7 +300,7 @@ public sealed partial class LiveTranscriptPage : Page
                 foreach (var prompt in _settings.RecentSessionContexts)
                 {
                     var display = prompt.Length > 60 ? prompt[..60] + "…" : prompt;
-                    var item = new MenuFlyoutItem { Text = display, Icon = new FontIcon { Glyph = "" } };
+                    var item = new MenuFlyoutItem { Text = display, Icon = new FontIcon { Glyph = "" } };
                     var captured = prompt;
                     item.Click += (_, _) => PreContextBox.Text = captured;
                     flyout.Items.Add(item);
@@ -312,7 +314,7 @@ public sealed partial class LiveTranscriptPage : Page
 
                 foreach (var saved in _settings.SavedSessionContexts)
                 {
-                    var item = new MenuFlyoutItem { Text = saved.Name, Icon = new FontIcon { Glyph = "" } };
+                    var item = new MenuFlyoutItem { Text = saved.Name, Icon = new FontIcon { Glyph = "" } };
                     var captured = saved.Text;
                     item.Click += (_, _) => PreContextBox.Text = captured;
                     flyout.Items.Add(item);
@@ -354,44 +356,6 @@ public sealed partial class LiveTranscriptPage : Page
         _settings.SavedSessionContexts.RemoveAll(p => p.Name == name);
         _settings.SavedSessionContexts.Add(new SavedPrompt(name, text));
         await _settings.SaveAsync();
-    }
-
-    private void OnSegmentAdded(object? sender, SubtitleSegment seg)
-    {
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            var view = new TranslatedSegmentView(seg);
-            _segments.Add(view);
-            if (_segments.Count > 500)
-                _segments.RemoveAt(0);
-
-            // When translation is off the service is DisabledTranslationService (no-op EnqueueSegment),
-            // so no event will arrive — mark the row passthrough immediately at full opacity.
-            if (!TranslationSvc.IsEnabled)
-                view.MarkPassthrough();
-
-            if (Manager.State == RecordingState.Recording &&
-                App.CaptionOverlay?.AppWindow.IsVisible == false)
-            {
-                ShowOverlayButton.Visibility = Visibility.Visible;
-            }
-        });
-    }
-
-    // Fired from the TranslationService background thread when a translation is ready.
-    // The view's INPC properties update in-place — no list rebuild needed.
-    private void OnSegmentTranslated(object? sender, SegmentTranslationReadyEventArgs e)
-    {
-        // ApplyTranslation fires INPC — must be on the UI thread (WinUI 3 requirement).
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            // Find the view-model by segment ID. Segments scrolled past the 500-item cap are gone
-            // from the list but their translations were already written to the SRT file by
-            // TranslationService.
-            var view = _segments.FirstOrDefault(v => v.Original.Id == e.SegmentId);
-            view?.ApplyTranslation(e.TranslatedText);
-            App.CaptionOverlay?.ShowTranslatedSegment(e.SegmentId, e.TranslatedText);
-        });
     }
 
     private void OnAssistantToggleChecked(object sender, RoutedEventArgs e) => ShowAssistantPanel();
@@ -457,7 +421,6 @@ public sealed partial class LiveTranscriptPage : Page
         if (e.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
         if (_isAsking) return;
 
-        // Debounce: cancel any pending update and wait 250 ms after the last keystroke.
         _suggestDebounce?.Cancel();
         _suggestDebounce = new CancellationTokenSource();
         var cts = _suggestDebounce;
@@ -472,30 +435,22 @@ public sealed partial class LiveTranscriptPage : Page
             return;
         }
 
-        // Gallery pattern: split by space — all tokens must match (name or prompt).
         var tokens = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var results = _allSkills.Where(s => tokens.All(t =>
             s.Name.Contains(t, StringComparison.OrdinalIgnoreCase) ||
             s.Prompt.Contains(t, StringComparison.OrdinalIgnoreCase))).ToList();
 
-        // Gallery pattern: always provide non-empty ItemsSource so the dropdown shows feedback.
         sender.ItemsSource = results.Count > 0 ? results : (object)new[] { "No results found" };
     }
 
-    // Gallery pattern: SuggestionChosen fires when arrowing through the list.
-    // Show the short Name in the box (not the full Prompt) — keeps it readable while browsing.
-    // QuerySubmitted then uses the full Prompt when the user actually confirms.
     private void OnAssistantSuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs e)
     {
         if (e.SelectedItem is SessionSkill skill)
             sender.Text = skill.Name;
-        // If "No results found" string — do nothing; leave the box as-is.
     }
 
     private async void OnAssistantQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs e)
     {
-        // ChosenSuggestion is set when user clicked/Enter'd a skill item → use full Prompt.
-        // Otherwise fall back to the typed text (free-form question).
         var question = e.ChosenSuggestion is SessionSkill skill ? skill.Prompt : e.QueryText;
         await SubmitQuestionAsync(question);
     }
@@ -572,4 +527,3 @@ public sealed partial class LiveTranscriptPage : Page
         HideThinkingStoryboard.Begin();
     }
 }
-

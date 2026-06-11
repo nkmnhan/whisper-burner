@@ -6,6 +6,7 @@ using WhisperLive.Services.Assistant;
 using WhisperLive.Services.Audio;
 using WhisperLive.Services.Translation;
 using WhisperLive.Services.Translation.Providers;
+using WhisperLive.ViewModels;
 using WhisperLive.Views;
 
 namespace WhisperLive;
@@ -22,6 +23,7 @@ sealed partial class App : Application
     internal ISessionAssistantService SessionAssistant { get; }
     internal IAssistantExportService AssistantExport { get; }
     internal ITranslationService TranslationService { get; private set; }
+    internal TranscriptViewModel TranscriptViewModel { get; private set; } = null!;
 
     public App()
     {
@@ -49,29 +51,35 @@ sealed partial class App : Application
     }
 
     /// <summary>
-    /// Rebuilds <see cref="TranslationService"/> from freshly-loaded settings.
-    /// Called by <see cref="Views.LiveTranscriptPage"/> after its async settings load completes,
-    /// before it subscribes to <see cref="ITranslationService.SegmentTranslated"/>.
+    /// Rebuilds <see cref="TranslationService"/> from freshly-loaded settings and re-wires
+    /// the <see cref="TranscriptViewModel"/> handler to the new service instance.
+    /// Called by <see cref="LiveTranscriptPage"/> after its async settings load completes.
     /// </summary>
     internal void ApplySettings(AppSettings settings)
     {
+        TranslationService.SegmentTranslated -= OnTranscriptSegmentTranslated;
         TranslationService = BuildTranslationService(settings, () => SubtitleService.CurrentSessionPath);
+        TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         MainWindow = new MainWindow();
         WindowHelper.TrackWindow(MainWindow);
+
+        TranscriptViewModel = new TranscriptViewModel(
+            MainWindow.DispatcherQueue,
+            () => TranslationService.IsEnabled);
+
         MainWindow.Navigate(typeof(LiveTranscriptPage));
         MainWindow.Activate();
 
         CaptionOverlay = new CaptionOverlayWindow();
         CaptionOverlay.AppWindow.Hide();
 
-        // Wire subtitle segments to the overlay here (not inside RecordingManager) — SRP.
-        // CaptionOverlayWindow.ShowSegment already marshals to the UI thread internally.
-        RecordingManager.SegmentAdded += (_, seg) => CaptionOverlay?.ShowSegment(seg);
+        RecordingManager.SegmentAdded += (_, seg) => TranscriptViewModel.OnSegmentAdded(seg);
         RecordingManager.SegmentAdded += (_, seg) => TranslationService.EnqueueSegment(seg);
+        TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
 
         // Gallery pattern: close all tracked windows when main closes.
         MainWindow.Closed += async (s, _) =>
@@ -95,6 +103,9 @@ sealed partial class App : Application
         _ = InitializeThemeAsync();
         AppLogger.Info("Main window launched");
     }
+
+    private void OnTranscriptSegmentTranslated(object? sender, SegmentTranslationReadyEventArgs e) =>
+        TranscriptViewModel.OnSegmentTranslated(e.SegmentId, e.TranslatedText);
 
     private static async System.Threading.Tasks.Task InitializeThemeAsync()
     {

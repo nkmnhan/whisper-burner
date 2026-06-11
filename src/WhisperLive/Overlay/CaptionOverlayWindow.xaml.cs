@@ -3,12 +3,8 @@ using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Linq;
 using System.Runtime.InteropServices;
 using WhisperLive.Helpers;
-using WhisperLive.Models;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT;
@@ -27,14 +23,12 @@ public sealed partial class CaptionOverlayWindow : Window
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
 
-    private const int MaxCaptionEntries = 5;
-    private readonly ObservableCollection<OverlayRow> _captionRows = [];
-
     private double _dragStartX;
     private double _dragStartY;
     private bool _isExpanded;
     private DesktopAcrylicController? _acrylicController;
     private SystemBackdropConfiguration? _backdropConfig;
+
     public CaptionOverlayWindow()
     {
         InitializeComponent();
@@ -45,7 +39,7 @@ public sealed partial class CaptionOverlayWindow : Window
         ((FrameworkElement)Content).RequestedTheme = ElementTheme.Dark;
         ApplyAcrylicBackdrop();
         RootGrid.ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY;
-        CaptionsPanel.ItemsSource = _captionRows;
+        CaptionsPanel.ItemsSource = ((App)Application.Current).TranscriptViewModel.Segments;
     }
 
     private void ConfigureWindow()
@@ -61,7 +55,6 @@ public sealed partial class CaptionOverlayWindow : Window
         AppWindow.IsShownInSwitchers = false;
 
         // Collapse the title bar entirely — removes all OS chrome buttons (close/min/max).
-        // Our XAML draws its own buttons; the OS close button's red hover can't be suppressed any other way.
         AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Collapsed;
 
@@ -77,8 +70,6 @@ public sealed partial class CaptionOverlayWindow : Window
         AppWindow.MoveAndResize(new RectInt32(x, y, WindowWidth, WindowHeightCollapsed));
     }
 
-
-    // Acrylic provides the frosted blur; the dark Rectangle overlay adds reliable dark tint.
     private void ApplyAcrylicBackdrop()
     {
         if (!DesktopAcrylicController.IsSupported()) return;
@@ -108,32 +99,13 @@ public sealed partial class CaptionOverlayWindow : Window
         };
     }
 
-
-    public void ShowSegment(SubtitleSegment seg) =>
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            _captionRows.Add(new OverlayRow { SegmentId = seg.Id, OriginalText = seg.Text });
-            if (_captionRows.Count > MaxCaptionEntries)
-                _captionRows.RemoveAt(0);
-        });
-
-    public void ShowTranslatedSegment(int segmentId, string translatedText) =>
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            var row = _captionRows.FirstOrDefault(r => r.SegmentId == segmentId);
-            if (row is not null) row.TranslatedText = translatedText;
-        });
-
-    public void ClearLines() =>
-        DispatcherQueue.TryEnqueue(() => _captionRows.Clear());
-
     public void SetLanguage(string language) =>
         DispatcherQueue.TryEnqueue(() => LanguageLabel.Text = language);
 
     private void OnExpandClicked(object sender, RoutedEventArgs e)
     {
         _isExpanded = !_isExpanded;
-        ChevronIcon.Glyph = _isExpanded ? "\uE70D" : "\uE70E";
+        ChevronIcon.Glyph = _isExpanded ? "" : "";
 
         int newHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
         int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;
@@ -145,7 +117,7 @@ public sealed partial class CaptionOverlayWindow : Window
     public void UpdatePauseState(bool isPaused)
     {
         DispatcherQueue.TryEnqueue(() =>
-            OverlayPauseIcon.Glyph = isPaused ? "\uE768" : "\uE769"); // Play : Pause
+            OverlayPauseIcon.Glyph = isPaused ? "" : ""); // Play : Pause
     }
 
     private void OnOverlayPauseClicked(object sender, RoutedEventArgs e)
@@ -185,31 +157,5 @@ public sealed partial class CaptionOverlayWindow : Window
         int newX = (int)(_dragStartX + e.Cumulative.Translation.X * scale);
         int newY = (int)(_dragStartY + e.Cumulative.Translation.Y * scale);
         AppWindow.Move(new PointInt32(newX, newY));
-    }
-
-    // ── View model ────────────────────────────────────────────────────────────
-
-    private sealed class OverlayRow : INotifyPropertyChanged
-    {
-        private string? _translatedText;
-
-        public int SegmentId { get; init; }
-        public string OriginalText { get; init; } = "";
-
-        public string? TranslatedText
-        {
-            get => _translatedText;
-            set
-            {
-                _translatedText = value;
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TranslatedText)));
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TranslationVisibility)));
-            }
-        }
-
-        public Visibility TranslationVisibility =>
-            _translatedText is not null ? Visibility.Visible : Visibility.Collapsed;
-
-        public event PropertyChangedEventHandler? PropertyChanged;
     }
 }
