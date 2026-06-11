@@ -1,17 +1,17 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using WhisperLive.Infrastructure;
 using WhisperLive.Models;
 using WhisperLive.Services.Assistant;
 using WhisperLive.Services.Audio;
-using Windows.System;
 
 namespace WhisperLive.Views;
 
@@ -20,21 +20,21 @@ public sealed partial class LiveTranscriptPage : Page
     private AppSettings _settings = new();
     private readonly ObservableCollection<string> _segments = [];
     private readonly ObservableCollection<AssistantMessage> _chatMessages = [];
-    private readonly ObservableCollection<SessionSkill> _skills = [];
+    private List<SessionSkill> _allSkills = [];
     private bool _isAsking;
     private int _displayOffset;
+    private CancellationTokenSource? _suggestDebounce;
+    private bool _suppressNextFocus;
 
     public LiveTranscriptPage()
     {
         InitializeComponent();
         TranscriptList.ItemsSource = _segments;
         AssistantChatList.ItemsSource = _chatMessages;
-        SuggestionStrip.ItemsSource = _skills;
         _chatMessages.CollectionChanged += (_, _) =>
         {
             var hasMessages = _chatMessages.Count > 0;
             ChatEmptyState.Visibility = hasMessages ? Visibility.Collapsed : Visibility.Visible;
-            SuggestionStripScroller.Visibility = hasMessages ? Visibility.Visible : Visibility.Collapsed;
         };
 
         HideThinkingStoryboard.Completed += (_, _) =>
@@ -72,11 +72,7 @@ public sealed partial class LiveTranscriptPage : Page
         AssistantToggleButton.Visibility = _settings.EnableAssistant
             ? Visibility.Visible : Visibility.Collapsed;
 
-        _skills.Clear();
-        foreach (var skill in SessionSkill.Defaults)
-            _skills.Add(skill);
-        foreach (var skill in _settings.CustomSkills)
-            _skills.Add(skill);
+        _allSkills = [.. SessionSkill.Defaults, .. _settings.CustomSkills];
 
         ApplyState(Manager.State);
 
@@ -370,29 +366,17 @@ public sealed partial class LiveTranscriptPage : Page
         PanelHideStoryboard.Begin();
     }
 
-    private async void OnAssistantQuestionKeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        if (e.Key != VirtualKey.Enter)
-            return;
-
-        e.Handled = true;
-        await SubmitQuestionAsync();
-    }
-
-    private async void OnSendQuestionClicked(object sender, RoutedEventArgs e) =>
-        await SubmitQuestionAsync();
-
-    private async Task SubmitQuestionAsync()
+    private async Task SubmitQuestionAsync(string? overrideQuestion = null)
     {
         if (_isAsking) return;
 
-        var question = AssistantQuestionBox.Text.Trim();
+        var question = (overrideQuestion ?? AssistantQuestionBox.Text).Trim();
         if (string.IsNullOrEmpty(question)) return;
 
         _isAsking = true;
         AssistantQuestionBox.Text = string.Empty;
+        AssistantQuestionBox.ItemsSource = null; // force-close the dropdown
         AssistantQuestionBox.IsEnabled = false;
-        SendQuestionButton.IsEnabled = false;
         ShowThinking();
 
         _chatMessages.Add(new AssistantMessage("You", question, DateTimeOffset.Now));
@@ -411,25 +395,72 @@ public sealed partial class LiveTranscriptPage : Page
             _isAsking = false;
             HideThinking();
             AssistantQuestionBox.IsEnabled = true;
-            SendQuestionButton.IsEnabled = true;
+            _suppressNextFocus = true;
             AssistantQuestionBox.Focus(FocusState.Programmatic);
         }
+    }
+
+    private void OnAssistantQuestionBoxGotFocus(object sender, RoutedEventArgs e)
+    {
+        if (_suppressNextFocus) { _suppressNextFocus = false; return; }
+        if (_isAsking) return;
+        if (string.IsNullOrEmpty(AssistantQuestionBox.Text))
+            AssistantQuestionBox.ItemsSource = _allSkills;
+    }
+
+    private async void OnAssistantSuggestTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs e)
+    {
+        if (e.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+        if (_isAsking) return;
+
+        // Debounce: cancel any pending update and wait 250 ms after the last keystroke.
+        _suggestDebounce?.Cancel();
+        _suggestDebounce = new CancellationTokenSource();
+        var cts = _suggestDebounce;
+
+        try { await Task.Delay(250, cts.Token); }
+        catch (OperationCanceledException) { return; }
+
+        var query = sender.Text.Trim();
+        if (string.IsNullOrEmpty(query))
+        {
+            sender.ItemsSource = _allSkills;
+            return;
+        }
+
+        // Gallery pattern: split by space — all tokens must match (name or prompt).
+        var tokens = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var results = _allSkills.Where(s => tokens.All(t =>
+            s.Name.Contains(t, StringComparison.OrdinalIgnoreCase) ||
+            s.Prompt.Contains(t, StringComparison.OrdinalIgnoreCase))).ToList();
+
+        // Gallery pattern: always provide non-empty ItemsSource so the dropdown shows feedback.
+        sender.ItemsSource = results.Count > 0 ? results : (object)new[] { "No results found" };
+    }
+
+    // Gallery pattern: SuggestionChosen fires when arrowing through the list.
+    // Show the short Name in the box (not the full Prompt) — keeps it readable while browsing.
+    // QuerySubmitted then uses the full Prompt when the user actually confirms.
+    private void OnAssistantSuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs e)
+    {
+        if (e.SelectedItem is SessionSkill skill)
+            sender.Text = skill.Name;
+        // If "No results found" string — do nothing; leave the box as-is.
+    }
+
+    private async void OnAssistantQuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs e)
+    {
+        // ChosenSuggestion is set when user clicked/Enter'd a skill item → use full Prompt.
+        // Otherwise fall back to the typed text (free-form question).
+        var question = e.ChosenSuggestion is SessionSkill skill ? skill.Prompt : e.QueryText;
+        await SubmitQuestionAsync(question);
     }
 
     private async void OnSuggestionClicked(object sender, RoutedEventArgs e)
     {
         if (_isAsking) return;
         if (((Button)sender).Tag is not string prompt) return;
-
-        AssistantQuestionBox.Text = prompt;
-        await SubmitQuestionAsync();
-    }
-
-    private void OnSuggestionStripWheelChanged(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
-    {
-        var delta = e.GetCurrentPoint(SuggestionStripScroller).Properties.MouseWheelDelta;
-        SuggestionStripScroller.ChangeView(SuggestionStripScroller.HorizontalOffset - delta, null, null);
-        e.Handled = true;
+        await SubmitQuestionAsync(prompt);
     }
 
     private void OnClearChatClicked(object sender, RoutedEventArgs e)

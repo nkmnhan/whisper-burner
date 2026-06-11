@@ -607,60 +607,42 @@
                             Text="Thinking" />
                     </StackPanel>
 
-                    <!-- Persistent skill chips — visible only when chat has messages; populated from defaults + custom skills -->
-                    <!-- HorizontalScrollBarVisibility="Disabled" reserves no layout space (Hidden does, clipping descenders).
-                         HorizontalScrollMode="Enabled" keeps touch + programmatic ChangeView working. -->
-                    <ScrollViewer
-                        x:Name="SuggestionStripScroller"
+                    <!--
+                        AutoSuggestBox replaces the horizontal chip strip + plain TextBox.
+                        Typing filters skills by name/prompt (Google-suggest style).
+                        Empty box → all skills shown. QuerySubmitted handles Enter + QueryIcon click.
+                        SuggestionChosen shows the short Name while arrowing; QuerySubmitted uses full Prompt.
+                    -->
+                    <AutoSuggestBox
+                        x:Name="AssistantQuestionBox"
                         Grid.Row="3"
-                        Margin="12,4,12,2"
-                        HorizontalScrollBarVisibility="Disabled"
-                        HorizontalScrollMode="Enabled"
-                        VerticalScrollBarVisibility="Disabled"
-                        VerticalScrollMode="Disabled"
-                        PointerWheelChanged="OnSuggestionStripWheelChanged"
-                        Visibility="Collapsed">
-                        <ItemsControl x:Name="SuggestionStrip">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal" Spacing="6" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="models:SessionSkill">
-                                    <Button
-                                        Content="{x:Bind Name}"
-                                        Style="{StaticResource SuggestionChipButtonStyle}"
-                                        Tag="{x:Bind Prompt}"
-                                        Click="OnSuggestionClicked" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-
-                    <Grid Grid.Row="4" Margin="12,8,12,12" ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox
-                            x:Name="AssistantQuestionBox"
-                            Grid.Column="0"
-                            MaxHeight="80"
-                            AcceptsReturn="False"
-                            AutomationProperties.HelpText="Press Enter or the send button to submit"
-                            KeyDown="OnAssistantQuestionKeyDown"
-                            PlaceholderText="Ask about the session…"
-                            TextWrapping="Wrap" />
-                        <Button
-                            x:Name="SendQuestionButton"
-                            Grid.Column="1"
-                            AutomationProperties.Name="Send"
-                            Click="OnSendQuestionClicked"
-                            Style="{StaticResource AccentButtonStyle}">
+                        Grid.RowSpan="2"
+                        Margin="12,8,12,12"
+                        VerticalAlignment="Bottom"
+                        AutomationProperties.HelpText="Type to filter suggestions — press Enter or the send icon to submit"
+                        GotFocus="OnAssistantQuestionBoxGotFocus"
+                        PlaceholderText="Ask about the session…"
+                        QuerySubmitted="OnAssistantQuerySubmitted"
+                        SuggestionChosen="OnAssistantSuggestionChosen"
+                        TextChanged="OnAssistantSuggestTextChanged">
+                        <AutoSuggestBox.QueryIcon>
                             <FontIcon FontSize="14" Glyph="&#xE724;" />
-                        </Button>
-                    </Grid>
+                        </AutoSuggestBox.QueryIcon>
+                        <AutoSuggestBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:SessionSkill">
+                                <StackPanel Padding="0,4" Spacing="2">
+                                    <TextBlock
+                                        Style="{StaticResource BodyTextBlockStyle}"
+                                        Text="{x:Bind Name}" />
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="{x:Bind Prompt}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </AutoSuggestBox.ItemTemplate>
+                    </AutoSuggestBox>
                 </Grid>
             </Border>
         </Grid>
