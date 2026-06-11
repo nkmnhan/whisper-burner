@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:CommunityToolkit.WinUI.Controls">
     <ScrollViewer>
-        <StackPanel MaxWidth="640" Margin="24,16" Spacing="4">
+        <StackPanel MaxWidth="640" Margin="24,16" Spacing="8">
 
             <TextBlock
                 Margin="0,0,0,12"
@@ -117,26 +117,15 @@
                             Width="160"
                             HorizontalAlignment="Right"
                             SelectionChanged="OnTranslationProviderChanged">
-                            <ComboBoxItem Content="docker (free)" />
+                            <ComboBoxItem Content="whisper (free)" />
                             <ComboBoxItem Content="deepl" />
                             <ComboBoxItem Content="google" />
-                            <ComboBoxItem Content="whisper (built-in)" />
                         </ComboBox>
                     </controls:SettingsCard>
-                    <controls:SettingsCard x:Name="DockerProviderInfoCard" Visibility="Collapsed">
-                        <InfoBar
-                            IsClosable="False"
-                            IsOpen="True"
-                            Message="Translates via the Docker API using Google Translate — no API key required. The Whisper container must be running."
-                            Severity="Informational" />
-                    </controls:SettingsCard>
-                    <controls:SettingsCard x:Name="WhisperProviderInfoCard" Visibility="Collapsed">
-                        <InfoBar
-                            IsClosable="False"
-                            IsOpen="True"
-                            Message="Whisper translates audio directly to English inside Docker — no API key required. Only English output is supported."
-                            Severity="Informational" />
-                    </controls:SettingsCard>
+                    <controls:SettingsCard
+                        x:Name="DockerProviderInfoCard"
+                        Description="Translates via the Whisper Docker API using Google Translate — no API key required."
+                        Visibility="Collapsed" />
                     <controls:SettingsCard x:Name="DeepLApiKeyCard" Description="DeepL API key (free tier: deepl.com/pro-api)" Header="DeepL API key">
                         <TextBox
                             x:Name="DeepLApiKeyBox"

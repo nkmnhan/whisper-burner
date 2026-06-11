@@ -45,12 +45,8 @@ public sealed partial class SettingsPage : Page
         SelectComboItem(ModelBox, _settings.Model);
         SelectComboItem(LanguageBox, _settings.Language);
         SelectComboItem(TranslationTargetBox, _settings.TranslationTargetLanguage);
-        SelectComboItem(TranslationProviderBox, _settings.TranslationProvider switch
-        {
-            "whisper" => "whisper (built-in)",
-            "docker"  => "docker (free)",
-            var p     => p,
-        });
+        SelectComboItem(TranslationProviderBox, _settings.TranslationProvider == "whisper"
+            ? "whisper (free)" : _settings.TranslationProvider);
         EnableTranslationToggle.IsOn = _settings.EnableTranslation;
         DeepLApiKeyBox.Text = _settings.DeepLApiKey;
         GoogleApiKeyBox.Text = _settings.GoogleTranslateApiKey;
@@ -152,12 +148,7 @@ public sealed partial class SettingsPage : Page
         if (!_loaded) return;
         var raw = (string)((ComboBoxItem)TranslationProviderBox.SelectedItem).Content;
         // Map display label back to stored key
-        var key = raw switch
-        {
-            "whisper (built-in)" => "whisper",
-            "docker (free)"      => "docker",
-            var p                => p,
-        };
+        var key = raw == "whisper (free)" ? "whisper" : raw;
         _settings.TranslationProvider = key;
         ApplyProviderVisibility(key);
         _ = _settings.SaveAsync();
@@ -165,10 +156,9 @@ public sealed partial class SettingsPage : Page
 
     private void ApplyProviderVisibility(string provider)
     {
-        DockerProviderInfoCard.Visibility  = provider == "docker"  ? Visibility.Visible : Visibility.Collapsed;
-        WhisperProviderInfoCard.Visibility = provider == "whisper" ? Visibility.Visible : Visibility.Collapsed;
-        DeepLApiKeyCard.Visibility         = provider == "deepl"   ? Visibility.Visible : Visibility.Collapsed;
-        GoogleApiKeyCard.Visibility        = provider == "google"  ? Visibility.Visible : Visibility.Collapsed;
+        DockerProviderInfoCard.Visibility = provider == "whisper" ? Visibility.Visible : Visibility.Collapsed;
+        DeepLApiKeyCard.Visibility        = provider == "deepl"  ? Visibility.Visible : Visibility.Collapsed;
+        GoogleApiKeyCard.Visibility       = provider == "google" ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnDeepLApiKeyChanged(object sender, TextChangedEventArgs e)

@@ -3,6 +3,9 @@ using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
 using System.Runtime.InteropServices;
 using WhisperLive.Helpers;
 using WhisperLive.Models;
@@ -15,7 +18,7 @@ namespace WhisperLive.Overlay;
 public sealed partial class CaptionOverlayWindow : Window
 {
     private const int WindowWidth = 860;
-    private const int WindowHeightCollapsed = 220;
+    private const int WindowHeightCollapsed = 280;
     private const int WindowHeightExpanded  = 440;
 
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
@@ -23,6 +26,9 @@ public sealed partial class CaptionOverlayWindow : Window
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    private const int MaxCaptionEntries = 5;
+    private readonly ObservableCollection<OverlayRow> _captionRows = [];
 
     private double _dragStartX;
     private double _dragStartY;
@@ -39,7 +45,7 @@ public sealed partial class CaptionOverlayWindow : Window
         ((FrameworkElement)Content).RequestedTheme = ElementTheme.Dark;
         ApplyAcrylicBackdrop();
         RootGrid.ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY;
-        CaptionText.SizeChanged += (_, _) => ScrollToBottom();
+        CaptionsPanel.ItemsSource = _captionRows;
     }
 
     private void ConfigureWindow()
@@ -103,33 +109,26 @@ public sealed partial class CaptionOverlayWindow : Window
     }
 
 
-    public void ShowSegment(SubtitleSegment seg)
-    {
-        DispatcherQueue.TryEnqueue(() =>
-            CaptionText.Text += (CaptionText.Text.Length > 0 ? " " : "") + seg.Text);
-        // SizeChanged hook scrolls to bottom after layout
-    }
-
-    public void ShowTranslatedSegment(string translatedText) =>
+    public void ShowSegment(SubtitleSegment seg) =>
         DispatcherQueue.TryEnqueue(() =>
         {
-            TranslatedCaptionText.Text = translatedText;
-            TranslatedCaptionText.Visibility = Visibility.Visible;
+            _captionRows.Add(new OverlayRow { SegmentId = seg.Id, OriginalText = seg.Text });
+            if (_captionRows.Count > MaxCaptionEntries)
+                _captionRows.RemoveAt(0);
+        });
+
+    public void ShowTranslatedSegment(int segmentId, string translatedText) =>
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            var row = _captionRows.FirstOrDefault(r => r.SegmentId == segmentId);
+            if (row is not null) row.TranslatedText = translatedText;
         });
 
     public void ClearLines() =>
-        DispatcherQueue.TryEnqueue(() =>
-        {
-            CaptionText.Text = string.Empty;
-            TranslatedCaptionText.Text = string.Empty;
-            TranslatedCaptionText.Visibility = Visibility.Collapsed;
-        });
+        DispatcherQueue.TryEnqueue(() => _captionRows.Clear());
 
     public void SetLanguage(string language) =>
         DispatcherQueue.TryEnqueue(() => LanguageLabel.Text = language);
-
-    private void ScrollToBottom() =>
-        CaptionScroller.ChangeView(null, double.MaxValue, null, disableAnimation: true);
 
     private void OnExpandClicked(object sender, RoutedEventArgs e)
     {
@@ -139,8 +138,6 @@ public sealed partial class CaptionOverlayWindow : Window
         int newHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
         int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;
         AppWindow.MoveAndResize(new RectInt32(AppWindow.Position.X, bottomEdge - newHeight, WindowWidth, newHeight));
-
-        ScrollToBottom();
     }
 
     private void OnCloseClicked(object sender, RoutedEventArgs e) => AppWindow.Hide();
@@ -188,5 +185,31 @@ public sealed partial class CaptionOverlayWindow : Window
         int newX = (int)(_dragStartX + e.Cumulative.Translation.X * scale);
         int newY = (int)(_dragStartY + e.Cumulative.Translation.Y * scale);
         AppWindow.Move(new PointInt32(newX, newY));
+    }
+
+    // ── View model ────────────────────────────────────────────────────────────
+
+    private sealed class OverlayRow : INotifyPropertyChanged
+    {
+        private string? _translatedText;
+
+        public int SegmentId { get; init; }
+        public string OriginalText { get; init; } = "";
+
+        public string? TranslatedText
+        {
+            get => _translatedText;
+            set
+            {
+                _translatedText = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TranslatedText)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TranslationVisibility)));
+            }
+        }
+
+        public Visibility TranslationVisibility =>
+            _translatedText is not null ? Visibility.Visible : Visibility.Collapsed;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 }

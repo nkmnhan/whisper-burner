@@ -390,7 +390,7 @@ public sealed partial class LiveTranscriptPage : Page
             // TranslationService.
             var view = _segments.FirstOrDefault(v => v.Original.Id == e.SegmentId);
             view?.ApplyTranslation(e.TranslatedText);
-            App.CaptionOverlay?.ShowTranslatedSegment(e.TranslatedText);
+            App.CaptionOverlay?.ShowTranslatedSegment(e.SegmentId, e.TranslatedText);
         });
     }
 

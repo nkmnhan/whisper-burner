@@ -15,7 +15,7 @@
         <!-- Dark overlay on top of acrylic — forces dark appearance in any system theme -->
         <Rectangle AutomationProperties.AccessibilityView="Raw" Fill="{ThemeResource CaptionOverlayDarkOverlayBrush}" />
 
-        <Grid Margin="16,8,16,8">
+        <Grid Margin="16,12,16,12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="32" />
                 <RowDefinition Height="*" />
@@ -27,10 +27,10 @@
                 x:Name="LiveTranscriptLabel"
                 Grid.Row="0"
                 VerticalAlignment="Center"
-                FontSize="13"
                 FontStyle="Italic"
                 FontWeight="SemiBold"
                 Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                Style="{StaticResource BodyTextBlockStyle}"
                 Text="Live Transcript" />
 
             <Grid
@@ -61,7 +61,7 @@
                             Text="English" />
                         <FontIcon
                             VerticalAlignment="Center"
-                            FontSize="10"
+                            FontSize="12"
                             Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                             Glyph="&#xE70D;"
                             Opacity="0.7" />
@@ -81,7 +81,7 @@
                     CornerRadius="{StaticResource ControlCornerRadius}"
                     Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                     ToolTipService.ToolTip="Hide overlay">
-                    <SymbolIcon Symbol="Cancel" />
+                    <FontIcon Glyph="&#xE711;" />
                 </Button>
 
                 <!-- Pause / Resume button -->
@@ -103,40 +103,31 @@
                 </Button>
             </Grid>
 
-            <!-- Row 1: scrollable caption area — original text + latest translation -->
-            <Grid Grid.Row="1" Margin="0,4,0,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <!-- Original text (full scrollable history) -->
-                <ScrollViewer
-                    x:Name="CaptionScroller"
-                    Grid.Row="0"
-                    HorizontalScrollBarVisibility="Disabled"
-                    VerticalScrollBarVisibility="Hidden">
-                    <TextBlock
-                        x:Name="CaptionText"
-                        FontSize="15"
-                        Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
-                        LineHeight="24"
-                        Opacity="0.65"
-                        TextWrapping="Wrap" />
-                </ScrollViewer>
-
-                <!-- Latest translated segment — full brightness, larger -->
-                <TextBlock
-                    x:Name="TranslatedCaptionText"
-                    Grid.Row="1"
-                    Margin="0,6,0,0"
-                    FontSize="20"
-                    FontWeight="SemiBold"
-                    Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
-                    LineHeight="30"
-                    TextWrapping="Wrap"
-                    Visibility="Collapsed" />
-            </Grid>
+            <!-- Row 1: last 2 bilingual segment pairs, anchored to bottom like subtitles -->
+            <ItemsControl
+                x:Name="CaptionsPanel"
+                Grid.Row="1"
+                Margin="0,4,0,0"
+                VerticalAlignment="Bottom">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,0,0,6" Spacing="2">
+                            <TextBlock
+                                Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                                Opacity="0.55"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{Binding OriginalText}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                                Style="{StaticResource BodyTextBlockStyle}"
+                                Text="{Binding TranslatedText}"
+                                TextWrapping="Wrap"
+                                Visibility="{Binding TranslationVisibility}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
             <!-- Row 2: expand / collapse chevron -->
             <Button

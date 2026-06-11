@@ -8,14 +8,14 @@
     <Page.Resources>
         <!-- Assistant chat bubbles — picked by AssistantMessageTemplateSelector based on Role -->
         <DataTemplate x:Key="AssistantUserMessageTemplate" x:DataType="models:AssistantMessage">
-            <StackPanel Margin="40,0,0,0" Spacing="2">
+            <StackPanel Margin="48,0,0,0" Spacing="2">
                 <TextBlock
                     HorizontalAlignment="Right"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
                     Text="You" />
                 <Border
-                    Padding="10,6"
+                    Padding="12,8"
                     HorizontalAlignment="Right"
                     Background="{ThemeResource AssistantUserBubbleBrush}"
                     CornerRadius="{StaticResource ControlCornerRadius}">
@@ -29,14 +29,14 @@
             </StackPanel>
         </DataTemplate>
         <DataTemplate x:Key="AssistantResponseMessageTemplate" x:DataType="models:AssistantMessage">
-            <StackPanel Margin="0,0,40,0" Spacing="2">
+            <StackPanel Margin="0,0,48,0" Spacing="2">
                 <TextBlock
                     HorizontalAlignment="Left"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
                     Text="Claude" />
                 <Border
-                    Padding="10,6"
+                    Padding="12,8"
                     HorizontalAlignment="Left"
                     Background="{ThemeResource AssistantResponseBubbleBrush}"
                     CornerRadius="{StaticResource ControlCornerRadius}">
@@ -76,20 +76,20 @@
             </StackPanel>
         </DataTemplate>
         <DataTemplate x:Key="AssistantErrorMessageTemplate" x:DataType="models:AssistantMessage">
-            <StackPanel Margin="0,0,40,0" Spacing="2">
+            <StackPanel Margin="0,0,48,0" Spacing="2">
                 <TextBlock
                     HorizontalAlignment="Left"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
                     Text="Claude" />
                 <Border
-                    Padding="10,6"
+                    Padding="12,8"
                     HorizontalAlignment="Left"
                     Background="{ThemeResource AssistantErrorBubbleBrush}"
                     CornerRadius="{StaticResource ControlCornerRadius}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <FontIcon
-                            Margin="0,2,0,0"
+                            Margin="0,4,0,0"
                             VerticalAlignment="Top"
                             FontSize="12"
                             Foreground="{ThemeResource SystemFillColorCriticalBrush}"
@@ -326,7 +326,7 @@
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Stretch">
                         <StackPanel
-                            Margin="4,0"
+                            Margin="8,0"
                             HorizontalAlignment="Center"
                             Orientation="Horizontal"
                             Spacing="6">
@@ -370,6 +370,7 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Spacing="12">
+                <!-- Decorative placeholder icon — 56px intentional, not bound by text type ramp -->
                 <FontIcon
                     x:Name="MicIcon"
                     HorizontalAlignment="Center"
@@ -419,7 +420,7 @@
                 -->
                 <Border
                     x:Name="TranslationChip"
-                    Padding="10,6"
+                    Padding="12,8"
                     HorizontalAlignment="Center"
                     Background="{ThemeResource SubtleFillColorSecondaryBrush}"
                     BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
@@ -594,6 +595,7 @@
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
                         Spacing="12">
+                        <!-- Decorative empty-state icon — 32px intentional, not bound by text type ramp -->
                         <FontIcon
                             HorizontalAlignment="Center"
                             FontSize="32"
