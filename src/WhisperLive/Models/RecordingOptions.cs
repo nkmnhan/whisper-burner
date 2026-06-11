@@ -5,4 +5,5 @@ public record RecordingOptions(
     int ChunkDurationSeconds,
     string ApiUrl,
     string Model,
-    string? InitialPrompt = null);
+    string? InitialPrompt = null,
+    string Task = "transcribe");

@@ -110,8 +110,20 @@ public sealed partial class CaptionOverlayWindow : Window
         // SizeChanged hook scrolls to bottom after layout
     }
 
+    public void ShowTranslatedSegment(string translatedText) =>
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            TranslatedCaptionText.Text = translatedText;
+            TranslatedCaptionText.Visibility = Visibility.Visible;
+        });
+
     public void ClearLines() =>
-        DispatcherQueue.TryEnqueue(() => CaptionText.Text = string.Empty);
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            CaptionText.Text = string.Empty;
+            TranslatedCaptionText.Text = string.Empty;
+            TranslatedCaptionText.Visibility = Visibility.Collapsed;
+        });
 
     public void SetLanguage(string language) =>
         DispatcherQueue.TryEnqueue(() => LanguageLabel.Text = language);

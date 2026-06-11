@@ -16,7 +16,7 @@ public sealed class AppSettings
     private static readonly JsonSerializerOptions _json = new() { WriteIndented = true };
 
     public string ApiUrl { get; set; } = "http://localhost:5000";
-    public string Language { get; set; } = "en";
+    public string Language { get; set; } = "auto";
     public string Model { get; set; } = "small";
     public int ChunkDurationSeconds { get; set; } = 5;
     public string Theme { get; set; } = "Default";
@@ -27,6 +27,13 @@ public sealed class AppSettings
     public List<SavedPrompt> SavedSessionContexts { get; set; } = [];
     public bool EnableAssistant { get; set; } = true;
     public List<SessionSkill> CustomSkills { get; set; } = [];
+
+    public bool EnableTranslation { get; set; } = false;
+    public string TranslationTargetLanguage { get; set; } = "vi";
+    public string TranslationProvider { get; set; } = "deepl";
+    public string DeepLApiKey { get; set; } = "";
+    public string GoogleTranslateApiKey { get; set; } = "";
+    public TranscriptDisplayMode TranscriptDisplayMode { get; set; } = TranscriptDisplayMode.Both;
 
     public static async Task<AppSettings> LoadAsync()
     {

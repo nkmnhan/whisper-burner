@@ -28,6 +28,7 @@ public static class AppLogger
                 path: Path.Combine(_logDir, "app-.log"),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 7,
+                flushToDiskInterval: TimeSpan.FromMilliseconds(200),
                 outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}");
 
 #if DEBUG

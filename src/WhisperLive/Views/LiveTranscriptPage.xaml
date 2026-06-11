@@ -412,6 +412,36 @@
                         </StackPanel>
                     </TextBox.Header>
                 </TextBox>
+
+                <!--
+                    Translation chip — only visible when EnableTranslation=true in settings.
+                    Lets the user see/override the target language per session without navigating to Settings.
+                -->
+                <Border
+                    x:Name="TranslationChip"
+                    Padding="10,6"
+                    HorizontalAlignment="Center"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon
+                            FontSize="14"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Glyph="&#xF2B7;" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Translate to" />
+                        <TextBlock
+                            x:Name="TranslationChipLabel"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource CaptionTextBlockStyle}" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <ListView
@@ -431,12 +461,33 @@
                         <Setter Property="Padding" Value="0,4,0,4" />
                     </Style>
                 </ListView.ItemContainerStyle>
+                <!--
+                    Bilingual template (TranslatedSegmentView):
+                    • Translated text row — visible only when State=Translated (HasTranslation=true)
+                    • Original text row — always present; italic+dimmed while Provisional,
+                      smaller+dimmed when Translated (acts as secondary line), normal when Failed.
+                    x:Bind Mode=OneWay so INPC property-changed notifications update rows in-place
+                    without re-rendering the whole list — the core of the "interim → final" pattern.
+                    ApplyTranslation() is always called on the UI thread (DispatcherQueue) so INPC
+                    is safe here.
+                -->
                 <ListView.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock
-                            FontSize="14"
-                            Text="{Binding}"
-                            TextWrapping="Wrap" />
+                    <DataTemplate x:DataType="models:TranslatedSegmentView">
+                        <StackPanel Spacing="1">
+                            <TextBlock
+                                FontSize="14"
+                                FontWeight="SemiBold"
+                                Text="{x:Bind TranslatedText, Mode=OneWay}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind TranslatedVisibility, Mode=OneWay}" />
+                            <TextBlock
+                                FontSize="{x:Bind OriginalFontSize, Mode=OneWay}"
+                                FontStyle="{x:Bind OriginalFontStyle, Mode=OneWay}"
+                                Opacity="{x:Bind OriginalOpacity, Mode=OneWay}"
+                                Text="{x:Bind OriginalText}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind OriginalVisibility, Mode=OneWay}" />
+                        </StackPanel>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>

@@ -12,30 +12,32 @@ using WhisperLive.Infrastructure;
 using WhisperLive.Models;
 using WhisperLive.Services.Assistant;
 using WhisperLive.Services.Audio;
+using WhisperLive.Services.Translation;
 
 namespace WhisperLive.Views;
 
 public sealed partial class LiveTranscriptPage : Page
 {
     private AppSettings _settings = new();
-    private readonly ObservableCollection<string> _segments = [];
+    private readonly ObservableCollection<TranslatedSegmentView> _segments = [];
     private readonly ObservableCollection<AssistantMessage> _chatMessages = [];
     private List<SessionSkill> _allSkills = [];
     private bool _isAsking;
-    private int _displayOffset;
     private CancellationTokenSource? _suggestDebounce;
     private bool _suppressNextFocus;
+    private readonly System.Collections.Specialized.NotifyCollectionChangedEventHandler _onChatCollectionChanged;
 
     public LiveTranscriptPage()
     {
         InitializeComponent();
         TranscriptList.ItemsSource = _segments;
         AssistantChatList.ItemsSource = _chatMessages;
-        _chatMessages.CollectionChanged += (_, _) =>
+        _onChatCollectionChanged = (_, _) =>
         {
             var hasMessages = _chatMessages.Count > 0;
             ChatEmptyState.Visibility = hasMessages ? Visibility.Collapsed : Visibility.Visible;
         };
+        _chatMessages.CollectionChanged += _onChatCollectionChanged;
 
         HideThinkingStoryboard.Completed += (_, _) =>
         {
@@ -53,24 +55,36 @@ public sealed partial class LiveTranscriptPage : Page
     private static App CurrentApp => (App)Application.Current;
     private static IRecordingManager Manager => CurrentApp.RecordingManager;
     private static ISessionAssistantService Assistant => CurrentApp.SessionAssistant;
+    private static IAssistantExportService AssistantExport => CurrentApp.AssistantExport;
+    private static ITranslationService TranslationSvc => CurrentApp.TranslationService;
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = await AppSettings.LoadAsync();
 
+        // Rebuild TranslationService with real settings before subscribing to its events.
+        CurrentApp.ApplySettings(_settings);
+
         Manager.StateChanged += OnStateChanged;
         Manager.SegmentAdded += OnSegmentAdded;
+        TranslationSvc.SegmentTranslated += OnSegmentTranslated;
 
         _segments.Clear();
-        _displayOffset = 0;
         foreach (var s in Manager.GetRecentSegments())
-            _segments.Add(s);
+            _segments.Add(new TranslatedSegmentView(new SubtitleSegment(0, 0, 0, s)));
 
         if (string.IsNullOrEmpty(PreContextBox.Text))
             PreContextBox.Text = _settings.DefaultSessionContext;
 
         AssistantToggleButton.Visibility = _settings.EnableAssistant
             ? Visibility.Visible : Visibility.Collapsed;
+
+        // Show translation chip in idle placeholder if translation is enabled.
+        if (_settings.EnableTranslation)
+        {
+            TranslationChip.Visibility = Visibility.Visible;
+            TranslationChipLabel.Text = TranslationSvc.TargetLanguage;
+        }
 
         _allSkills = [.. SessionSkill.Defaults, .. _settings.CustomSkills];
 
@@ -84,6 +98,8 @@ public sealed partial class LiveTranscriptPage : Page
     {
         Manager.StateChanged -= OnStateChanged;
         Manager.SegmentAdded -= OnSegmentAdded;
+        TranslationSvc.SegmentTranslated -= OnSegmentTranslated;
+        _chatMessages.CollectionChanged -= _onChatCollectionChanged;
     }
 
     private async Task CheckApiHealthAsync()
@@ -187,7 +203,9 @@ public sealed partial class LiveTranscriptPage : Page
                 ChunkDurationSeconds: _settings.ChunkDurationSeconds,
                 ApiUrl: _settings.ApiUrl,
                 Model: _settings.Model,
-                InitialPrompt: initialPrompt.Length > 0 ? initialPrompt : null);
+                InitialPrompt: initialPrompt.Length > 0 ? initialPrompt : null,
+                Task: _settings.EnableTranslation && _settings.TranslationProvider == "whisper"
+                    ? "translate" : "transcribe");
 
             var contextText = PreContextBox.Text.Trim();
             if (!string.IsNullOrEmpty(contextText))
@@ -206,6 +224,9 @@ public sealed partial class LiveTranscriptPage : Page
             if (_settings.EnableAssistant)
                 Assistant.StartSession(PreContextBox.Text);
 
+            if (_settings.EnableTranslation)
+                TranslationSvc.StartSession();
+
             await Manager.StartAsync(options);
         }
         else
@@ -213,6 +234,13 @@ public sealed partial class LiveTranscriptPage : Page
             await Manager.StopAsync();
             if (_settings.EnableAssistant)
                 Assistant.EndSession();
+
+            if (_settings.EnableTranslation)
+            {
+                TranslationSvc.EndSession();
+                if (Manager.CurrentSessionPath is { } srtPath)
+                    _ = TranslationSvc.WriteTranslatedSrtAsync(srtPath);
+            }
 
             var saved = Manager.CurrentSessionPath is { } p
                 ? $"Saved → {System.IO.Path.GetFileName(p)}" : null;
@@ -241,13 +269,14 @@ public sealed partial class LiveTranscriptPage : Page
     {
         _segments.Clear();
         _chatMessages.Clear();
-        _displayOffset = 0;
         TranscriptList.Visibility = Visibility.Collapsed;
         NewSessionButton.Visibility = Visibility.Collapsed;
         ActionStatus.Text = string.Empty;
         PreContextBox.Text = _settings.DefaultSessionContext;
         App.CaptionOverlay?.ClearLines();
         CurrentApp.SubtitleService.StartSession();
+        if (_settings.EnableTranslation)
+            TranslationSvc.StartSession();
     }
 
     private void OnShowOverlayClicked(object sender, RoutedEventArgs e)
@@ -335,18 +364,32 @@ public sealed partial class LiveTranscriptPage : Page
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            _segments.Add(seg.Text);
+            var view = new TranslatedSegmentView(seg);
+            _segments.Add(view);
             if (_segments.Count > 500)
-            {
                 _segments.RemoveAt(0);
-                _displayOffset++;
-            }
+
+            // Enqueue for background translation — returns immediately, never blocks UI.
+            if (_settings.EnableTranslation)
+                TranslationSvc.EnqueueSegment(view);
 
             if (Manager.State == RecordingState.Recording &&
                 App.CaptionOverlay?.AppWindow.IsVisible == false)
             {
                 ShowOverlayButton.Visibility = Visibility.Visible;
             }
+        });
+    }
+
+    // Fired from the TranslationService background thread when a translation is ready.
+    // The view's INPC properties update in-place — no list rebuild needed.
+    private void OnSegmentTranslated(object? sender, SegmentTranslationReadyEventArgs e)
+    {
+        // ApplyTranslation fires INPC — must be on the UI thread (WinUI 3 requirement).
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            e.View.ApplyTranslation(e.TranslatedText);
+            App.CaptionOverlay?.ShowTranslatedSegment(e.TranslatedText);
         });
     }
 
@@ -487,7 +530,8 @@ public sealed partial class LiveTranscriptPage : Page
         if (((Button)sender).Tag is not string text) return;
 
         var fileName = $"assistant-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.txt";
-        await SaveAssistantTextAsync(fileName, text);
+        var path = await AssistantExport.SaveAsync(fileName, text);
+        ShowActionStatus($"Saved → {System.IO.Path.GetFileName(path)}");
     }
 
     private async void OnSaveConversationClicked(object sender, RoutedEventArgs e)
@@ -511,19 +555,8 @@ public sealed partial class LiveTranscriptPage : Page
         }
 
         var fileName = $"assistant-chat-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.txt";
-        await SaveAssistantTextAsync(fileName, builder.ToString().TrimEnd());
-    }
-
-    private async Task SaveAssistantTextAsync(string fileName, string text)
-    {
-        var sessionDir = System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "whisper.live", "sessions");
-        System.IO.Directory.CreateDirectory(sessionDir);
-
-        var path = System.IO.Path.Combine(sessionDir, fileName);
-        await System.IO.File.WriteAllTextAsync(path, text);
-        ShowActionStatus($"Saved → {fileName}");
+        var path = await AssistantExport.SaveAsync(fileName, builder.ToString().TrimEnd());
+        ShowActionStatus($"Saved → {System.IO.Path.GetFileName(path)}");
     }
 
     private void ShowThinking()
@@ -538,3 +571,4 @@ public sealed partial class LiveTranscriptPage : Page
         HideThinkingStoryboard.Begin();
     }
 }
+

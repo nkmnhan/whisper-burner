@@ -1,17 +1,20 @@
 using System;
 using System.Linq;
-using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
-using Windows.UI.Text;
 
 namespace WhisperLive.Helpers;
 
 /// <summary>
-/// Attached property that parses a Markdown string and populates a
-/// <see cref="RichTextBlock"/> with typed inlines — bold, italic, headings,
-/// bullet/numbered lists, and pipe tables. No external packages required.
+/// Attached property that parses a limited Markdown subset and populates a
+/// <see cref="RichTextBlock"/> with typed inlines. No external packages required.
+/// <para>
+/// <b>Supported:</b> headings (#/##/###), bullet lists (- / *), numbered lists,
+/// inline bold (**), italic (*), code (`), horizontal rules, pipe tables (rendered
+/// as monospaced rows — not aligned columns). Escaped Markdown, nested formatting,
+/// links, and fenced code blocks are <b>not</b> supported.
+/// </para>
 /// Usage: &lt;RichTextBlock helpers:MarkdownHelper.Text="{x:Bind Text}" /&gt;
 /// </summary>
 public static class MarkdownHelper
@@ -55,17 +58,17 @@ public static class MarkdownHelper
             // Headings
             if (line.StartsWith("### "))
             {
-                rtb.Blocks.Add(BuildHeading(line[4..], 13, FontWeights.SemiBold, topMargin: 6));
+                rtb.Blocks.Add(BuildHeading(line[4..], 13, topMargin: 6));
                 continue;
             }
             if (line.StartsWith("## "))
             {
-                rtb.Blocks.Add(BuildHeading(line[3..], 14, FontWeights.SemiBold, topMargin: 8));
+                rtb.Blocks.Add(BuildHeading(line[3..], 14, topMargin: 8));
                 continue;
             }
             if (line.StartsWith("# "))
             {
-                rtb.Blocks.Add(BuildHeading(line[2..], 16, FontWeights.Bold, topMargin: 8));
+                rtb.Blocks.Add(BuildHeading(line[2..], 16, topMargin: 8));
                 continue;
             }
 
@@ -172,7 +175,7 @@ public static class MarkdownHelper
         return -1;
     }
 
-    private static Paragraph BuildHeading(string text, double fontSize, FontWeight weight, double topMargin)
+    private static Paragraph BuildHeading(string text, double fontSize, double topMargin)
     {
         var para = new Paragraph { Margin = new Thickness(0, topMargin, 0, 4) };
         var run = new Run { Text = text, FontSize = fontSize };
@@ -188,11 +191,12 @@ public static class MarkdownHelper
                         .Select(c => c.Trim())
                         .ToArray();
         var para = new Paragraph { Margin = new Thickness(0, 0, 0, 2) };
-        for (var i = 0; i < cells.Length; i++)
+        // Render as monospaced joined text — proportional fonts cannot align columns reliably.
+        para.Inlines.Add(new Run
         {
-            if (i > 0) para.Inlines.Add(new Run { Text = "   " });
-            AddInlines(para.Inlines, cells[i]);
-        }
+            Text = string.Join("  |  ", cells),
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas, Courier New"),
+        });
         return para;
     }
 

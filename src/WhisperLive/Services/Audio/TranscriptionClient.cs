@@ -47,6 +47,8 @@ public sealed class TranscriptionClient : ITranscriptionClient
         form.Add(new StringContent(options.Model), "model");
         if (!string.IsNullOrEmpty(options.InitialPrompt))
             form.Add(new StringContent(options.InitialPrompt), "initial_prompt");
+        if (options.Task != "transcribe")
+            form.Add(new StringContent(options.Task), "task");
 
         AppLogger.Debug("Transcribing chunk #{Index} ({Bytes} bytes, overlap={Overlap}s)",
             chunk.ChunkIndex, fileBytes.Length, chunk.OverlapSeconds);

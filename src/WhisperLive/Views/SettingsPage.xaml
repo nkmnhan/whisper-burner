@@ -65,6 +65,73 @@
                 </controls:SettingsExpander.Items>
             </controls:SettingsExpander>
 
+            <!-- Translation -->
+            <controls:SettingsExpander
+                x:Name="TranslationExpander"
+                Description="Translate each segment to your language in real time"
+                Header="Translation"
+                IsExpanded="True">
+                <controls:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xF2B7;" />
+                </controls:SettingsExpander.HeaderIcon>
+                <controls:SettingsExpander.Items>
+                    <controls:SettingsCard Description="Translate segments in the background — never blocks new transcription" Header="Enable translation">
+                        <ToggleSwitch x:Name="EnableTranslationToggle" Toggled="OnEnableTranslationToggled" />
+                    </controls:SettingsCard>
+                    <controls:SettingsCard Description="Language to display in the overlay and saved as .xx.srt" Header="Target language">
+                        <ComboBox
+                            x:Name="TranslationTargetBox"
+                            Width="160"
+                            HorizontalAlignment="Right"
+                            SelectionChanged="OnTranslationTargetChanged">
+                            <ComboBoxItem Content="vi" />
+                            <ComboBoxItem Content="en" />
+                            <ComboBoxItem Content="ja" />
+                            <ComboBoxItem Content="zh" />
+                            <ComboBoxItem Content="fr" />
+                            <ComboBoxItem Content="de" />
+                            <ComboBoxItem Content="es" />
+                            <ComboBoxItem Content="ko" />
+                            <ComboBoxItem Content="th" />
+                        </ComboBox>
+                    </controls:SettingsCard>
+                    <controls:SettingsCard Description="Translation API backend" Header="Provider">
+                        <ComboBox
+                            x:Name="TranslationProviderBox"
+                            Width="160"
+                            HorizontalAlignment="Right"
+                            SelectionChanged="OnTranslationProviderChanged">
+                            <ComboBoxItem Content="deepl" />
+                            <ComboBoxItem Content="google" />
+                            <ComboBoxItem Content="whisper (built-in)" />
+                        </ComboBox>
+                    </controls:SettingsCard>
+                    <controls:SettingsCard x:Name="WhisperProviderInfoCard" Visibility="Collapsed">
+                        <InfoBar
+                            IsClosable="False"
+                            IsOpen="True"
+                            Message="Whisper translates audio directly to English inside Docker — no API key required. Only English output is supported."
+                            Severity="Informational" />
+                    </controls:SettingsCard>
+                    <controls:SettingsCard x:Name="DeepLApiKeyCard" Description="DeepL API key (free tier: deepl.com/pro-api)" Header="DeepL API key">
+                        <TextBox
+                            x:Name="DeepLApiKeyBox"
+                            Width="260"
+                            HorizontalAlignment="Right"
+                            PlaceholderText="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx"
+                            TextChanged="OnDeepLApiKeyChanged" />
+                    </controls:SettingsCard>
+                    <controls:SettingsCard x:Name="GoogleApiKeyCard" Description="Google Cloud Translate API key (cloud.google.com/translate)" Header="Google API key">
+                        <TextBox
+                            x:Name="GoogleApiKeyBox"
+                            Width="260"
+                            HorizontalAlignment="Right"
+                            PlaceholderText="AIza..."
+                            TextChanged="OnGoogleApiKeyChanged" />
+                    </controls:SettingsCard>
+                </controls:SettingsExpander.Items>
+            </controls:SettingsExpander>
+
             <!-- Language -->
             <controls:SettingsCard Description="Language spoken in the audio" Header="Language">
                 <controls:SettingsCard.HeaderIcon>

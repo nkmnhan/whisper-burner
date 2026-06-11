@@ -23,10 +23,36 @@ if %errorlevel% neq 0 (
 )
 
 :: dotnet publish -o does not copy WinUI 3 XAML resources (.xbf, .pri).
-:: Copy them from the build output so ms-appx:/// URI resolution works at runtime.
-set BUILD_BIN=src\WhisperLive\bin\x64\Release\net9.0-windows10.0.22621.0\win-x64
+:: Discover the TFM folder dynamically so this works after a .NET upgrade.
+set BUILD_BIN=
+for /f "delims=" %%d in ('dir /b /ad "src\WhisperLive\bin\x64\Release" 2^>nul') do (
+    if exist "src\WhisperLive\bin\x64\Release\%%d\win-x64\WhisperLive.pri" (
+        set BUILD_BIN=src\WhisperLive\bin\x64\Release\%%d\win-x64
+    )
+)
+
+if "%BUILD_BIN%"=="" (
+    echo.
+    echo  ERROR: Could not find XAML build output.
+    echo  Expected: src\WhisperLive\bin\x64\Release\net*\win-x64\
+    pause
+    exit /b 1
+)
+
+echo  Copying XAML resources from %BUILD_BIN%...
 xcopy /y /s /q "%BUILD_BIN%\*.xbf" "release\"
+if %errorlevel% neq 0 (
+    echo  ERROR: Failed to copy .xbf files.
+    pause
+    exit /b 1
+)
+
 copy /y "%BUILD_BIN%\WhisperLive.pri" "release\" > nul
+if %errorlevel% neq 0 (
+    echo  ERROR: Failed to copy WhisperLive.pri.
+    pause
+    exit /b 1
+)
 
 echo.
 echo  Build succeeded.

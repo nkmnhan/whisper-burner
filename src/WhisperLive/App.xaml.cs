@@ -4,6 +4,7 @@ using WhisperLive.Infrastructure;
 using WhisperLive.Overlay;
 using WhisperLive.Services.Assistant;
 using WhisperLive.Services.Audio;
+using WhisperLive.Services.Translation;
 using WhisperLive.Views;
 
 namespace WhisperLive;
@@ -18,6 +19,8 @@ sealed partial class App : Application
     internal ISubtitleService SubtitleService { get; }
     internal IRecordingManager RecordingManager { get; }
     internal ISessionAssistantService SessionAssistant { get; }
+    internal IAssistantExportService AssistantExport { get; }
+    internal ITranslationService TranslationService { get; private set; }
 
     public App()
     {
@@ -31,12 +34,27 @@ sealed partial class App : Application
         SubtitleService = new Services.Audio.SubtitleService();
         RecordingManager = new Services.Audio.RecordingManager(RecordingService, TranscriptionClient, SubtitleService);
         SessionAssistant = new SessionAssistantService(RecordingManager, aiProvider);
+        AssistantExport = new AssistantExportService();
+
+        // Disabled placeholder — replaced by ApplySettings() in LiveTranscriptPage.OnLoaded
+        // once AppSettings are loaded asynchronously on the UI thread.
+        TranslationService = BuildTranslationService(new AppSettings());
 
         UnhandledException += (_, e) =>
         {
             AppLogger.Error(e.Exception, "Unhandled exception: {Message}", e.Message);
             e.Handled = true;
         };
+    }
+
+    /// <summary>
+    /// Rebuilds <see cref="TranslationService"/> from freshly-loaded settings.
+    /// Called by <see cref="Views.LiveTranscriptPage"/> after its async settings load completes,
+    /// before it subscribes to <see cref="ITranslationService.SegmentTranslated"/>.
+    /// </summary>
+    internal void ApplySettings(AppSettings settings)
+    {
+        TranslationService = BuildTranslationService(settings);
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -58,6 +76,7 @@ sealed partial class App : Application
         {
             await RecordingManager.StopAsync();
             SessionAssistant.EndSession();
+            TranslationService.EndSession();
 
             CaptionOverlay?.Close();
 
@@ -79,5 +98,23 @@ sealed partial class App : Application
     {
         await ThemeHelper.InitializeAsync();
         TitleBarHelper.ApplySystemThemeToCaptionButtons(MainWindow, ThemeHelper.ActualTheme);
+    }
+
+    internal static ITranslationService BuildTranslationService(AppSettings settings)
+    {
+        // Whisper built-in translate: task=translate sent with each audio chunk.
+        // No external API needed — the translation happens inside the Docker container.
+        if (settings.TranslationProvider == "whisper" && settings.EnableTranslation)
+            return new Services.Translation.PassThroughTranslationService();
+
+        ITranslationProvider provider = settings.TranslationProvider switch
+        {
+            "google" => new GoogleTranslationProvider(settings.GoogleTranslateApiKey),
+            _ => new DeepLTranslationProvider(settings.DeepLApiKey),
+        };
+        return new Services.Translation.TranslationService(
+            provider,
+            isEnabled: settings.EnableTranslation,
+            targetLanguage: settings.TranslationTargetLanguage);
     }
 }

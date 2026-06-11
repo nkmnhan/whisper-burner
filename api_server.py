@@ -48,11 +48,14 @@ def models():
 async def transcribe(
     file: UploadFile,
     model: str = Form(_DEFAULT_MODEL),
-    language: str = Form("en"),
+    language: str = Form("auto"),
     initial_prompt: str = Form(""),
+    task: str = Form("transcribe"),
 ):
     if model not in _AVAILABLE_MODELS:
         return JSONResponse({"error": "unknown_model"}, status_code=400)
+    if task not in ("transcribe", "translate"):
+        return JSONResponse({"error": "task must be 'transcribe' or 'translate'"}, status_code=400)
 
     audio = await file.read()
     suffix = os.path.splitext(file.filename or ".wav")[1] or ".wav"
@@ -62,7 +65,8 @@ async def transcribe(
         tmp_path = tmp.name
 
     try:
-        kwargs = {"language": language}
+        # language=None triggers Whisper auto-detect; task="translate" outputs English
+        kwargs = {"language": None if language in ("auto", "") else language, "task": task}
         if initial_prompt:
             kwargs["initial_prompt"] = initial_prompt
         result = _get_model(model).transcribe(tmp_path, **kwargs)

@@ -13,7 +13,7 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
         "Answer questions about the current session transcript concisely and accurately. " +
         "Respond in 1-5 sentences unless the user asks for a detailed summary, list, email, or minutes. " +
         "You may use Markdown formatting (bold, italic, lists, tables, headings) — it will be rendered. " +
-        "Read the session SRT file when the question needs full transcript context.";
+        "The meeting transcript will be provided inline when relevant — do not look for external files.";
 
     private readonly IRecordingManager _recordingManager;
     private readonly IAiProvider _aiProvider;
@@ -36,6 +36,9 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
     {
         _systemPrompt = BuildSystemPrompt(preContext?.Trim());
         _chatSession = null;
+        // Stateful chat: the session accumulates context across questions.
+        // This is intentional — the assistant remembers earlier turns in the conversation.
+        // Swap to one-shot stateless calls in AskAsync if token growth becomes a concern.
         _sessionCts = new CancellationTokenSource();
     }
 
@@ -54,15 +57,22 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
 
     // ── Chat ──────────────────────────────────────────────────────────────────
 
-    public async Task<string> AskAsync(string question, CancellationToken cancellationToken = default)
+    public async Task<string> AskAsync(string question, AskOptions? options = null, CancellationToken cancellationToken = default)
     {
-        var session = await GetOrCreateChatSessionAsync(cancellationToken);
+        // Link caller's token with the session lifecycle token so EndSession() cancels in-flight asks.
+        using var linked = _sessionCts is { } cts
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token)
+            : null;
+        var ct = linked?.Token ?? cancellationToken;
+
+        var session = await GetOrCreateChatSessionAsync(ct);
         if (session is null) return "No active session.";
 
         try
         {
+            var prompt = BuildPrompt(question, options);
             var context = await BuildCallContextAsync();
-            return await session.SendAsync(question, context, cancellationToken);
+            return await session.SendAsync(prompt, context, ct);
         }
         catch (Exception ex)
         {
@@ -98,9 +108,21 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
         var settings = await AppSettings.LoadAsync();
         return new AiCallContext(
             AllowedReadPaths: settings.AllowedReadPaths,
-            ContextPaths: settings.ContextFolderPaths,
-            LiveTranscriptPath: _recordingManager.CurrentSessionPath
+            ContextPaths: settings.ContextFolderPaths
+            // LiveTranscriptPath intentionally omitted — Claude no longer reads the SRT directly.
+            // Transcript content is injected inline when AskOptions.IncludeBufferedTranscript is true.
         );
+    }
+
+    private string BuildPrompt(string question, AskOptions? options)
+    {
+        if (options?.IncludeBufferedTranscript != true) return question;
+
+        var segments = _recordingManager.GetRecentSegments();
+        if (segments.Count == 0) return question;
+
+        var transcript = string.Join("\n", segments);
+        return $"[Transcript — {segments.Count} buffered segments]:\n{transcript}\n\n{question}";
     }
 
     private static string BuildSystemPrompt(string? preContext)

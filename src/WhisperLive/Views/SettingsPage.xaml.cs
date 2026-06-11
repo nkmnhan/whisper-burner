@@ -44,6 +44,13 @@ public sealed partial class SettingsPage : Page
         ChunkLabel.Text = $"{_settings.ChunkDurationSeconds} s";
         SelectComboItem(ModelBox, _settings.Model);
         SelectComboItem(LanguageBox, _settings.Language);
+        SelectComboItem(TranslationTargetBox, _settings.TranslationTargetLanguage);
+        SelectComboItem(TranslationProviderBox, _settings.TranslationProvider == "whisper"
+            ? "whisper (built-in)" : _settings.TranslationProvider);
+        EnableTranslationToggle.IsOn = _settings.EnableTranslation;
+        DeepLApiKeyBox.Text = _settings.DeepLApiKey;
+        GoogleApiKeyBox.Text = _settings.GoogleTranslateApiKey;
+        ApplyProviderVisibility(_settings.TranslationProvider);
         SelectThemeCombo(_settings.Theme);
         EnableAssistantToggle.IsOn = _settings.EnableAssistant;
         RebuildContextFolderItems();
@@ -119,6 +126,53 @@ public sealed partial class SettingsPage : Page
     {
         if (!_loaded) return;
         _settings.EnableAssistant = EnableAssistantToggle.IsOn;
+        _ = _settings.SaveAsync();
+    }
+
+    private void OnEnableTranslationToggled(object sender, RoutedEventArgs e)
+    {
+        if (!_loaded) return;
+        _settings.EnableTranslation = EnableTranslationToggle.IsOn;
+        _ = _settings.SaveAsync();
+    }
+
+    private void OnTranslationTargetChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        _settings.TranslationTargetLanguage = (string)((ComboBoxItem)TranslationTargetBox.SelectedItem).Content;
+        _ = _settings.SaveAsync();
+    }
+
+    private void OnTranslationProviderChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        var raw = (string)((ComboBoxItem)TranslationProviderBox.SelectedItem).Content;
+        // Map display label back to stored key
+        var key = raw == "whisper (built-in)" ? "whisper" : raw;
+        _settings.TranslationProvider = key;
+        ApplyProviderVisibility(key);
+        _ = _settings.SaveAsync();
+    }
+
+    private void ApplyProviderVisibility(string provider)
+    {
+        var isWhisper = provider == "whisper";
+        WhisperProviderInfoCard.Visibility = isWhisper ? Visibility.Visible : Visibility.Collapsed;
+        DeepLApiKeyCard.Visibility = provider == "deepl" ? Visibility.Visible : Visibility.Collapsed;
+        GoogleApiKeyCard.Visibility = provider == "google" ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnDeepLApiKeyChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        _settings.DeepLApiKey = DeepLApiKeyBox.Text.Trim();
+        _ = _settings.SaveAsync();
+    }
+
+    private void OnGoogleApiKeyChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        _settings.GoogleTranslateApiKey = GoogleApiKeyBox.Text.Trim();
         _ = _settings.SaveAsync();
     }
 
