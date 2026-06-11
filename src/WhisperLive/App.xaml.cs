@@ -1,7 +1,7 @@
 using Microsoft.UI.Xaml;
 using WhisperLive.Helpers;
 using WhisperLive.Infrastructure;
-using WhisperLive.Overlay;
+using WhisperLive.Components;
 using WhisperLive.Services.Assistant;
 using WhisperLive.Services.Audio;
 using WhisperLive.Services.Translation;

@@ -67,6 +67,7 @@ public sealed partial class LiveTranscriptPage : Page
 
         Manager.StateChanged += OnStateChanged;
         CurrentApp.TranscriptViewModel.Segments.CollectionChanged += OnSegmentsChanged;
+        if (App.CaptionOverlay is { } overlayOnLoad) overlayOnLoad.Hidden += OnOverlayHidden;
 
         if (string.IsNullOrEmpty(PreContextBox.Text))
             PreContextBox.Text = _settings.DefaultSessionContext;
@@ -92,6 +93,7 @@ public sealed partial class LiveTranscriptPage : Page
     {
         Manager.StateChanged -= OnStateChanged;
         CurrentApp.TranscriptViewModel.Segments.CollectionChanged -= OnSegmentsChanged;
+        if (App.CaptionOverlay is { } overlayOnUnload) overlayOnUnload.Hidden -= OnOverlayHidden;
         _chatMessages.CollectionChanged -= _onChatCollectionChanged;
     }
 
@@ -103,6 +105,12 @@ public sealed partial class LiveTranscriptPage : Page
         {
             ShowOverlayButton.Visibility = Visibility.Visible;
         }
+    }
+
+    private void OnOverlayHidden(object? sender, EventArgs e)
+    {
+        if (Manager.State == RecordingState.Recording)
+            ShowOverlayButton.Visibility = Visibility.Visible;
     }
 
     private async Task CheckApiHealthAsync()
@@ -170,7 +178,7 @@ public sealed partial class LiveTranscriptPage : Page
                 WaveformInButton.Visibility = Visibility.Visible;
                 PauseButton.Visibility = Visibility.Visible;
                 NewSessionButton.Visibility = Visibility.Collapsed;
-                PauseIcon.Glyph = "";
+                PauseIcon.Glyph = "";
                 AutomationProperties.SetName(PauseButton, "Pause recording");
                 ToolTipService.SetToolTip(PauseButton, "Pause recording");
                 WaveformStoryboard.Begin();
@@ -181,7 +189,7 @@ public sealed partial class LiveTranscriptPage : Page
                 break;
 
             case RecordingState.Paused:
-                PauseIcon.Glyph = "";
+                PauseIcon.Glyph = ""; // Play (Resume)
                 AutomationProperties.SetName(PauseButton, "Resume recording");
                 ToolTipService.SetToolTip(PauseButton, "Resume recording");
                 WaveformStoryboard.Stop();

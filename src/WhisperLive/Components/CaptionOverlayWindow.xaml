@@ -1,5 +1,5 @@
 <Window
-    x:Class="WhisperLive.Overlay.CaptionOverlayWindow"
+    x:Class="WhisperLive.Components.CaptionOverlayWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="using:WhisperLive.Models"
@@ -42,6 +42,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Language badge -->
@@ -69,9 +70,26 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Pause / Resume button -->
+                <Button
+                    x:Name="OverlayPauseButton"
+                    Grid.Column="2"
+                    Width="32"
+                    Height="32"
+                    Padding="0"
+                    AutomationProperties.Name="Pause or resume"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="OnOverlayPauseClicked"
+                    CornerRadius="{StaticResource ControlCornerRadius}"
+                    Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                    ToolTipService.ToolTip="Pause / Resume">
+                    <FontIcon x:Name="OverlayPauseIcon" FontSize="14" Glyph="&#xE769;" />
+                </Button>
+
                 <!-- Close button -->
                 <Button
-                    Grid.Column="2"
+                    Grid.Column="3"
                     Width="32"
                     Height="32"
                     Padding="0"
@@ -84,28 +102,9 @@
                     ToolTipService.ToolTip="Hide overlay">
                     <FontIcon Glyph="&#xE711;" />
                 </Button>
-
-                <!-- Pause / Resume button -->
-                <Button
-                    x:Name="OverlayPauseButton"
-                    Grid.Column="1"
-                    Width="32"
-                    Height="32"
-                    Padding="0"
-                    HorizontalAlignment="Center"
-                    AutomationProperties.Name="Pause or resume"
-                    Background="Transparent"
-                    BorderThickness="0"
-                    Click="OnOverlayPauseClicked"
-                    CornerRadius="{StaticResource ControlCornerRadius}"
-                    Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
-                    ToolTipService.ToolTip="Pause / Resume">
-                    <FontIcon x:Name="OverlayPauseIcon" FontSize="14" Glyph="&#xE769;" />
-                </Button>
             </Grid>
 
-            <!-- Row 1: transcript — binds to shared TranscriptViewModel.Segments;
-                 latest item always visible at bottom; virtualised by ListView -->
+            <!-- Row 1: transcript list — capped slice bound via _overlayRows -->
             <ListView
                 x:Name="CaptionsPanel"
                 Grid.Row="1"
@@ -162,7 +161,7 @@
                 CornerRadius="{StaticResource ControlCornerRadius}"
                 Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                 ToolTipService.ToolTip="Expand / Collapse">
-                <FontIcon x:Name="ChevronIcon" FontSize="12" Glyph="&#xE70E;" />
+                <FontIcon x:Name="ChevronIcon" FontSize="12" Glyph="&#xE70D;" />
             </Button>
         </Grid>
     </Grid>

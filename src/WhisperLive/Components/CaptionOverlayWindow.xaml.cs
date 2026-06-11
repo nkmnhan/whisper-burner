@@ -3,19 +3,25 @@ using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
+using System;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.Linq;
 using System.Runtime.InteropServices;
-using WhisperLive.Helpers;
+using WhisperLive.Models;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT;
 
-namespace WhisperLive.Overlay;
+namespace WhisperLive.Components;
 
 public sealed partial class CaptionOverlayWindow : Window
 {
     private const int WindowWidth = 860;
     private const int WindowHeightCollapsed = 280;
     private const int WindowHeightExpanded  = 440;
+    private const int MaxCollapsedRows = 10;
+    private const int MaxExpandedRows  = 30;
 
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
@@ -23,28 +29,68 @@ public sealed partial class CaptionOverlayWindow : Window
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
 
+    private readonly ObservableCollection<TranslatedSegmentView> _overlayRows = [];
     private double _dragStartX;
     private double _dragStartY;
     private bool _isExpanded;
     private DesktopAcrylicController? _acrylicController;
     private SystemBackdropConfiguration? _backdropConfig;
 
+    /// <summary>Raised when the user dismisses the overlay via the close button.</summary>
+    public event EventHandler? Hidden;
+
     public CaptionOverlayWindow()
     {
         InitializeComponent();
-        // Intentionally NOT tracked via WindowHelper — the overlay manages its own
-        // dark theme independently and must not affect the main window's theme.
         ConfigureWindow();
-        // Force dark theme on this window's content only, isolated from ThemeHelper
         ((FrameworkElement)Content).RequestedTheme = ElementTheme.Dark;
         ApplyAcrylicBackdrop();
-        RootGrid.ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY;
-        CaptionsPanel.ItemsSource = ((App)Application.Current).TranscriptViewModel.Segments;
+
+        CaptionsPanel.ItemsSource = _overlayRows;
+
+        var allSegments = ((App)Application.Current).TranscriptViewModel.Segments;
+        allSegments.CollectionChanged += OnSegmentsChanged;
+
+        Closed += (_, _) =>
+        {
+            allSegments.CollectionChanged -= OnSegmentsChanged;
+            _acrylicController?.Dispose();
+            _acrylicController = null;
+            _backdropConfig = null;
+        };
+    }
+
+    private void OnSegmentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        var max = _isExpanded ? MaxExpandedRows : MaxCollapsedRows;
+
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            _overlayRows.Clear();
+            return;
+        }
+
+        if (e.Action == NotifyCollectionChangedAction.Add && e.NewItems is { } added)
+        {
+            foreach (TranslatedSegmentView item in added)
+                _overlayRows.Add(item);
+            while (_overlayRows.Count > max)
+                _overlayRows.RemoveAt(0);
+        }
+    }
+
+    private void ResyncRows()
+    {
+        var all = ((App)Application.Current).TranscriptViewModel.Segments;
+        var max = _isExpanded ? MaxExpandedRows : MaxCollapsedRows;
+        var slice = all.TakeLast(max).ToList();
+        _overlayRows.Clear();
+        foreach (var item in slice)
+            _overlayRows.Add(item);
     }
 
     private void ConfigureWindow()
     {
-        // Borderless, always-on-top
         var presenter = OverlappedPresenter.CreateForToolWindow();
         presenter.IsResizable = false;
         presenter.IsMaximizable = false;
@@ -54,16 +100,13 @@ public sealed partial class CaptionOverlayWindow : Window
 
         AppWindow.IsShownInSwitchers = false;
 
-        // Collapse the title bar entirely — removes all OS chrome buttons (close/min/max).
         AppWindow.TitleBar.ExtendsContentIntoTitleBar = true;
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Collapsed;
 
-        // Rounded corners
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         int roundCorners = DWMWCP_ROUND;
         DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref roundCorners, sizeof(int));
 
-        // Position bottom-centre of primary display (collapsed height)
         var area = DisplayArea.Primary.WorkArea;
         int x = (area.Width - WindowWidth) / 2;
         int y = area.Height - WindowHeightCollapsed - 48;
@@ -90,13 +133,6 @@ public sealed partial class CaptionOverlayWindow : Window
 
         _acrylicController.AddSystemBackdropTarget(this.As<ICompositionSupportsSystemBackdrop>());
         _acrylicController.SetSystemBackdropConfiguration(_backdropConfig);
-
-        Closed += (_, _) =>
-        {
-            _acrylicController?.Dispose();
-            _acrylicController = null;
-            _backdropConfig = null;
-        };
     }
 
     public void SetLanguage(string language) =>
@@ -105,20 +141,25 @@ public sealed partial class CaptionOverlayWindow : Window
     private void OnExpandClicked(object sender, RoutedEventArgs e)
     {
         _isExpanded = !_isExpanded;
+        // Collapsed: ChevronDown (E70E) = prompt to expand; Expanded: ChevronUp (E70D) = prompt to collapse
         ChevronIcon.Glyph = _isExpanded ? "" : "";
 
         int newHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
         int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;
         AppWindow.MoveAndResize(new RectInt32(AppWindow.Position.X, bottomEdge - newHeight, WindowWidth, newHeight));
+
+        ResyncRows();
     }
 
-    private void OnCloseClicked(object sender, RoutedEventArgs e) => AppWindow.Hide();
-
-    public void UpdatePauseState(bool isPaused)
+    private void OnCloseClicked(object sender, RoutedEventArgs e)
     {
-        DispatcherQueue.TryEnqueue(() =>
-            OverlayPauseIcon.Glyph = isPaused ? "" : ""); // Play : Pause
+        AppWindow.Hide();
+        Hidden?.Invoke(this, EventArgs.Empty);
     }
+
+    public void UpdatePauseState(bool isPaused) =>
+        DispatcherQueue.TryEnqueue(() =>
+            OverlayPauseIcon.Glyph = isPaused ? "" : ""); // Play (resume) : Pause
 
     private void OnOverlayPauseClicked(object sender, RoutedEventArgs e)
     {
@@ -141,8 +182,6 @@ public sealed partial class CaptionOverlayWindow : Window
         TopBar.Visibility = Visibility.Collapsed;
         LiveTranscriptLabel.Visibility = Visibility.Visible;
     }
-
-    // ── Drag to reposition ────────────────────────────────────────────────────
 
     private void OnManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)
     {
