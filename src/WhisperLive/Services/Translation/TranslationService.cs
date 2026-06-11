@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -12,15 +13,15 @@ using WhisperLive.Services.Translation.Providers;
 namespace WhisperLive.Services.Translation;
 
 /// <summary>
-/// Background translation pipeline.
+/// Background translation pipeline. Always active when instantiated.
+/// For the disabled case, the factory returns DisabledTranslationService instead.
 ///
-/// Architecture (matches the EveryTongue "update/commit" pattern validated by research):
-///   • New segment arrives → enqueued, UI shows immediately as italic/dimmed (Provisional)
-///   • Bounded Channel (capacity=20, DropOldest) — if the API is slow, oldest pending
-///     segments are dropped instead of blocking newer, more relevant ones
-///   • SemaphoreSlim(3) — max 3 concurrent API calls; prevents rate-limit cascade
-///   • On success → view.ApplyTranslation() fires INPC → in-place UI update (italic→normal)
-///   • On failure → view.MarkFailed(); original text shown as fallback
+/// - Unbounded channel: no segment is ever dropped, regardless of API speed.
+/// - SemaphoreSlim(3): limits concurrent API calls to prevent rate-limit cascades.
+/// - Ordered drain: translations arrive out of order; a write lock + sequential pointer
+///   ensures the translated SRT file is always in valid SRT order.
+/// - Streaming write: AutoFlush writes each translated entry to disk immediately.
+/// - EndSession fallback: untranslated segments fall back to original text so the SRT is complete.
 /// </summary>
 public sealed class TranslationService : ITranslationService, IDisposable
 {
@@ -28,35 +29,39 @@ public sealed class TranslationService : ITranslationService, IDisposable
     private const int MaxRetries = 2;
 
     private readonly ITranslationProvider _provider;
+    private readonly Func<string?> _getSessionPath;
     private readonly SemaphoreSlim _concurrencySemaphore = new(MaxConcurrent, MaxConcurrent);
+    private readonly SemaphoreSlim _writeLock = new(1, 1);
 
-    // Bounded channel: DropOldest ensures the UI never stalls on queue backpressure.
-    private readonly Channel<TranslatedSegmentView> _channel =
-        Channel.CreateBounded<TranslatedSegmentView>(
-            new BoundedChannelOptions(20)
-            {
-                FullMode = BoundedChannelFullMode.DropOldest,
-                SingleReader = true,
-                SingleWriter = false,
-            });
+    // Every segment queued is eventually translated — no eviction under load.
+    private readonly Channel<SubtitleSegment> _channel = Channel.CreateUnbounded<SubtitleSegment>(
+        new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
 
-    // Session-scoped list for SRT export — populated as translations arrive.
-    private readonly List<TranslatedSegmentView> _sessionViews = [];
-    private readonly object _viewsLock = new();
+    // Original segments keyed by ID — needed for SRT timestamps.
+    private readonly ConcurrentDictionary<int, SubtitleSegment> _originals = new();
 
+    // Ordered drain: hold out-of-order completions until sequential write is possible.
+    private readonly Dictionary<int, string> _completedTexts = new();
+    private int _nextWriteId = 1;
+    private int _maxEnqueuedId;
+
+    private StreamWriter? _writer;
     private CancellationTokenSource? _sessionCts;
     private Task? _workerTask;
 
-    public bool IsEnabled { get; }
     public string TargetLanguage { get; }
+    public bool IsEnabled => true;
 
     public event EventHandler<SegmentTranslationReadyEventArgs>? SegmentTranslated;
 
-    public TranslationService(ITranslationProvider provider, bool isEnabled, string targetLanguage)
+    public TranslationService(
+        ITranslationProvider provider,
+        string targetLanguage,
+        Func<string?> getSessionPath)
     {
         _provider = provider;
-        IsEnabled = isEnabled;
         TargetLanguage = targetLanguage;
+        _getSessionPath = getSessionPath;
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -64,7 +69,10 @@ public sealed class TranslationService : ITranslationService, IDisposable
     public void StartSession()
     {
         EndSession();
-        lock (_viewsLock) _sessionViews.Clear();
+        _originals.Clear();
+        lock (_completedTexts) _completedTexts.Clear();
+        _nextWriteId = 1;
+        _maxEnqueuedId = 0;
 
         _sessionCts = new CancellationTokenSource();
         _workerTask = Task.Run(() => ConsumeAsync(_sessionCts.Token));
@@ -78,42 +86,41 @@ public sealed class TranslationService : ITranslationService, IDisposable
         _sessionCts.Cancel();
         _sessionCts.Dispose();
         _sessionCts = null;
+
+        FlushFallbacks();
+        CloseWriter();
         AppLogger.Info("TranslationService session ended");
     }
 
     // ── Enqueue ───────────────────────────────────────────────────────────────
 
-    public void EnqueueSegment(TranslatedSegmentView view)
+    public void EnqueueSegment(SubtitleSegment segment)
     {
-        if (!IsEnabled) return;
-        lock (_viewsLock) _sessionViews.Add(view);
-        // TryWrite never blocks. If full, DropOldest removes the least-relevant pending item.
-        _channel.Writer.TryWrite(view);
+        _originals[segment.Id] = segment;
+        Interlocked.Exchange(ref _maxEnqueuedId, Math.Max(_maxEnqueuedId, segment.Id));
+        _channel.Writer.TryWrite(segment);
     }
 
     // ── Background consumer ───────────────────────────────────────────────────
 
     private async Task ConsumeAsync(CancellationToken ct)
     {
-        await foreach (var view in _channel.Reader.ReadAllAsync(ct))
-        {
-            // Fire-and-forget each translation with bounded concurrency.
-            _ = TranslateWithSemaphoreAsync(view, ct);
-        }
+        await foreach (var segment in _channel.Reader.ReadAllAsync(ct))
+            _ = TranslateWithSemaphoreAsync(segment, ct);
     }
 
-    private async Task TranslateWithSemaphoreAsync(TranslatedSegmentView view, CancellationToken ct)
+    private async Task TranslateWithSemaphoreAsync(SubtitleSegment segment, CancellationToken ct)
     {
         await _concurrencySemaphore.WaitAsync(ct);
         try
         {
-            await TranslateWithRetryAsync(view, ct);
+            await TranslateWithRetryAsync(segment, ct);
         }
-        catch (OperationCanceledException) { /* session ended — leave view as Provisional */ }
+        catch (OperationCanceledException) { /* session ended — EndSession writes fallback */ }
         catch (Exception ex)
         {
-            AppLogger.Warning(ex, "Translation failed for segment {Id}", view.Original.Id);
-            view.MarkFailed();
+            AppLogger.Warning(ex, "Translation failed for segment {Id} after all retries", segment.Id);
+            // Segment stays absent from _completedTexts; EndSession writes original-text fallback.
         }
         finally
         {
@@ -121,17 +128,15 @@ public sealed class TranslationService : ITranslationService, IDisposable
         }
     }
 
-    private async Task TranslateWithRetryAsync(TranslatedSegmentView view, CancellationToken ct)
+    private async Task TranslateWithRetryAsync(SubtitleSegment segment, CancellationToken ct)
     {
         var delay = TimeSpan.FromSeconds(1);
         for (var attempt = 0; attempt <= MaxRetries; attempt++)
         {
             try
             {
-                var translated = await _provider.TranslateAsync(view.OriginalText, TargetLanguage, ct);
-                // Do NOT call view.ApplyTranslation here — INPC must fire on the UI thread.
-                // Fire the event with translated text; the page handler dispatches and applies.
-                SegmentTranslated?.Invoke(this, new SegmentTranslationReadyEventArgs(view, translated));
+                var translated = await _provider.TranslateAsync(segment.Text, TargetLanguage, ct);
+                await CommitTranslationAsync(segment.Id, translated, ct);
                 return;
             }
             catch (OperationCanceledException) { throw; }
@@ -140,38 +145,93 @@ public sealed class TranslationService : ITranslationService, IDisposable
                 AppLogger.Warning(ex, "Translation attempt {Attempt} failed, retrying in {Delay}ms",
                     attempt + 1, delay.TotalMilliseconds);
                 await Task.Delay(delay + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 500)), ct);
-                delay = delay * 2; // exponential backoff
+                delay = delay * 2;
             }
         }
-        // All retries exhausted — mark failed so original is shown cleanly.
-        view.MarkFailed();
     }
 
-    // ── SRT export ────────────────────────────────────────────────────────────
+    // ── Ordered streaming write ───────────────────────────────────────────────
 
-    public async Task WriteTranslatedSrtAsync(string originalSrtPath, CancellationToken ct = default)
+    private async Task CommitTranslationAsync(int segmentId, string translatedText, CancellationToken ct)
     {
-        List<TranslatedSegmentView> snapshot;
-        lock (_viewsLock) snapshot = [.._sessionViews];
-
-        var translated = snapshot
-            .FindAll(v => v.State == TranslationSegmentState.Translated && v.TranslatedText is not null);
-
-        if (translated.Count == 0) return;
-
-        var sb = new StringBuilder();
-        for (var i = 0; i < translated.Count; i++)
+        await _writeLock.WaitAsync(ct);
+        try
         {
-            var v = translated[i];
-            var seg = v.Original with { Id = i + 1, Text = v.TranslatedText! };
-            sb.AppendLine(seg.ToSrtEntry());
+            _completedTexts[segmentId] = translatedText;
+            DrainCompletedEntries();
+        }
+        finally
+        {
+            _writeLock.Release();
         }
 
-        // "session.srt" → "session.vi.srt"
-        var ext = Path.GetExtension(originalSrtPath);
-        var translatedPath = Path.ChangeExtension(originalSrtPath, $".{TargetLanguage}{ext}");
-        await File.WriteAllTextAsync(translatedPath, sb.ToString(), Encoding.UTF8, ct);
-        AppLogger.Info("Translated SRT written: {Path}", translatedPath);
+        SegmentTranslated?.Invoke(this, new SegmentTranslationReadyEventArgs(segmentId, translatedText));
+    }
+
+    // Must be called under _writeLock.
+    private void DrainCompletedEntries()
+    {
+        while (_completedTexts.TryGetValue(_nextWriteId, out var text)
+               && _originals.TryGetValue(_nextWriteId, out var original))
+        {
+            WriteEntry(original, text);
+            _completedTexts.Remove(_nextWriteId);
+            _nextWriteId++;
+        }
+    }
+
+    private void WriteEntry(SubtitleSegment original, string translatedText)
+    {
+        var writer = EnsureWriter();
+        if (writer is null) return;
+
+        var seg = original with { Text = translatedText };
+        writer.WriteLine(seg.ToSrtEntry());
+        writer.WriteLine();
+    }
+
+    // ── EndSession fallback ───────────────────────────────────────────────────
+
+    private void FlushFallbacks()
+    {
+        if (!_writeLock.Wait(TimeSpan.FromSeconds(5))) return;
+        try
+        {
+            // Any segment between _nextWriteId and _maxEnqueuedId that has no translation
+            // gets its original text written so the translated SRT file is always complete.
+            for (var id = _nextWriteId; id <= _maxEnqueuedId; id++)
+            {
+                if (!_completedTexts.ContainsKey(id) && _originals.TryGetValue(id, out var seg))
+                    _completedTexts[id] = seg.Text;
+            }
+            DrainCompletedEntries();
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+    // ── File management ───────────────────────────────────────────────────────
+
+    private StreamWriter? EnsureWriter()
+    {
+        if (_writer is not null) return _writer;
+
+        var basePath = _getSessionPath();
+        if (basePath is null) return null; // path created on first raw segment — retry on next entry
+
+        var translatedPath = Path.ChangeExtension(basePath, $".{TargetLanguage}.srt");
+        _writer = new StreamWriter(translatedPath, append: false, Encoding.UTF8) { AutoFlush = true };
+        AppLogger.Info("Translation SRT opened: {Path}", translatedPath);
+        return _writer;
+    }
+
+    private void CloseWriter()
+    {
+        _writer?.Flush();
+        _writer?.Dispose();
+        _writer = null;
     }
 
     // ── IDisposable ───────────────────────────────────────────────────────────
@@ -180,5 +240,6 @@ public sealed class TranslationService : ITranslationService, IDisposable
     {
         EndSession();
         _concurrencySemaphore.Dispose();
+        _writeLock.Dispose();
     }
 }
