@@ -70,6 +70,10 @@ public sealed class TranslationService : ITranslationService, IDisposable
     {
         EndSession();
         _originals.Clear();
+        // Drain any items left in the channel from a previous session.
+        // Without this, stale segments with mismatched IDs would be consumed
+        // by this session's worker, corrupting the ordered drain.
+        while (_channel.Reader.TryRead(out _)) { }
         // Use _writeLock for consistency — same lock guards all _completedTexts access.
         _writeLock.Wait();
         try { _completedTexts.Clear(); }
@@ -98,14 +102,19 @@ public sealed class TranslationService : ITranslationService, IDisposable
         _sessionCts.Dispose();
         _sessionCts = null;
 
-        // Wait for the consumer loop to exit — it throws OperationCanceledException on the
-        // next ReadAllAsync iteration which completes near-instantly. A 1-second ceiling
-        // prevents a UI freeze if something unexpected delays the loop.
-        // In-flight TranslateWithSemaphoreAsync tasks are fire-and-forget; those already
-        // past their CT check will complete normally (valid data), those still queued will
-        // get OCE on _writeLock.WaitAsync(ct) and skip the write — safe either way.
+        // Wait for the consumer loop to exit.
         _workerTask?.Wait(TimeSpan.FromSeconds(1));
         _workerTask = null;
+
+        // Drain the concurrency semaphore to confirm every fire-and-forget
+        // TranslateWithSemaphoreAsync task has exited its try-finally and released
+        // its slot. After cancellation they abort quickly (the HTTP call is also
+        // cancelled). Without this wait, a task could still hold _writeLock inside
+        // DrainCompletedEntries when FlushFallbacks() tries to acquire it —
+        // causing the 5-second timeout to fire and losing fallback writes.
+        for (var i = 0; i < MaxConcurrent; i++)
+            _concurrencySemaphore.Wait(TimeSpan.FromSeconds(3));
+        _concurrencySemaphore.Release(MaxConcurrent);
 
         FlushFallbacks();
         _srtWriter?.Dispose();
@@ -209,7 +218,13 @@ public sealed class TranslationService : ITranslationService, IDisposable
 
     private void FlushFallbacks()
     {
-        if (!_writeLock.Wait(TimeSpan.FromSeconds(5))) return;
+        // By this point EndSession() has already drained _concurrencySemaphore,
+        // so no task should be holding _writeLock. The timeout here is a last-resort guard.
+        if (!_writeLock.Wait(TimeSpan.FromSeconds(15)))
+        {
+            AppLogger.Warning("FlushFallbacks timed out waiting for write lock — some entries may be missing from the translated SRT");
+            return;
+        }
         try
         {
             // Any segment between _nextWriteId and _maxEnqueuedId that has no translation
