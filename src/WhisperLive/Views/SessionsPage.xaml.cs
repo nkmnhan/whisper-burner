@@ -220,10 +220,21 @@ public sealed partial class SessionsPage : Page
 
     private static string ParseDisplayName(string fileNameNoExt)
     {
-        if (DateTime.TryParseExact(fileNameNoExt, "yyyy-MM-dd_HH-mm-ss",
-            CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
-            return dt.ToString("MMMM d, yyyy · h:mm tt");
-        return fileNameNoExt;
+        // File names can have known suffixes: "yyyy-MM-dd_HH-mm-ss[.suffix]"
+        // e.g. "2026-06-12_09-25-20"         → June 12, 2026 · 9:25 AM
+        //      "2026-06-12_09-25-20.final"    → June 12, 2026 · 9:25 AM · final
+        //      "2026-06-12_09-25-20.vi"       → June 12, 2026 · 9:25 AM · vi
+        //      "2026-06-12_09-25-20.corrected"→ June 12, 2026 · 9:25 AM · corrected
+        var dotIdx = fileNameNoExt.IndexOf('.');
+        var basePart = dotIdx >= 0 ? fileNameNoExt[..dotIdx] : fileNameNoExt;
+        var suffix = dotIdx >= 0 ? fileNameNoExt[(dotIdx + 1)..] : null;
+
+        if (!DateTime.TryParseExact(basePart, "yyyy-MM-dd_HH-mm-ss",
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            return fileNameNoExt;
+
+        var dateStr = dt.ToString("MMMM d, yyyy · h:mm tt");
+        return suffix is null ? dateStr : $"{dateStr} · {suffix}";
     }
 
     private static string BuildSubTitle(string filePath)
