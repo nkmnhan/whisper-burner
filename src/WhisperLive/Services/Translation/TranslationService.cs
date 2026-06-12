@@ -2,12 +2,12 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using WhisperLive.Infrastructure;
 using WhisperLive.Models;
+using WhisperLive.Services.Audio;
 using WhisperLive.Services.Translation.Providers;
 
 namespace WhisperLive.Services.Translation;
@@ -20,7 +20,7 @@ namespace WhisperLive.Services.Translation;
 /// - SemaphoreSlim(3): limits concurrent API calls to prevent rate-limit cascades.
 /// - Ordered drain: translations arrive out of order; a write lock + sequential pointer
 ///   ensures the translated SRT file is always in valid SRT order.
-/// - Streaming write: AutoFlush writes each translated entry to disk immediately.
+/// - Streaming write: ISrtSessionWriter.TryWrite writes each translated entry to disk immediately.
 /// - EndSession fallback: untranslated segments fall back to original text so the SRT is complete.
 /// </summary>
 public sealed class TranslationService : ITranslationService, IDisposable
@@ -45,7 +45,7 @@ public sealed class TranslationService : ITranslationService, IDisposable
     private int _nextWriteId = 1;
     private int _maxEnqueuedId;
 
-    private StreamWriter? _writer;
+    private ISrtSessionWriter? _srtWriter;
     private CancellationTokenSource? _sessionCts;
     private Task? _workerTask;
 
@@ -77,6 +77,14 @@ public sealed class TranslationService : ITranslationService, IDisposable
         _nextWriteId = 1;
         _maxEnqueuedId = 0;
 
+        // Path factory: derives translated SRT path from the base session path once it's available.
+        // Returns null until SubtitleService creates the raw SRT (retried on every TryWrite call).
+        _srtWriter = new StreamingSrtWriter(() =>
+        {
+            var p = _getSessionPath();
+            return p is null ? null : Path.ChangeExtension(p, $".{TargetLanguage}.srt");
+        });
+
         _sessionCts = new CancellationTokenSource();
         _workerTask = Task.Run(() => ConsumeAsync(_sessionCts.Token));
         AppLogger.Info("TranslationService session started (provider={Provider}, target={Lang})",
@@ -100,7 +108,8 @@ public sealed class TranslationService : ITranslationService, IDisposable
         _workerTask = null;
 
         FlushFallbacks();
-        CloseWriter();
+        _srtWriter?.Dispose();
+        _srtWriter = null;
         AppLogger.Info("TranslationService session ended");
     }
 
@@ -192,15 +201,9 @@ public sealed class TranslationService : ITranslationService, IDisposable
         }
     }
 
-    private void WriteEntry(SubtitleSegment original, string translatedText)
-    {
-        var writer = EnsureWriter();
-        if (writer is null) return;
-
-        var seg = original with { Text = translatedText };
-        writer.WriteLine(seg.ToSrtEntry());
-        writer.WriteLine();
-    }
+    private void WriteEntry(SubtitleSegment original, string translatedText) =>
+        // Caller owns text transformation: pass original timestamps, override text only.
+        _srtWriter?.TryWrite(original with { Text = translatedText });
 
     // ── EndSession fallback ───────────────────────────────────────────────────
 
@@ -222,28 +225,6 @@ public sealed class TranslationService : ITranslationService, IDisposable
         {
             _writeLock.Release();
         }
-    }
-
-    // ── File management ───────────────────────────────────────────────────────
-
-    private StreamWriter? EnsureWriter()
-    {
-        if (_writer is not null) return _writer;
-
-        var basePath = _getSessionPath();
-        if (basePath is null) return null; // path created on first raw segment — retry on next entry
-
-        var translatedPath = Path.ChangeExtension(basePath, $".{TargetLanguage}.srt");
-        _writer = new StreamWriter(translatedPath, append: false, Encoding.UTF8) { AutoFlush = true };
-        AppLogger.Info("Translation SRT opened: {Path}", translatedPath);
-        return _writer;
-    }
-
-    private void CloseWriter()
-    {
-        _writer?.Flush();
-        _writer?.Dispose();
-        _writer = null;
     }
 
     // ── IDisposable ───────────────────────────────────────────────────────────

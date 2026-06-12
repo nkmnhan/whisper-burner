@@ -17,8 +17,7 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     private readonly List<SubtitleSegment> _segments = [];
     private readonly object _segLock = new();
-    private StreamWriter? _writer;
-    private bool _sessionPending;
+    private ISrtSessionWriter? _srtWriter;
 
     public event EventHandler<SubtitleSegment>? SegmentAdded;
 
@@ -31,18 +30,20 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         EndSession();
         _segments.Clear();
         CurrentSessionPath = null;
-        _sessionPending = true;
+        // Pre-compute path at session-start time so the timestamp reflects when recording began,
+        // not when the first audio chunk arrived. File is created lazily on first TryWrite.
+        Directory.CreateDirectory(_sessionsDir);
+        var sessionPath = Path.Combine(_sessionsDir, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.srt");
+        _srtWriter = new StreamingSrtWriter(() => sessionPath);
     }
 
     public void EndSession()
     {
         WriteFinalSrt();
-        _writer?.Flush();
-        _writer?.Dispose();
-        _writer = null;
+        _srtWriter?.Dispose();
+        _srtWriter = null;
         if (CurrentSessionPath is not null)
             AppLogger.Info("Session file closed: {Path}", CurrentSessionPath);
-        _sessionPending = false;
     }
 
     public void AppendSegments(IEnumerable<SubtitleSegment> segments)
@@ -112,24 +113,11 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     private void WriteSrtEntry(SubtitleSegment seg)
     {
-        EnsureSessionFile();
-        if (_writer is null) return;
-        try { _writer.Write(seg.ToSrtEntry()); _writer.WriteLine(); }
-        catch (Exception ex) { AppLogger.Warning(ex, "Failed to write segment to session file"); }
-    }
-
-    private void EnsureSessionFile()
-    {
-        if (_writer is not null || !_sessionPending) return;
-
-        Directory.CreateDirectory(_sessionsDir);
-        CurrentSessionPath = Path.Combine(
-            _sessionsDir,
-            $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.srt");
-
-        _writer = new StreamWriter(CurrentSessionPath, append: false, Encoding.UTF8) { AutoFlush = true };
-        _sessionPending = false;
-        AppLogger.Info("Session file opened: {Path}", CurrentSessionPath);
+        if (_srtWriter?.TryWrite(seg) == true && CurrentSessionPath is null)
+        {
+            CurrentSessionPath = _srtWriter.CurrentPath;
+            AppLogger.Info("Session file opened: {Path}", CurrentSessionPath);
+        }
     }
 
     public void ApplyCorrections(IReadOnlyList<CorrectedSegment> corrections)
