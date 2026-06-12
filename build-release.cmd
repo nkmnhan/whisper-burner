@@ -13,7 +13,8 @@ dotnet publish src\WhisperLive\WhisperLive.csproj ^
   --self-contained false ^
   -o release ^
   --nologo ^
-  -p:Platform=x64
+  -p:Platform=x64 ^
+  -p:WindowsAppSdkSelfContained=true
 
 if %errorlevel% neq 0 (
     echo.

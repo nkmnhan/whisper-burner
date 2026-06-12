@@ -42,6 +42,7 @@ public sealed class ClaudeCliProvider : IAiProvider
         var psi = new ProcessStartInfo
         {
             FileName = "claude",
+            WorkingDirectory = AppDataFolder,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -56,6 +57,7 @@ public sealed class ClaudeCliProvider : IAiProvider
         Process process;
         try
         {
+            Directory.CreateDirectory(AppDataFolder);
             process = Process.Start(psi)
                 ?? throw new InvalidOperationException("Process.Start returned null.");
         }

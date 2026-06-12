@@ -29,7 +29,7 @@ public sealed class TranscriptViewModel
     public void OnSegmentAdded(SubtitleSegment seg) =>
         _dq.TryEnqueue(() =>
         {
-            var view = new TranslatedSegmentView(seg);
+            var view = new TranslatedSegmentView(seg, _isTranslationEnabled());
             Segments.Add(view);
             if (Segments.Count > MaxSegments)
                 Segments.RemoveAt(0);

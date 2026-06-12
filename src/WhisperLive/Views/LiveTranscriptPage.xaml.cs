@@ -400,7 +400,7 @@ public sealed partial class LiveTranscriptPage : Page
 
         try
         {
-            var answer = await Assistant.AskAsync(question);
+            var answer = await Assistant.AskAsync(question, new AskOptions(IncludeBufferedTranscript: true));
             _chatMessages.Add(new AssistantMessage("Claude", answer, DateTimeOffset.Now));
         }
         catch (Exception ex)

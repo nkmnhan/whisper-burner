@@ -15,10 +15,16 @@ public sealed class TranslatedSegmentView : INotifyPropertyChanged
 {
     private string? _translatedText;
     private TranslationSegmentState _state = TranslationSegmentState.Provisional;
+    private readonly bool _isTranslationEnabled;
 
-    public TranslatedSegmentView(SubtitleSegment original)
+    public TranslatedSegmentView(SubtitleSegment original, bool isTranslationEnabled = false)
     {
         Original = original;
+        _isTranslationEnabled = isTranslationEnabled;
+        // Pre-reserve a full bilingual row height immediately so the layout never
+        // changes when the real translation arrives — eliminating scroll jitter.
+        if (isTranslationEnabled)
+            _translatedText = "\u00A0";
     }
 
     /// <summary>Original Whisper segment — provides Id, Start, End, and original Text.</summary>
@@ -68,17 +74,27 @@ public sealed class TranslatedSegmentView : INotifyPropertyChanged
             ? FontStyle.Italic
             : FontStyle.Normal;
 
-    /// <summary>Dimmed while pending; further dimmed as secondary line when translated; full opacity otherwise.</summary>
+    /// <summary>
+    /// Dimmed while pending; further dimmed as secondary line when translated (or when
+    /// translation is enabled and the placeholder is showing); full opacity otherwise.
+    /// </summary>
     public double OriginalOpacity =>
-        _state == TranslationSegmentState.Provisional ? 0.65 :
-        HasTranslation ? 0.50 : 1.0;
+        _state == TranslationSegmentState.Provisional
+            ? (_isTranslationEnabled ? 0.50 : 0.65)
+            : HasTranslation ? 0.50 : 1.0;
 
-    /// <summary>Smaller when a translated line is also showing; normal otherwise.</summary>
-    public double OriginalFontSize => HasTranslation ? 12.0 : 14.0;
+    /// <summary>
+    /// Smaller when translation is enabled (the row is always bilingual); normal otherwise.
+    /// Pre-reserved at insert time so the layout never changes when the translation arrives.
+    /// </summary>
+    public double OriginalFontSize => _isTranslationEnabled ? 12.0 : 14.0;
 
-    /// <summary>Translated text row is visible only when a translation has arrived.</summary>
+    /// <summary>
+    /// Translated text row: always visible when translation is enabled (placeholder or real text);
+    /// collapsed when translation is disabled.
+    /// </summary>
     public Visibility TranslatedVisibility =>
-        HasTranslation ? Visibility.Visible : Visibility.Collapsed;
+        _isTranslationEnabled ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>
     /// Original text row: hidden when mode=Translated and a translation exists;
@@ -90,7 +106,8 @@ public sealed class TranslatedSegmentView : INotifyPropertyChanged
 
     /// <summary>
     /// Called by <see cref="Services.Translation.TranslationService"/> on the UI thread
-    /// when translation completes. Triggers property notifications → in-place row update.
+    /// when translation completes. Replaces the pre-reserved placeholder with the real text —
+    /// only the text value changes, not Visibility or font size, so no layout shift occurs.
     /// </summary>
     public void ApplyTranslation(string translated)
     {
