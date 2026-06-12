@@ -70,7 +70,10 @@ public sealed class TranslationService : ITranslationService, IDisposable
     {
         EndSession();
         _originals.Clear();
-        lock (_completedTexts) _completedTexts.Clear();
+        // Use _writeLock for consistency — same lock guards all _completedTexts access.
+        _writeLock.Wait();
+        try { _completedTexts.Clear(); }
+        finally { _writeLock.Release(); }
         _nextWriteId = 1;
         _maxEnqueuedId = 0;
 
@@ -86,6 +89,15 @@ public sealed class TranslationService : ITranslationService, IDisposable
         _sessionCts.Cancel();
         _sessionCts.Dispose();
         _sessionCts = null;
+
+        // Wait for the consumer loop to exit — it throws OperationCanceledException on the
+        // next ReadAllAsync iteration which completes near-instantly. A 1-second ceiling
+        // prevents a UI freeze if something unexpected delays the loop.
+        // In-flight TranslateWithSemaphoreAsync tasks are fire-and-forget; those already
+        // past their CT check will complete normally (valid data), those still queued will
+        // get OCE on _writeLock.WaitAsync(ct) and skip the write — safe either way.
+        _workerTask?.Wait(TimeSpan.FromSeconds(1));
+        _workerTask = null;
 
         FlushFallbacks();
         CloseWriter();

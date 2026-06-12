@@ -161,7 +161,9 @@ public sealed class ClaudeCliProvider : IAiProvider
             }
             finally
             {
-                _lock.Release();
+                // Guard against ObjectDisposedException: EndSession() can call Dispose()
+                // on the UI thread while this finally block runs on a threadpool thread.
+                try { _lock.Release(); } catch (ObjectDisposedException) { }
             }
         }
 
@@ -228,7 +230,12 @@ public sealed class ClaudeCliProvider : IAiProvider
             return prompt;
         }
 
-        public void Dispose() => _lock.Dispose();
+        public void Dispose()
+        {
+            // Guard against ObjectDisposedException if Release() is still in-flight
+            // on a threadpool thread when EndSession() disposes on the UI thread.
+            try { _lock.Dispose(); } catch (ObjectDisposedException) { }
+        }
     }
 
     /// <summary>Signals that stdin was closed by Claude before we finished writing — session context overflowed.</summary>

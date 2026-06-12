@@ -19,6 +19,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
     private readonly ISubtitleService _subtitle;
 
     private CancellationTokenSource? _cts;
+    private Task? _consumeTask;
     private readonly object _segLock = new();
     private readonly List<string> _recentSegments = [];
 
@@ -53,7 +54,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         _subtitle.StartSession();
         _subtitle.SegmentAdded += OnSubtitleSegmentAdded;
         _ = _recording.StartAsync(options, _cts.Token);
-        _ = ConsumeChunksAsync(options, _cts.Token);
+        _consumeTask = ConsumeChunksAsync(options, _cts.Token);
 
         SetState(RecordingState.Recording);
         return Task.CompletedTask;
@@ -66,6 +67,17 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         _subtitle.SegmentAdded -= OnSubtitleSegmentAdded;
         _cts?.Cancel();
         await _recording.StopAsync();
+
+        // Wait for the consumer loop to drain the last chunk before closing the subtitle
+        // writer — prevents AppendSegments() racing with EndSession()._writer.Dispose().
+        if (_consumeTask is { } t)
+        {
+            try { await t.ConfigureAwait(false); }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { AppLogger.Warning(ex, "ConsumeChunksAsync faulted on stop"); }
+        }
+        _consumeTask = null;
+
         _subtitle.EndSession();
         _cts = null;
 
@@ -124,5 +136,6 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
     {
         _cts?.Cancel();
         _cts?.Dispose();
+        _consumeTask = null;
     }
 }
