@@ -7,6 +7,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows.Input;
 using WhisperLive.Infrastructure;
 
@@ -157,7 +158,14 @@ public sealed partial class SessionsPage : Page
         if (_dialogOpen) return;
 
         string content;
-        try { content = await File.ReadAllTextAsync(filePath); }
+        try
+        {
+            // Use FileShare.ReadWrite so we can read files the TranslationService
+            // still has open for streaming writes during an active session.
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var sr = new StreamReader(fs, Encoding.UTF8);
+            content = await sr.ReadToEndAsync();
+        }
         catch (Exception ex)
         {
             AppLogger.Warning(ex, "Failed to read session file {Path}", filePath);
@@ -244,8 +252,13 @@ public sealed partial class SessionsPage : Page
             var info = new FileInfo(filePath);
             var sizeKb = info.Length / 1024.0;
 
+            // Use FileShare.ReadWrite so actively-written translation SRT files can be read.
+            string[] lines;
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var sr = new StreamReader(fs, Encoding.UTF8))
+                lines = sr.ReadToEnd().Split('\n');
+
             // Count valid SRT blocks: a numeric-only line followed by a line containing " --> "
-            var lines = File.ReadLines(filePath).ToArray();
             var entryCount = 0;
             for (var i = 0; i < lines.Length - 1; i++)
             {

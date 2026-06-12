@@ -52,18 +52,18 @@
                     Orientation="Horizontal"
                     Spacing="4">
                     <!--
-                        Language chip — pill badge (CornerRadius=20 = full pill per Fluent pill-badge pattern).
-                        Padding="8,4" keeps both axes on the 4px grid.
-                        MinHeight="20" = 12px font + 4+4 vertical padding.
+                        Language chips match the pause/close buttons exactly:
+                        Height=32, CornerRadius=ControlCornerRadius, Background=Transparent,
+                        BorderThickness=0 (no border at rest — same as SubtleButtonStyle pattern).
+                        Padding="8,0": horizontal breathing room; vertical filled by Height=32.
                     -->
                     <Border
-                        MinHeight="20"
-                        Padding="8,4"
+                        Height="32"
+                        Padding="8,0"
                         VerticalAlignment="Center"
                         Background="Transparent"
-                        BorderBrush="{ThemeResource CaptionOverlayBadgeBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="20">
+                        BorderThickness="0"
+                        CornerRadius="{StaticResource ControlCornerRadius}">
                         <TextBlock
                             x:Name="LanguageLabel"
                             VerticalAlignment="Center"
@@ -81,13 +81,12 @@
                         Visibility="Collapsed" />
                     <Border
                         x:Name="TranslationTargetChip"
-                        MinHeight="20"
-                        Padding="8,4"
+                        Height="32"
+                        Padding="8,0"
                         VerticalAlignment="Center"
                         Background="Transparent"
-                        BorderBrush="{ThemeResource CaptionOverlayBadgeBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="20"
+                        BorderThickness="0"
+                        CornerRadius="{StaticResource ControlCornerRadius}"
                         Visibility="Collapsed">
                         <TextBlock
                             x:Name="TranslationTargetLabel"
