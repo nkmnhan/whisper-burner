@@ -9,6 +9,7 @@ using System.Collections.Specialized;
 using System.Linq;
 using System.Runtime.InteropServices;
 using WhisperLive.Models;
+using WhisperLive.Services.Audio;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT;
@@ -51,14 +52,22 @@ public sealed partial class CaptionOverlayWindow : Window
         var allSegments = ((App)Application.Current).TranscriptViewModel.Segments;
         allSegments.CollectionChanged += OnSegmentsChanged;
 
+        var manager = ((App)Application.Current).RecordingManager;
+        manager.StateChanged += OnManagerStateChanged;
+
         Closed += (_, _) =>
         {
             allSegments.CollectionChanged -= OnSegmentsChanged;
+            manager.StateChanged -= OnManagerStateChanged;
             _acrylicController?.Dispose();
             _acrylicController = null;
             _backdropConfig = null;
         };
     }
+
+    private void OnManagerStateChanged(object? sender, RecordingState state) =>
+        DispatcherQueue.TryEnqueue(() =>
+            OverlayPauseIcon.Glyph = state == RecordingState.Paused ? "" : "");
 
     private void OnSegmentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
@@ -157,18 +166,15 @@ public sealed partial class CaptionOverlayWindow : Window
         Hidden?.Invoke(this, EventArgs.Empty);
     }
 
-    public void UpdatePauseState(bool isPaused) =>
-        DispatcherQueue.TryEnqueue(() =>
-            OverlayPauseIcon.Glyph = isPaused ? "" : ""); // Play (resume) : Pause
 
     private void OnOverlayPauseClicked(object sender, RoutedEventArgs e)
     {
-        var svc = ((App)Application.Current).RecordingService;
-        if (svc.IsPaused)
-            _ = svc.ResumeAsync();
-        else
-            _ = svc.PauseAsync();
-        UpdatePauseState(svc.IsPaused);
+        var manager = ((App)Application.Current).RecordingManager;
+        if (manager.State == RecordingState.Paused)
+            _ = manager.ResumeAsync();
+        else if (manager.State == RecordingState.Recording)
+            _ = manager.PauseAsync();
+        // StateChanged → OnManagerStateChanged updates the icon automatically.
     }
 
     private void OnPointerEntered(object sender, PointerRoutedEventArgs e)

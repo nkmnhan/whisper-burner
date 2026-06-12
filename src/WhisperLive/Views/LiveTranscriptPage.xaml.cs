@@ -1,4 +1,4 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -186,7 +186,6 @@ public sealed partial class LiveTranscriptPage : Page
                 AutomationProperties.SetName(MainButton, "Stop recording");
                 SetStatusDot("StatusDotErrorBrush", "Recording");
                 App.CaptionOverlay?.AppWindow.Show();
-                App.CaptionOverlay?.UpdatePauseState(false);
                 break;
 
             case RecordingState.Paused:
@@ -196,7 +195,6 @@ public sealed partial class LiveTranscriptPage : Page
                 WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
                 SetStatusDot("StatusDotCautionBrush", "Paused");
-                App.CaptionOverlay?.UpdatePauseState(true);
                 break;
         }
     }
@@ -231,7 +229,6 @@ public sealed partial class LiveTranscriptPage : Page
 
             CurrentApp.TranscriptViewModel.Clear();
             App.CaptionOverlay?.SetLanguage(_settings.Language);
-            App.CaptionOverlay?.UpdatePauseState(false);
 
             if (_settings.EnableAssistant)
                 Assistant.StartSession(PreContextBox.Text);
@@ -267,12 +264,10 @@ public sealed partial class LiveTranscriptPage : Page
         if (Manager.State == RecordingState.Recording)
         {
             await Manager.PauseAsync();
-            App.CaptionOverlay?.UpdatePauseState(true);
         }
         else if (Manager.State == RecordingState.Paused)
         {
             await Manager.ResumeAsync();
-            App.CaptionOverlay?.UpdatePauseState(false);
         }
     }
 
