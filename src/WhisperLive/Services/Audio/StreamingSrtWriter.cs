@@ -45,7 +45,7 @@ internal sealed class StreamingSrtWriter : ISrtSessionWriter
         }
         catch (Exception ex)
         {
-            AppLogger.Warning(ex, "Failed to write SRT entry to {Path}", CurrentPath);
+            AppLogger.Warning(ex, "Failed to write SRT entry to {Path}", CurrentPath!);
             return false;
         }
     }

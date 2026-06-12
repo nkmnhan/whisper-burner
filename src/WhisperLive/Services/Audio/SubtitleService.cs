@@ -116,7 +116,7 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         if (_srtWriter?.TryWrite(seg) == true && CurrentSessionPath is null)
         {
             CurrentSessionPath = _srtWriter.CurrentPath;
-            AppLogger.Info("Session file opened: {Path}", CurrentSessionPath);
+            AppLogger.Info("Session file opened: {Path}", CurrentSessionPath!);
         }
     }
 
