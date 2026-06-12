@@ -45,22 +45,57 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Language badge — read-only indicator, no dropdown affordance -->
-                <Border
+                <!-- Language badges: source chip + optional arrow + translation target chip -->
+                <StackPanel
                     Grid.Column="0"
-                    Padding="8,3"
                     VerticalAlignment="Center"
-                    Background="Transparent"
-                    BorderBrush="{ThemeResource CaptionOverlayBadgeBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="{StaticResource OverlayCornerRadius}">
-                    <TextBlock
-                        x:Name="LanguageLabel"
+                    Orientation="Horizontal"
+                    Spacing="4">
+                    <!--
+                        Language chip — pill badge (CornerRadius=20 = full pill per Fluent pill-badge pattern).
+                        Padding="8,4" keeps both axes on the 4px grid.
+                        MinHeight="20" = 12px font + 4+4 vertical padding.
+                    -->
+                    <Border
+                        MinHeight="20"
+                        Padding="8,4"
                         VerticalAlignment="Center"
-                        FontSize="12"
+                        Background="Transparent"
+                        BorderBrush="{ThemeResource CaptionOverlayBadgeBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="20">
+                        <TextBlock
+                            x:Name="LanguageLabel"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                            Text="auto" />
+                    </Border>
+                    <TextBlock
+                        x:Name="LangArrow"
+                        VerticalAlignment="Center"
+                        FontSize="11"
                         Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
-                        Text="auto" />
-                </Border>
+                        Opacity="0.6"
+                        Text="→"
+                        Visibility="Collapsed" />
+                    <Border
+                        x:Name="TranslationTargetChip"
+                        MinHeight="20"
+                        Padding="8,4"
+                        VerticalAlignment="Center"
+                        Background="Transparent"
+                        BorderBrush="{ThemeResource CaptionOverlayBadgeBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="20"
+                        Visibility="Collapsed">
+                        <TextBlock
+                            x:Name="TranslationTargetLabel"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}" />
+                    </Border>
+                </StackPanel>
 
                 <!-- Pause / Resume button -->
                 <Button

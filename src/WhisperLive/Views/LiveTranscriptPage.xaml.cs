@@ -228,7 +228,9 @@ public sealed partial class LiveTranscriptPage : Page
             }
 
             CurrentApp.TranscriptViewModel.Clear();
-            App.CaptionOverlay?.SetLanguage(_settings.Language);
+            App.CaptionOverlay?.SetLanguage(
+                _settings.Language,
+                _settings.EnableTranslation ? TranslationSvc.TargetLanguage : null);
 
             if (_settings.EnableAssistant)
                 Assistant.StartSession(PreContextBox.Text);

@@ -144,8 +144,15 @@ public sealed partial class CaptionOverlayWindow : Window
         _acrylicController.SetSystemBackdropConfiguration(_backdropConfig);
     }
 
-    public void SetLanguage(string language) =>
-        DispatcherQueue.TryEnqueue(() => LanguageLabel.Text = language);
+    public void SetLanguage(string language, string? translationTarget = null) =>
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            LanguageLabel.Text = language;
+            var hasTarget = translationTarget is not null;
+            LangArrow.Visibility = hasTarget ? Visibility.Visible : Visibility.Collapsed;
+            TranslationTargetChip.Visibility = hasTarget ? Visibility.Visible : Visibility.Collapsed;
+            if (hasTarget) TranslationTargetLabel.Text = translationTarget!;
+        });
 
     private void OnExpandClicked(object sender, RoutedEventArgs e)
     {
