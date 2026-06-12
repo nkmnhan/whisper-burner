@@ -250,6 +250,9 @@ public sealed partial class LiveTranscriptPage : Page
             if (_settings.EnableTranslation)
                 TranslationSvc.EndSession();
 
+            // Resolve any rows still waiting for translation — show original text cleanly.
+            CurrentApp.TranscriptViewModel.FinalizeSession();
+
             var saved = Manager.CurrentSessionPath is { } p
                 ? $"Saved → {System.IO.Path.GetFileName(p)}" : null;
             if (saved is not null)

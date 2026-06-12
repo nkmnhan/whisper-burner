@@ -85,6 +85,7 @@ sealed partial class App : Application
         MainWindow.Closed += async (s, _) =>
         {
             await RecordingManager.StopAsync();
+            TranscriptViewModel.FinalizeSession();
             SessionAssistant.EndSession();
             TranslationService.EndSession();
 

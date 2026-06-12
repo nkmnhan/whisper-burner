@@ -44,6 +44,22 @@ public sealed class TranscriptViewModel
             view?.ApplyTranslation(translatedText);
         });
 
+    /// <summary>
+    /// Called when the recording session ends. Any segment still in
+    /// <see cref="TranslationSegmentState.Provisional"/> state had its translation
+    /// cancelled (session CTS fired). Mark them as Failed so the original text
+    /// is shown at full opacity instead of staying as an invisible placeholder.
+    /// </summary>
+    public void FinalizeSession() =>
+        _dq.TryEnqueue(() =>
+        {
+            foreach (var view in Segments)
+            {
+                if (view.State == TranslationSegmentState.Provisional)
+                    view.MarkFailed();
+            }
+        });
+
     public void Clear() =>
         _dq.TryEnqueue(() => Segments.Clear());
 }
