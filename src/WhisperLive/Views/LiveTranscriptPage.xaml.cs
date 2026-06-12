@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Xaml;
+﻿﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -178,7 +178,7 @@ public sealed partial class LiveTranscriptPage : Page
                 WaveformInButton.Visibility = Visibility.Visible;
                 PauseButton.Visibility = Visibility.Visible;
                 NewSessionButton.Visibility = Visibility.Collapsed;
-                PauseIcon.Glyph = "";
+                PauseIcon.Glyph = "\uE769";
                 AutomationProperties.SetName(PauseButton, "Pause recording");
                 ToolTipService.SetToolTip(PauseButton, "Pause recording");
                 WaveformStoryboard.Begin();
@@ -189,7 +189,7 @@ public sealed partial class LiveTranscriptPage : Page
                 break;
 
             case RecordingState.Paused:
-                PauseIcon.Glyph = ""; // Play (Resume)
+                PauseIcon.Glyph = "\uE768"; // Play (Resume)
                 AutomationProperties.SetName(PauseButton, "Resume recording");
                 ToolTipService.SetToolTip(PauseButton, "Resume recording");
                 WaveformStoryboard.Stop();

@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Composition;
+﻿﻿using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -67,7 +67,7 @@ public sealed partial class CaptionOverlayWindow : Window
 
     private void OnManagerStateChanged(object? sender, RecordingState state) =>
         DispatcherQueue.TryEnqueue(() =>
-            OverlayPauseIcon.Glyph = state == RecordingState.Paused ? "" : "");
+            OverlayPauseIcon.Glyph = state == RecordingState.Paused ? "\uE768" : "\uE769");
 
     private void OnSegmentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
@@ -151,7 +151,7 @@ public sealed partial class CaptionOverlayWindow : Window
     {
         _isExpanded = !_isExpanded;
         // Expanded: E70E (ChevronUp ^) = prompt to collapse; Collapsed: E70D (ChevronDown ∨) = prompt to expand
-        ChevronIcon.Glyph = _isExpanded ? "" : ""; // ^ collapse : ∨ expand
+        ChevronIcon.Glyph = _isExpanded ? "\uE70E" : "\uE70D"; // ^ collapse : ∨ expand
 
         int newHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
         int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;
