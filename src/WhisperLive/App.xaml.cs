@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using WhisperLive.Helpers;
 using WhisperLive.Infrastructure;
 using WhisperLive.Components;
+using WhisperLive.Models;
 using WhisperLive.Services.Assistant;
 using WhisperLive.Services.Audio;
 using WhisperLive.Services.Translation;
@@ -62,6 +63,14 @@ sealed partial class App : Application
     internal void ApplySettings(AppSettings settings)
     {
         _currentSettings = settings;
+
+        // Never swap the translation service while a recording is active.
+        // The running service owns the open vi SRT writer and its session CTS.
+        // Replacing it would orphan the active service (EndSession never called → no
+        // fallback flush) and leave the replacement unstarted (StartSession not called →
+        // all subsequent segments silently dropped). Settings take effect at next recording.
+        if (RecordingManager.State != RecordingState.Idle) return;
+
         TranslationService.SegmentTranslated -= OnTranscriptSegmentTranslated;
         TranslationService = BuildTranslationService(settings, () => SubtitleService.CurrentSessionPath);
         TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;

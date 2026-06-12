@@ -39,7 +39,6 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     public void EndSession()
     {
-        WriteFinalSrt();
         _srtWriter?.Dispose();
         _srtWriter = null;
         if (CurrentSessionPath is not null)
@@ -138,20 +137,6 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
         var correctedPath = Path.ChangeExtension(CurrentSessionPath, ".corrected.srt");
         WriteSrtFile(correctedPath, snapshot, "Failed to write corrected SRT");
-    }
-
-    private void WriteFinalSrt()
-    {
-        if (CurrentSessionPath is null) return;
-        List<SubtitleSegment> snapshot;
-        lock (_segLock)
-        {
-            if (_segments.Count == 0) return;
-            snapshot = [.._segments];
-        }
-        var finalPath = Path.ChangeExtension(CurrentSessionPath, ".final.srt");
-        WriteSrtFile(finalPath, snapshot, "Failed to write final SRT");
-        AppLogger.Info("Final SRT written: {Path}", finalPath);
     }
 
     private static void WriteSrtFile(string path, List<SubtitleSegment> segments, string errorMsg)

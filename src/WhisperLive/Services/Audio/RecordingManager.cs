@@ -64,12 +64,12 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
     {
         if (State == RecordingState.Idle) return;
 
-        _subtitle.SegmentAdded -= OnSubtitleSegmentAdded;
         _cts?.Cancel();
         await _recording.StopAsync();
 
-        // Wait for the consumer loop to drain the last chunk before closing the subtitle
-        // writer — prevents AppendSegments() racing with EndSession()._writer.Dispose().
+        // Wait for the consumer loop to drain the last chunk BEFORE unsubscribing
+        // SegmentAdded — ensures every segment from the final audio chunk fires the
+        // handler (and reaches TranslationService.EnqueueSegment) before we close.
         if (_consumeTask is { } t)
         {
             try { await t.ConfigureAwait(false); }
@@ -78,6 +78,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         }
         _consumeTask = null;
 
+        _subtitle.SegmentAdded -= OnSubtitleSegmentAdded;
         _subtitle.EndSession();
         _cts = null;
 
