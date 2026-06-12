@@ -25,6 +25,10 @@ sealed partial class App : Application
     internal ITranslationService TranslationService { get; private set; }
     internal TranscriptViewModel TranscriptViewModel { get; private set; } = null!;
 
+    // Current settings cached in memory — updated by ApplySettings(), read by SessionAssistant
+    // without any disk I/O so AskAsync never blocks the UI thread on a file read.
+    private AppSettings _currentSettings = new();
+
     public App()
     {
         AppLogger.Initialize();
@@ -36,7 +40,7 @@ sealed partial class App : Application
         TranscriptionClient = new Services.Audio.TranscriptionClient();
         SubtitleService = new Services.Audio.SubtitleService();
         RecordingManager = new Services.Audio.RecordingManager(RecordingService, TranscriptionClient, SubtitleService);
-        SessionAssistant = new SessionAssistantService(RecordingManager, aiProvider);
+        SessionAssistant = new SessionAssistantService(RecordingManager, aiProvider, () => _currentSettings);
         AssistantExport = new AssistantExportService();
 
         // Disabled placeholder — replaced by ApplySettings() in LiveTranscriptPage.OnLoaded
@@ -57,6 +61,7 @@ sealed partial class App : Application
     /// </summary>
     internal void ApplySettings(AppSettings settings)
     {
+        _currentSettings = settings;
         TranslationService.SegmentTranslated -= OnTranscriptSegmentTranslated;
         TranslationService = BuildTranslationService(settings, () => SubtitleService.CurrentSessionPath);
         TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;

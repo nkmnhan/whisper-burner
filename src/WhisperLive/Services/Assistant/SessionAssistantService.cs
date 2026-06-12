@@ -17,6 +17,7 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
 
     private readonly IRecordingManager _recordingManager;
     private readonly IAiProvider _aiProvider;
+    private readonly Func<AppSettings> _getSettings;
 
     private IAiSession? _chatSession;
     private string? _systemPrompt;
@@ -24,10 +25,14 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
 
     private readonly SemaphoreSlim _sessionCreateLock = new(1, 1);
 
-    public SessionAssistantService(IRecordingManager recordingManager, IAiProvider aiProvider)
+    public SessionAssistantService(
+        IRecordingManager recordingManager,
+        IAiProvider aiProvider,
+        Func<AppSettings> getSettings)
     {
         _recordingManager = recordingManager;
         _aiProvider = aiProvider;
+        _getSettings = getSettings;
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -71,7 +76,7 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
         try
         {
             var prompt = BuildPrompt(question, options);
-            var context = await BuildCallContextAsync();
+            var context = BuildCallContext();
             return await session.SendAsync(prompt, context, ct);
         }
         catch (Exception ex)
@@ -103,9 +108,9 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
         }
     }
 
-    private async Task<AiCallContext> BuildCallContextAsync()
+    private AiCallContext BuildCallContext()
     {
-        var settings = await AppSettings.LoadAsync();
+        var settings = _getSettings();
         return new AiCallContext(
             AllowedReadPaths: settings.AllowedReadPaths,
             ContextPaths: settings.ContextFolderPaths
