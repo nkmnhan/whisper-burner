@@ -153,6 +153,39 @@ Translated SRT files are saved alongside the originals in `videos/output/`:
 
 ---
 
+## WhisperLive Desktop App
+
+Real-time **system audio capture → Whisper API transcription → live subtitle overlay** for Windows, built as a separate WinUI 3 desktop app under `src/WhisperLive/`.
+
+### Requirements
+
+- Windows 10 build 22621 or later
+- .NET 9 Desktop Runtime
+- Whisper API server running locally
+
+Start the API server first:
+
+```powershell
+.\start-api-gpu.cmd
+# or
+.\start-api-cpu.cmd
+```
+
+### Quick Start
+
+```powershell
+.\build-release.cmd
+```
+
+Then launch the app from `release\WhisperLive.exe`.
+
+### Features
+
+- Live transcript overlay for system audio
+- Optional translation pipeline for subtitles
+- Built-in Claude session assistant
+- Session saving to `~/whisper.live/sessions/`
+
 ## Project Structure
 
 ```
@@ -205,4 +238,5 @@ The ffmpeg `subtitles=` filter treats commas as special characters. The script e
 - [OpenAI Whisper](https://github.com/openai/whisper)
 - [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
 

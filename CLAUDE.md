@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Containerized OpenAI Whisper ASR with GPU/CPU Docker profiles. Batch-processes videos from `videos/` into SRT transcripts and burnt-in MP4s saved to `videos/output/`.
 
-Also contains a **WinUI 3 desktop app** (`src/WhisperBurner.WinUI/`) for system-audio capture, live subtitle overlay, and session save. Audio-only pipeline: system audio → WAV chunks → Dockerized Whisper API → always-on-top overlay. Screen recording is Phase 2 (not yet implemented).
+Also contains a **WinUI 3 desktop app** (`src/WhisperLive/`) for real-time system-audio capture, live subtitle overlay, translation, and session save. Audio-only pipeline: system audio → Whisper API → always-on-top overlay. Screen recording is Phase 2 (not yet implemented).
 
 ## Role
 
@@ -29,10 +29,7 @@ Act as a **senior Windows desktop / DevOps developer** and collaborator. Apply c
 ### WinUI 3 App
 
 ```powershell
-cd src/WhisperBurner.WinUI
-
-# First build only — compile the AppxStub (required once per machine/checkout)
-dotnet build .tools/AppxStub/AppxStub.csproj -c Release -o .tools/AppxPackage
+cd src/WhisperLive
 
 # Regular build
 dotnet build -c Debug
@@ -41,7 +38,11 @@ dotnet build -c Debug
 dotnet run -c Debug
 ```
 
-> The `.tools/AppxPackage/Microsoft.Build.AppxPackage.dll` stub must exist before the main build. The csproj auto-builds it via a `BeforeBuild` target if absent, but the first explicit build of the stub is faster.
+### WinUI 3 App — Release (self-contained, no admin)
+
+```powershell
+.\build-release.cmd
+```
 
 ### Docker / Batch transcription
 
@@ -60,72 +61,95 @@ docker compose --profile cpu build
 ### Docker pipeline
 
 - `Dockerfile` — Python 3.12-slim, ffmpeg, openai-whisper
-- `docker-compose.yml` — `gpu` and `cpu` profiles; mounts `./models` and `./videos`
-- `process-videos.ps1` — batch transcription + subtitle burn
+- `docker-compose.yml` — `gpu`, `cpu`, `api-gpu`, and `api-cpu` profiles; mounts `./models` and `./videos`
+- `process-videos.ps1` — batch transcription + optional translation + subtitle burn
 - `videos/` — source files; `videos/output/` — SRT + MP4 outputs
 
-### WinUI 3 App (`src/WhisperBurner.WinUI/`)
+### WinUI 3 App (`src/WhisperLive/`)
 
-Built on **Windows App SDK 2.1 unpackaged**, targeting `net10.0-windows10.0.19041.0`. Follows the **WinUI Gallery** code style as the reference implementation.
+Built on **Windows App SDK 2.1 unpackaged**, targeting `net9.0-windows10.0.22621.0`, x64 only.
+
+**App data paths:**
+- Settings: `~/whisper.live/settings.json`
+- Sessions: `~/whisper.live/sessions/`
 
 **Key packages:**
 - `Microsoft.WindowsAppSDK` 2.1.3 — WinUI 3 platform
-- `CommunityToolkit.WinUI.Controls.SettingsControls` — `SettingsCard`, `SettingsExpander` for settings UI
-- `CommunityToolkit.WinUI.Converters` — `BoolToVisibilityConverter`, `StringVisibilityConverter`
-- `CommunityToolkit.WinUI.Animations` — animation utilities
-- `Microsoft.Windows.CsWin32` — source-generated Win32 P/Invoke (declare API names in `NativeMethods.txt`)
-- `NAudio` — audio capture (WasapiLoopbackCapture / WaveInEvent)
+- `CommunityToolkit.WinUI.Controls.SettingsControls` 8.2 — `SettingsCard`, `SettingsExpander`
+- `CommunityToolkit.WinUI.Converters` 8.2 — common XAML converters
+- `CommunityToolkit.WinUI.Animations` 8.2 — UI animation helpers
+- `Microsoft.Windows.CsWin32` 0.3.269 — source-generated Win32 P/Invoke
+- `NAudio` 2.2.1 — loopback capture
+- `Serilog` 4.2 + File/Debug sinks — app logging
 
 **Layer structure:**
 
 | Folder | Purpose |
 |---|---|
-| `Helpers/` | `ThemeHelper` — dark/light/system theme across all windows; `WindowHelper` — tracks `ActiveWindows`, sets min size |
-| `Infrastructure/` | `AppSettings` (JSON, `~/whisper.burner/settings.json`), `AppLogger` (file logger) |
-| `Models/` | Immutable record types — `SubtitleSegment`, `CaptureRegion`, `AudioChunkInfo`, `SessionManifest`, `RecordingOptions`, `ApiHealthInfo` |
-| `Services/Audio/` | `IRecordingService` / `RecordingService` (NAudio + bounded Channel), `ITranscriptionClient` / `TranscriptionClient` (HTTP multipart), `ISubtitleService` / `SubtitleService` (NDJSON streaming + SRT export) |
-| `Services/Video/` | `ISessionRepository` / `SessionRepository` (manifest JSON), `IRegionSelectionService` / `RegionSelectionService` (screen capture) |
-| `Styles/` | `Brushes.xaml` — `ThemeDictionaries` (Light/Dark) for `WaveformBarBrush`, `SavedBannerBackgroundBrush`, `LiveTranscriptBackgroundBrush`; also `WaveformBarStyle`, `GhostButtonStyle`, `StopButtonStyle` |
-| `Views/` | `RecordingPage`, `SettingsPage` (uses `SettingsExpander`/`SettingsCard`), `SessionReviewPage` (placeholder) |
-| `Overlay/` | `SubtitleOverlayWindow` (always-on-top, layered, drag strip), `RegionSelectorWindow` (fullscreen selector), `SubtitleLine` (INotifyPropertyChanged for font-size binding) |
+| `App.xaml` / `App.xaml.cs` | Service singletons, `_currentSettings`, `ApplySettings()`, `CaptionOverlayWindow`, `SessionAssistantService(RecordingManager, aiProvider, () => _currentSettings)` |
+| `MainWindow.xaml` / `.cs` | `MicaBackdrop`, `TitleBar`, `NavigationView` shell for `LiveTranscriptPage`, `SessionsPage`, `SettingsPage` |
+| `Components/` | `CaptionOverlayWindow` (always-on-top, draggable, pause/close buttons, language chips), `GhostButton` |
+| `Helpers/` | `ThemeHelper`, `TitleBarHelper`, `WindowHelper`, plus UI helpers like `AssistantMessageTemplateSelector` and `MarkdownHelper` |
+| `Infrastructure/` | `AppSettings` (JSON, `~/whisper.live/settings.json`), `AppLogger` (Serilog wrapper) |
+| `Models/` | `AssistantMessage`, `AudioChunkInfo`, `CorrectedSegment`, `NotesBubble`, `RecordingOptions`, `RecordingState`, `SavedPrompt`, `SessionNotes`, `SessionSkill`, `SubtitleSegment`, `TranscriptDisplayMode`, `TranslatedSegmentView`, `TranslationSegmentState` |
+| `Services/Audio/` | `ISrtSessionWriter` / `StreamingSrtWriter`, `IRecordingService` / `RecordingService`, `ISubtitleService` / `SubtitleService`, `ITranscriptionClient` / `TranscriptionClient`, `IRecordingManager` / `RecordingManager` |
+| `Services/Translation/` | `ITranslationService` / `TranslationService`, `DisabledTranslationService`, `SegmentTranslationReadyEventArgs`, translation providers |
+| `Services/Assistant/` | `ISessionAssistantService` / `SessionAssistantService`, `IAiProvider` / `ClaudeCliProvider`, `IAiSession`, `IAssistantExportService` / `AssistantExportService`, `AiCallContext`, `AiStreamChunk`, `AskOptions` |
+| `Styles/` | `Brushes.xaml` — `ThemeDictionaries` for brushes and shared button styles |
+| `ViewModels/` | `TranscriptViewModel` — `ObservableCollection<TranslatedSegmentView>`, translation updates, `FinalizeSession()` |
+| `Views/` | `LiveTranscriptPage` (recording, assistant chat, suggestion chips), `SessionsPage` (open/delete saved SRTs), `SettingsPage` (`SettingsCard` / `SettingsExpander`) |
 
 **App shell (WinUI Gallery pattern):**
-- `App.xaml` — merges `Brushes.xaml`, declares CommunityToolkit converters in `ThemeDictionaries`
-- `App.xaml.cs` — owns all service singletons; calls `WindowHelper.TrackWindow()` + `ThemeHelper.Initialize()` on launch
-- `MainWindow.xaml` — `MicaBackdrop` in XAML, `TitleBar` control (`ExtendsContentIntoTitleBar`), `NavigationView` (Record, Sessions) + settings gear
-- `MainWindow.xaml.cs` — `WindowHelper.SetWindowMinSize`, `ThemeHelper.IsDarkTheme()` for caption button colour
+- `App.xaml.cs` — owns all service singletons; caches `_currentSettings` in memory via `ApplySettings()`; constructs `SessionAssistantService` with `Func<AppSettings>` injection; creates `CaptionOverlayWindow`
+- `MainWindow` — `MicaBackdrop`, `TitleBar` (`ExtendsContentIntoTitleBar`), `NavigationView` → `LiveTranscriptPage` / `SessionsPage` / `SettingsPage`
 
 **Data flow (recording session):**
 ```
-RecordingPage → RecordingService.StartAsync()
-  └─ NAudio DataAvailable → FlushChunk() → Channel<AudioChunkInfo>
-  └─ ConsumeChunksAsync() → TranscriptionClient.TranscribeChunkAsync()
-  └─ SubtitleService.AppendSegments() → SegmentAdded event
-  └─ RecordingPage.OnSegmentAdded() → SubtitleOverlayWindow.ShowSegment()
+LiveTranscriptPage → RecordingManager.StartAsync()
+  └─ RecordingService: WasapiLoopbackCapture → Channel<AudioChunkInfo>
+  └─ TranscriptionClient.TranscribeChunkAsync() (POST /transcribe)
+  └─ SubtitleService.AppendSegments()
+       └─ ISrtSessionWriter.TryWrite(seg)          ← streams raw SRT to disk
+       └─ SegmentAdded event → RecordingManager
+            └─ TranslationService.EnqueueSegment() ← if translation enabled
+            └─ TranscriptViewModel.OnSegmentAdded()
+  └─ TranslationService (background, 3 concurrent)
+       └─ translate → ISrtSessionWriter.TryWrite(seg with translated text)
+       └─ SegmentTranslated → TranscriptViewModel.OnSegmentTranslated()
+  └─ LiveTranscriptPage binds to TranscriptViewModel.Segments
+  └─ CaptionOverlayWindow.ShowSegment() via DispatcherQueue
 ```
 
-**AppxStub (`.tools/AppxStub/`):** Stub `Microsoft.Build.AppxPackage.dll` that satisfies MSBuild task references from `Microsoft.WindowsAppSDK` when the VS AppxPackage workload is absent. Built to `.tools/AppxPackage/`; `AppxMSBuildToolsPath` in the csproj redirects to it.
+**Session SRT outputs (`~/whisper.live/sessions/`):**
+- `yyyy-MM-dd_HH-mm-ss.srt` — raw transcript (streaming write)
+- `yyyy-MM-dd_HH-mm-ss.<lang>.srt` — translated transcript (streaming write)
+- `yyyy-MM-dd_HH-mm-ss.final.srt` — session-end best snapshot
+- `yyyy-MM-dd_HH-mm-ss.corrected.srt` — optional AI-corrected export
 
-**Old project:** `old-one/WhisperBurner.WinUI/` — archived prior implementation; reference for business logic only, do not modify.
+**Old project:** `old-one/` — archived prior implementation; reference for business logic only, do not modify.
 
 ## Naming Conventions
 
 - Booleans: `is`, `has`, `can`, `should` prefix
-- Event handlers: `On` prefix (`OnSegmentAdded`, `OnAudioChunkReady`)
-- Async methods: verb prefix (`StartRecordingAsync`, `TranscribeChunkAsync`)
+- Event handlers: `On` prefix (`OnSegmentAdded`, `OnSegmentTranslated`)
+- Async methods: verb prefix (`StartAsync`, `TranscribeChunkAsync`)
 - No single-letter names except `i`/`j` in simple loops
 
 ## C# / WinUI 3 Conventions
 
 - PascalCase everywhere; `async`/`await` on all I/O paths; nullable enabled
-- **UI thread vs background thread**: `RecordingService`, `SubtitleService`, and `TranscriptionClient` raise events from background threads (audio capture callbacks, HTTP responses, channel consumers). Any event handler in a `Page`/`Window` that touches UI elements (`TextBlock.Text`, `Visibility`, brushes, etc.) must marshal back to the UI thread with `DispatcherQueue.TryEnqueue(() => ...)` — see `CaptionOverlayWindow.ShowSegment`/`ClearLines`/`SetLanguage` and `LiveTranscriptPage.OnStateChanged` for the established pattern. Conversely, never wrap a service's internal logic in `DispatcherQueue.TryEnqueue` — that's a presentation-layer concern, not the service's
+- **UI thread vs background thread**: `RecordingService`, `SubtitleService`, `TranscriptionClient`, and `TranslationService` raise events from background threads. Any event handler in a `Page`/`Window` that touches UI elements must marshal back to the UI thread with `DispatcherQueue.TryEnqueue(() => ...)`. Never move that dispatching into services
 - Services are singletons owned by `App`; pages access them via `((App)Application.Current).ServiceName`
+- `ISrtSessionWriter` is the shared abstraction for all session SRT streaming writes. `SubtitleService` and `TranslationService` must use `StreamingSrtWriter` through this interface — never create a raw `StreamWriter` for SRT output
+- `SessionAssistantService` receives `Func<AppSettings>` via constructor injection. Never call `AppSettings.LoadAsync()` inside assistant service methods — use the injected getter
+- Segoe MDL2 Assets glyphs in C# must always use escaped `"\uXXXX"` sequences, never pasted raw Unicode. Verified codepoints: `\uE768`, `\uE769`, `\uE70D`, `\uE70E`, `\uE711`
+- `SessionsPage` must read SRT files with `FileShare.ReadWrite` so actively-written session files can be opened safely during recording
 - `WindowHelper.TrackWindow()` on every new `Window` — required for `ThemeHelper` to reach all windows
 - Custom brushes go in `Styles/Brushes.xaml` under `ThemeDictionaries`, never hardcoded in XAML
 - Settings UI uses `SettingsCard` / `SettingsExpander` from `CommunityToolkit.WinUI.Controls`; no raw `Expander` + `StackPanel`
-- Win32 P/Invoke: add API name to `NativeMethods.txt` for CsWin32. For complex interop not yet in CsWin32 (window style bits, DWM attributes), `[DllImport]` with explicit constants is acceptable
+- Win32 P/Invoke: add API names to `NativeMethods.txt` for CsWin32. For interop not covered there (for example DWM attributes), `[DllImport]` is acceptable
 - `CancellationTokenSource` per recording session; cancel on stop and on page `Unloaded`
-- Never implement UI logic directly in a `Page` or `Window` — delegate to a service
+- Never implement UI logic directly in a `Page` or `Window` — delegate to services/view models
 - Keep interface and model files under 60 lines — one type per file
 
 ## Docker Conventions
