@@ -71,7 +71,7 @@ async def transcribe(
         kwargs = {"language": None if language in ("auto", "") else language, "task": task}
         if initial_prompt:
             kwargs["initial_prompt"] = initial_prompt
-        result = _get_model(model).transcribe(tmp_path, **kwargs)
+        result = await asyncio.to_thread(_get_model(model).transcribe, tmp_path, **kwargs)
     finally:
         os.unlink(tmp_path)
 

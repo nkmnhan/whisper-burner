@@ -1,6 +1,9 @@
-# Model cache
-/models/*
-!/models/.gitkeep
+# Model cache — keep subdirectory placeholders, ignore actual model files
+/models/**
+!/models/whisper/
+!/models/whisper/.gitkeep
+!/models/fast-whisper/
+!/models/fast-whisper/.gitkeep
 
 # Video source files
 /videos/*.wmv

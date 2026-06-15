@@ -1,3 +1,3 @@
 @echo off
-docker compose --profile gpu build
+docker compose -f docker\whisper\docker-compose.yml --profile gpu build
 pause
