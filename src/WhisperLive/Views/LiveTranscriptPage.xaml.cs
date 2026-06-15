@@ -400,7 +400,10 @@ public sealed partial class LiveTranscriptPage : Page
 
         try
         {
-            var answer = await Assistant.AskAsync(question, new AskOptions(IncludeBufferedTranscript: true));
+            // Force onto the thread pool so Process.Start and context-building
+            // never block the UI thread — all UI updates already happened above.
+            var answer = await Task.Run(
+                () => Assistant.AskAsync(question, new AskOptions(IncludeBufferedTranscript: true)));
             _chatMessages.Add(new AssistantMessage("Claude", answer, DateTimeOffset.Now));
         }
         catch (Exception ex)
@@ -449,7 +452,7 @@ public sealed partial class LiveTranscriptPage : Page
             s.Name.Contains(t, StringComparison.OrdinalIgnoreCase) ||
             s.Prompt.Contains(t, StringComparison.OrdinalIgnoreCase))).ToList();
 
-        sender.ItemsSource = results.Count > 0 ? results : (object)new[] { "No results found" };
+        sender.ItemsSource = results.Count > 0 ? (IEnumerable<SessionSkill>)results : null;
     }
 
     private void OnAssistantSuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs e)

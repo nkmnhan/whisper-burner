@@ -19,6 +19,27 @@ public sealed class ClaudeCliProvider : IAiProvider
     internal static readonly string AppDataFolder = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "whisper.live");
 
+    internal static readonly string GlobalClaudeMdPath = Path.Combine(AppDataFolder, "CLAUDE.md");
+
+    internal static readonly string DefaultGlobalInstructions =
+        "# WhisperLive Session Assistant\n\n" +
+        "You are a session assistant embedded in a live-transcription desktop app.\n" +
+        "Answer questions about the current session transcript concisely and accurately.\n" +
+        "Respond in 1–5 sentences unless the user asks for a detailed summary, list, email, or minutes.\n" +
+        "You may use Markdown formatting (bold, italic, lists, tables, headings) — it will be rendered.";
+
+    /// <summary>
+    /// Writes ~/whisper.live/CLAUDE.md with default content if the file does not yet exist.
+    /// Called at app startup so the user always has an editable global instructions file.
+    /// </summary>
+    internal static async Task EnsureGlobalClaudeMdAsync()
+    {
+        if (File.Exists(GlobalClaudeMdPath)) return;
+        Directory.CreateDirectory(AppDataFolder);
+        await File.WriteAllTextAsync(GlobalClaudeMdPath, DefaultGlobalInstructions);
+        AppLogger.Info("Created default CLAUDE.md at {Path}", GlobalClaudeMdPath);
+    }
+
     public string Name => "Claude Code CLI";
 
     /// <summary>
@@ -31,8 +52,8 @@ public sealed class ClaudeCliProvider : IAiProvider
         return await RunProcessAsync(args, prompt, ct);
     }
 
-    public IAiSession CreateSession(string systemPrompt) =>
-        new ClaudeSession(systemPrompt);
+    public IAiSession CreateSession() =>
+        new ClaudeSession();
 
     // ── Shared subprocess execution ───────────────────────────────────────────
 
@@ -118,12 +139,12 @@ public sealed class ClaudeCliProvider : IAiProvider
 
     private sealed class ClaudeSession : IAiSession
     {
-        private readonly string _systemPromptBase;
         private string _sessionId = Guid.NewGuid().ToString();
+        private bool _isFirstTurn = true;
+        private string? _conversationSummary; // carried forward on overflow rotation
         private readonly SemaphoreSlim _lock = new(1, 1);
 
-        public ClaudeSession(string systemPromptBase) =>
-            _systemPromptBase = systemPromptBase;
+        public ClaudeSession() { }
 
         public async Task<string> SendAsync(
             string userMessage, AiCallContext? context = null, CancellationToken ct = default)
@@ -133,17 +154,20 @@ public sealed class ClaudeCliProvider : IAiProvider
             {
                 for (var attempt = 0; attempt < 2; attempt++)
                 {
-
-                    var args = BuildArgs(_sessionId, _systemPromptBase, context);
+                    var args = BuildArgs(_sessionId, context, _isFirstTurn && _conversationSummary is not null);
 
                     try
                     {
-                        return await RunProcessAsync(args, userMessage, ct);
+                        var result = await RunProcessAsync(args, userMessage, ct);
+                        _isFirstTurn = false;
+                        return result;
                     }
                     catch (ContextOverflowException) when (attempt == 0)
                     {
+                        AppLogger.Warning("Claude session pipe closed (context too large) — summarising and rotating to new session ID");
+                        _conversationSummary = await TrySummarizeAsync(ct);
                         _sessionId = Guid.NewGuid().ToString();
-                        AppLogger.Warning("Claude session pipe closed (context too large) — rotating to new session ID");
+                        _isFirstTurn = true;
                         continue;
                     }
                     catch (InvalidOperationException ex) when (
@@ -167,8 +191,31 @@ public sealed class ClaudeCliProvider : IAiProvider
             }
         }
 
-        private static List<string> BuildArgs(
-            string sessionId, string systemPromptBase, AiCallContext? context)
+        /// <summary>
+        /// Asks Claude (one-shot, no session) to summarise the current conversation
+        /// so the summary can seed a fresh session via --append-system-prompt after rotation.
+        /// </summary>
+        private async Task<string?> TrySummarizeAsync(CancellationToken ct)
+        {
+            try
+            {
+                const string summarizePrompt =
+                    "Summarise the conversation we just had in 3–5 concise bullet points so it can be used " +
+                    "as context for a fresh session. Focus on questions asked, answers given, and any key " +
+                    "decisions or action items surfaced.";
+                var args = new List<string> { "-p", "--session-id", _sessionId, "--output-format", "json" };
+                var summary = await RunProcessAsync(args, summarizePrompt, ct);
+                AppLogger.Info("Conversation summary saved for next session ({Chars} chars)", summary.Length);
+                return summary;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warning(ex, "Could not summarise conversation before rotation — continuing without summary");
+                return null;
+            }
+        }
+
+        private List<string> BuildArgs(string sessionId, AiCallContext? context, bool injectSummary)
         {
             var args = new List<string> { "-p", "--session-id", sessionId, "--output-format", "json" };
 
@@ -188,9 +235,14 @@ public sealed class ClaudeCliProvider : IAiProvider
                 }
             }
 
-            var systemPrompt = BuildSystemPromptSuffix(systemPromptBase, context);
-            args.Add("--append-system-prompt");
-            args.Add(systemPrompt);
+            // Only inject prior-conversation summary on the first turn after a context rotation.
+            // Static persona lives in ~/whisper.live/CLAUDE.md (auto-loaded from working dir).
+            // Per-session context lives in ~/whisper.live/session-active/CLAUDE.md (loaded via --add-dir).
+            if (injectSummary && _conversationSummary is { } summary)
+            {
+                args.Add("--append-system-prompt");
+                args.Add($"Prior conversation summary (context was rotated due to size):\n{summary}");
+            }
 
             return args;
         }

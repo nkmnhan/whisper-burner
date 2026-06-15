@@ -17,7 +17,9 @@ public interface IAiProvider
     /// <summary>
     /// Creates a stateful session. The provider manages session identity,
     /// context retention, and retry/rotation internally.
-    /// Dispose the session when the recording session ends.
-    /// </summary>
-    IAiSession CreateSession(string systemPrompt);
+/// Static persona instructions live in the provider's working-directory CLAUDE.md —
+/// the caller no longer needs to pass a system prompt.
+/// Dispose the session when the recording session ends.
+/// </summary>
+IAiSession CreateSession();
 }

@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using WhisperLive.Infrastructure;
@@ -8,19 +10,20 @@ namespace WhisperLive.Services.Assistant;
 
 public sealed class SessionAssistantService : ISessionAssistantService, IDisposable
 {
-    private const string SystemPromptBase =
-        "You are a session assistant embedded in a live-transcription desktop app. " +
-        "Answer questions about the current session transcript concisely and accurately. " +
-        "Respond in 1-5 sentences unless the user asks for a detailed summary, list, email, or minutes. " +
-        "You may use Markdown formatting (bold, italic, lists, tables, headings) — it will be rendered. " +
-        "The meeting transcript will be provided inline when relevant — do not look for external files.";
+    private static readonly string SessionActiveFolder =
+        Path.Combine(ClaudeCliProvider.AppDataFolder, "session-active");
+
+    private static readonly string SessionClaudeMdPath =
+        Path.Combine(SessionActiveFolder, "CLAUDE.md");
+
+    /// <summary>Max recent segments injected inline per ask — keeps per-turn tokens bounded.</summary>
+    private const int MaxInlineSegments = 50;
 
     private readonly IRecordingManager _recordingManager;
     private readonly IAiProvider _aiProvider;
     private readonly Func<AppSettings> _getSettings;
 
     private IAiSession? _chatSession;
-    private string? _systemPrompt;
     private CancellationTokenSource? _sessionCts;
 
     private readonly SemaphoreSlim _sessionCreateLock = new(1, 1);
@@ -39,17 +42,14 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
 
     public void StartSession(string? preContext = null)
     {
-        _systemPrompt = BuildSystemPrompt(preContext?.Trim());
+        WriteSessionClaudeMd(preContext?.Trim());
         _chatSession = null;
-        // Stateful chat: the session accumulates context across questions.
-        // This is intentional — the assistant remembers earlier turns in the conversation.
-        // Swap to one-shot stateless calls in AskAsync if token growth becomes a concern.
         _sessionCts = new CancellationTokenSource();
     }
 
     public void EndSession()
     {
-        if (_chatSession is null && _systemPrompt is null) return;
+        if (_chatSession is null && _sessionCts is null) return;
 
         _sessionCts?.Cancel();
         _sessionCts?.Dispose();
@@ -57,7 +57,8 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
 
         _chatSession?.Dispose();
         _chatSession = null;
-        _systemPrompt = null;
+
+        TryDeleteSessionClaudeMd();
     }
 
     // ── Chat ──────────────────────────────────────────────────────────────────
@@ -91,15 +92,15 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
     private async Task<IAiSession?> GetOrCreateChatSessionAsync(CancellationToken ct)
     {
         if (_chatSession is { } existing) return existing;
-        if (_systemPrompt is null) return null;
+        if (_sessionCts is null) return null;
 
         await _sessionCreateLock.WaitAsync(ct);
         try
         {
             if (_chatSession is not null) return _chatSession;
-            if (_systemPrompt is null) return null;
+            if (_sessionCts is null) return null;
 
-            _chatSession = _aiProvider.CreateSession(_systemPrompt);
+            _chatSession = _aiProvider.CreateSession();
             return _chatSession;
         }
         finally
@@ -111,11 +112,11 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
     private AiCallContext BuildCallContext()
     {
         var settings = _getSettings();
+        var contextPaths = new System.Collections.Generic.List<string> { SessionActiveFolder };
+        contextPaths.AddRange(settings.ContextFolderPaths);
         return new AiCallContext(
             AllowedReadPaths: settings.AllowedReadPaths,
-            ContextPaths: settings.ContextFolderPaths
-            // LiveTranscriptPath intentionally omitted — Claude no longer reads the SRT directly.
-            // Transcript content is injected inline when AskOptions.IncludeBufferedTranscript is true.
+            ContextPaths: contextPaths
         );
     }
 
@@ -123,19 +124,44 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
     {
         if (options?.IncludeBufferedTranscript != true) return question;
 
-        var segments = _recordingManager.GetRecentSegments();
-        if (segments.Count == 0) return question;
+        var all = _recordingManager.GetRecentSegments();
+        if (all.Count == 0) return question;
+
+        // Cap at MaxInlineSegments to keep per-turn token usage bounded.
+        var segments = all.Count > MaxInlineSegments
+            ? all.Skip(all.Count - MaxInlineSegments).ToList()
+            : all;
 
         var transcript = string.Join("\n", segments);
-        return $"[Transcript — {segments.Count} buffered segments]:\n{transcript}\n\n{question}";
+        var note = all.Count > MaxInlineSegments
+            ? $"[Transcript — last {MaxInlineSegments} of {all.Count} segments]"
+            : $"[Transcript — {segments.Count} segment(s)]";
+
+        return $"{note}:\n{transcript}\n\n{question}";
     }
 
-    private static string BuildSystemPrompt(string? preContext)
+    // ── Session CLAUDE.md ─────────────────────────────────────────────────────
+
+    private static void WriteSessionClaudeMd(string? preContext)
     {
-        var prompt = SystemPromptBase;
-        if (preContext is not null)
-            prompt += $"\n\nSession context:\n{preContext}";
-        return prompt;
+        try
+        {
+            Directory.CreateDirectory(SessionActiveFolder);
+            var content = string.IsNullOrEmpty(preContext)
+                ? string.Empty
+                : $"# Session Context\n\n{preContext}";
+            File.WriteAllText(SessionClaudeMdPath, content);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warning(ex, "Could not write session CLAUDE.md");
+        }
+    }
+
+    private static void TryDeleteSessionClaudeMd()
+    {
+        try { File.Delete(SessionClaudeMdPath); }
+        catch { /* best-effort */ }
     }
 
     public void Dispose()

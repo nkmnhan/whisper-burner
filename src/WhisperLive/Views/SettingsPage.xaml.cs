@@ -5,9 +5,11 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading.Tasks;
 using WhisperLive.Helpers;
 using WhisperLive.Infrastructure;
 using WhisperLive.Models;
+using WhisperLive.Services.Assistant;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -63,6 +65,18 @@ public sealed partial class SettingsPage : Page
 
         DefaultContextBox.Text = _settings.DefaultSessionContext;
 
+        try
+        {
+            var claudeMdPath = ClaudeCliProvider.GlobalClaudeMdPath;
+            GlobalClaudeMdBox.Text = File.Exists(claudeMdPath)
+                ? await File.ReadAllTextAsync(claudeMdPath)
+                : ClaudeCliProvider.DefaultGlobalInstructions;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warning(ex, "Could not load CLAUDE.md for settings editor");
+        }
+
         _loaded = true;
     }
 
@@ -80,6 +94,26 @@ public sealed partial class SettingsPage : Page
         if (!_loaded) return;
         _settings.DefaultSessionContext = DefaultContextBox.Text;
         _ = _settings.SaveAsync();
+    }
+
+    private void OnGlobalClaudeMdChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        _ = SaveGlobalClaudeMdAsync(GlobalClaudeMdBox.Text);
+    }
+
+    private static async Task SaveGlobalClaudeMdAsync(string content)
+    {
+        try
+        {
+            var path = ClaudeCliProvider.GlobalClaudeMdPath;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, content);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warning(ex, "Could not save CLAUDE.md");
+        }
     }
 
     private void OnModelChanged(object sender, SelectionChangedEventArgs e)

@@ -158,6 +158,20 @@
                     <controls:SettingsCard Description="Show the Assistant panel during sessions" Header="Enable assistant">
                         <ToggleSwitch x:Name="EnableAssistantToggle" Toggled="OnEnableAssistantToggled" />
                     </controls:SettingsCard>
+                    <controls:SettingsCard
+                        Description="Loaded by Claude CLI from ~/whisper.live/CLAUDE.md — defines assistant persona and rules for every session"
+                        Header="Global assistant instructions">
+                        <TextBox
+                            x:Name="GlobalClaudeMdBox"
+                            Width="360"
+                            MaxHeight="180"
+                            AcceptsReturn="True"
+                            FontFamily="Consolas"
+                            FontSize="12"
+                            PlaceholderText="# WhisperLive Session Assistant&#x0a;You are a session assistant…"
+                            TextWrapping="Wrap"
+                            TextChanged="OnGlobalClaudeMdChanged" />
+                    </controls:SettingsCard>
                 </controls:SettingsExpander.Items>
             </controls:SettingsExpander>
 

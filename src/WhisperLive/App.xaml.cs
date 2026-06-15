@@ -46,13 +46,15 @@ sealed partial class App : Application
 
         // Disabled placeholder — replaced by ApplySettings() in LiveTranscriptPage.OnLoaded
         // once AppSettings are loaded asynchronously on the UI thread.
-        TranslationService = BuildTranslationService(new AppSettings(), () => SubtitleService.CurrentSessionPath);
+        TranslationService = BuildTranslationService(new AppSettings());
 
         UnhandledException += (_, e) =>
         {
             AppLogger.Error(e.Exception, "Unhandled exception: {Message}", e.Message);
             e.Handled = true;
         };
+
+        _ = ClaudeCliProvider.EnsureGlobalClaudeMdAsync();
     }
 
     /// <summary>
@@ -72,7 +74,7 @@ sealed partial class App : Application
         if (RecordingManager.State != RecordingState.Idle) return;
 
         TranslationService.SegmentTranslated -= OnTranscriptSegmentTranslated;
-        TranslationService = BuildTranslationService(settings, () => SubtitleService.CurrentSessionPath);
+        TranslationService = BuildTranslationService(settings);
         TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
     }
 
@@ -128,7 +130,7 @@ sealed partial class App : Application
         TitleBarHelper.ApplySystemThemeToCaptionButtons(MainWindow, ThemeHelper.ActualTheme);
     }
 
-    internal static ITranslationService BuildTranslationService(AppSettings settings, Func<string?> getSessionPath)
+    internal static ITranslationService BuildTranslationService(AppSettings settings)
     {
         if (!settings.EnableTranslation)
             return new DisabledTranslationService();
@@ -142,7 +144,6 @@ sealed partial class App : Application
 
         return new TranslationService(
             provider,
-            targetLanguage: settings.TranslationTargetLanguage,
-            getSessionPath: getSessionPath);
+            targetLanguage: settings.TranslationTargetLanguage);
     }
 }

@@ -69,7 +69,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
 
         // Wait for the consumer loop to drain the last chunk BEFORE unsubscribing
         // SegmentAdded — ensures every segment from the final audio chunk fires the
-        // handler (and reaches TranslationService.EnqueueSegment) before we close.
+        // handler before we close.
         if (_consumeTask is { } t)
         {
             try { await t.ConfigureAwait(false); }
