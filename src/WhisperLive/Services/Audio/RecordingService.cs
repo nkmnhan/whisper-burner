@@ -128,7 +128,11 @@ public sealed class RecordingService : IRecordingService
 
         AppLogger.Debug("Flushed chunk #{Index} — {Bytes} bytes (overlap={Overlap}s) → {Path}",
             _chunkIndex, wavData.Length, chunkOverlap, path);
-        _channel.Writer.TryWrite(new AudioChunkInfo(path, _chunkIndex, wavStartTime, chunkOverlap));
+        if (!_channel.Writer.TryWrite(new AudioChunkInfo(path, _chunkIndex, wavStartTime, chunkOverlap)))
+        {
+            AppLogger.Warning("Audio chunk #{Index} dropped — consumer backlog full; transcript gap possible", _chunkIndex);
+            try { File.Delete(path); } catch { }
+        }
         _offsetSeconds += options.ChunkDurationSeconds;
         _chunkIndex++;
     }

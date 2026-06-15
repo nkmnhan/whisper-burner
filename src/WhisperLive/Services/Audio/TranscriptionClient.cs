@@ -13,7 +13,7 @@ namespace WhisperLive.Services.Audio;
 
 public sealed class TranscriptionClient : ITranscriptionClient
 {
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(60) };
+    private readonly HttpClient _http = new() { Timeout = Timeout.InfiniteTimeSpan };
 
     private static readonly JsonSerializerOptions _json = new()
     {
@@ -53,7 +53,9 @@ public sealed class TranscriptionClient : ITranscriptionClient
         AppLogger.Debug("Transcribing chunk #{Index} ({Bytes} bytes, overlap={Overlap}s)",
             chunk.ChunkIndex, fileBytes.Length, chunk.OverlapSeconds);
 
-        using var response = await _http.PostAsync($"{options.ApiUrl}/transcribe", form, ct);
+        using var reqCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        reqCts.CancelAfter(TimeSpan.FromSeconds(60));
+        using var response = await _http.PostAsync($"{options.ApiUrl}/transcribe", form, reqCts.Token);
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync(ct);

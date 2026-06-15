@@ -33,7 +33,6 @@ public sealed class AppSettings
     public string TranslationProvider { get; set; } = "deepl";
     public string DeepLApiKey { get; set; } = "";
     public string GoogleTranslateApiKey { get; set; } = "";
-    public TranscriptDisplayMode TranscriptDisplayMode { get; set; } = TranscriptDisplayMode.Both;
 
     public static async Task<AppSettings> LoadAsync()
     {

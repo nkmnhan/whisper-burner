@@ -1,4 +1,4 @@
-﻿﻿using Microsoft.UI.Composition;
+using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -67,7 +67,7 @@ public sealed partial class CaptionOverlayWindow : Window
 
     private void OnManagerStateChanged(object? sender, RecordingState state) =>
         DispatcherQueue.TryEnqueue(() =>
-            OverlayPauseIcon.Glyph = state == RecordingState.Paused ? "\uE768" : "\uE769");
+            OverlayPauseIcon.Glyph = state == RecordingState.Paused ? "" : "");
 
     private void OnSegmentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
@@ -157,8 +157,7 @@ public sealed partial class CaptionOverlayWindow : Window
     private void OnExpandClicked(object sender, RoutedEventArgs e)
     {
         _isExpanded = !_isExpanded;
-        // Expanded: E70E (ChevronUp ^) = prompt to collapse; Collapsed: E70D (ChevronDown ∨) = prompt to expand
-        ChevronIcon.Glyph = _isExpanded ? "\uE70E" : "\uE70D"; // ^ collapse : ∨ expand
+        ChevronIcon.Glyph = _isExpanded ? "" : "";
 
         int newHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
         int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;
@@ -173,7 +172,6 @@ public sealed partial class CaptionOverlayWindow : Window
         Hidden?.Invoke(this, EventArgs.Empty);
     }
 
-
     private void OnOverlayPauseClicked(object sender, RoutedEventArgs e)
     {
         var manager = ((App)Application.Current).RecordingManager;
@@ -181,7 +179,6 @@ public sealed partial class CaptionOverlayWindow : Window
             _ = manager.ResumeAsync();
         else if (manager.State == RecordingState.Recording)
             _ = manager.PauseAsync();
-        // StateChanged → OnManagerStateChanged updates the icon automatically.
     }
 
     private void OnPointerEntered(object sender, PointerRoutedEventArgs e)

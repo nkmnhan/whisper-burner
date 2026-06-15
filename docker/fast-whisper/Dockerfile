@@ -23,6 +23,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
             deep-translator fastapi "uvicorn[standard]" python-multipart; \
     fi
 
+# Make the pip-installed NVIDIA libraries (cublas, cudnn) visible to the dynamic linker.
+# nvidia-cublas-cu12 and nvidia-cudnn-cu12 install .so files under site-packages/nvidia/*/lib/
+# but that path is not on LD_LIBRARY_PATH by default, so CTranslate2 can't load them.
+ENV LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.12/site-packages/nvidia/cudnn/lib
+
 WORKDIR /app
 
 CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "5000"]

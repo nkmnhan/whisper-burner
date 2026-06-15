@@ -185,9 +185,7 @@ public sealed class ClaudeCliProvider : IAiProvider
             }
             finally
             {
-                // Guard against ObjectDisposedException: EndSession() can call Dispose()
-                // on the UI thread while this finally block runs on a threadpool thread.
-                try { _lock.Release(); } catch (ObjectDisposedException) { }
+                _lock.Release();
             }
         }
 
@@ -249,6 +247,11 @@ public sealed class ClaudeCliProvider : IAiProvider
 
         private static string? BuildAllowedTools(AiCallContext? context)
         {
+            // Threat model: adversarial audio could inject instructions into the transcript that
+            // Claude then acts on. Tool access is therefore scoped to ~/whisper.live/ by default.
+            // AllowedReadPaths defaults to [] in AppSettings, so the default blast radius of a
+            // prompt-injection attack is limited to session SRTs, notes, and settings — no broader
+            // filesystem access unless the user explicitly adds paths in Settings.
             var dataDir = AppDataFolder.Replace('\\', '/');
             var patterns = new List<string>
             {
@@ -284,9 +287,12 @@ public sealed class ClaudeCliProvider : IAiProvider
 
         public void Dispose()
         {
-            // Guard against ObjectDisposedException if Release() is still in-flight
-            // on a threadpool thread when EndSession() disposes on the UI thread.
-            try { _lock.Dispose(); } catch (ObjectDisposedException) { }
+            // _lock is not disposed here. SessionAssistantService.EndSession() cancels the
+            // session CTS before calling Dispose(), which makes any in-flight WaitAsync exit
+            // via OperationCanceledException before reaching the try block. Disposing the
+            // semaphore here would race with the Release() in the finally block of a thread
+            // that held the lock at cancellation time. SemaphoreSlim with no AvailableWaitHandle
+            // holds no OS resource, so GC reclaim is correct.
         }
     }
 

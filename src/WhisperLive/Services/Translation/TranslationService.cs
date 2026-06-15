@@ -64,7 +64,9 @@ public sealed class TranslationService : ITranslationService, IDisposable
         _sessionCts.Dispose();
         _sessionCts = null;
 
-        _workerTask?.Wait(TimeSpan.FromSeconds(1));
+        // The CTS cancel above terminates ConsumeAsync (ReadAllAsync throws OCE) and all
+        // in-flight TranslateWithSemaphoreAsync tasks. No blocking wait needed — the tasks
+        // exit asynchronously and any late SegmentTranslated events are harmless no-ops.
         _workerTask = null;
 
         AppLogger.Info("TranslationService session ended");

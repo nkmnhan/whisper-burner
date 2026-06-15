@@ -8,10 +8,6 @@ using WhisperLive.Models;
 
 namespace WhisperLive.Services.Audio;
 
-/// <summary>
-/// App-level singleton. Owns the full recording lifecycle so page navigation
-/// never interrupts a session. One session at a time is enforced.
-/// </summary>
 public sealed class RecordingManager : IRecordingManager, IDisposable
 {
     private readonly IRecordingService _recording;
@@ -67,9 +63,6 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         _cts?.Cancel();
         await _recording.StopAsync();
 
-        // Wait for the consumer loop to drain the last chunk BEFORE unsubscribing
-        // SegmentAdded — ensures every segment from the final audio chunk fires the
-        // handler before we close.
         if (_consumeTask is { } t)
         {
             try { await t.ConfigureAwait(false); }
@@ -121,7 +114,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
                 var segments = await _transcription.TranscribeChunkAsync(chunk, options, ct);
                 _subtitle.AppendSegments(segments);
             }
-            catch (OperationCanceledException) { break; }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
             catch (Exception ex) { AppLogger.Error(ex, "Transcription error on chunk"); }
             finally { try { File.Delete(chunk.FilePath); } catch { } }
         }
