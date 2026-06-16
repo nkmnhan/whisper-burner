@@ -22,4 +22,5 @@ public sealed class DisabledTranslationService : ITranslationService
     public void StartSession() { }
     public void EnqueueSegment(SubtitleSegment segment) { }
     public void EndSession() { }
+    public void Dispose() { }
 }

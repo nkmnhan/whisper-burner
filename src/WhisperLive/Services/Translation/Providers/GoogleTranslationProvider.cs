@@ -1,4 +1,3 @@
-using System;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
@@ -16,11 +15,12 @@ public sealed class GoogleTranslationProvider : ITranslationProvider
 {
     private const string ApiBase = "https://translation.googleapis.com/language/translate/v2";
 
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
+    private readonly HttpClient _http;
     private readonly string _apiKey;
 
-    public GoogleTranslationProvider(string apiKey)
+    public GoogleTranslationProvider(IHttpClientFactory httpFactory, string apiKey)
     {
+        _http = httpFactory.CreateClient("translation");
         _apiKey = apiKey;
     }
 

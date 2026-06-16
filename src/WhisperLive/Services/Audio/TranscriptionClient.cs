@@ -13,7 +13,12 @@ namespace WhisperLive.Services.Audio;
 
 public sealed class TranscriptionClient : ITranscriptionClient
 {
-    private readonly HttpClient _http = new() { Timeout = Timeout.InfiniteTimeSpan };
+    private readonly HttpClient _http;
+
+    public TranscriptionClient(IHttpClientFactory httpFactory)
+    {
+        _http = httpFactory.CreateClient("transcription");
+    }
 
     private static readonly JsonSerializerOptions _json = new()
     {
@@ -78,9 +83,16 @@ public sealed class TranscriptionClient : ITranscriptionClient
 
     // Whisper hallucinates punctuation-only segments on silence or noise.
     // Bracket/paren annotations like [Music] or (applause) are kept — they carry real context.
+    // faster-whisper emits [BLANK_AUDIO] / [Silence] for silent audio — filter those out too.
+    private static readonly HashSet<string> _silenceTokens = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "[BLANK_AUDIO]", "[blank audio]", "[Silence]", "[silence]",
+    };
+
     private static bool IsHallucination(string text)
     {
         var t = text.Trim();
+        if (_silenceTokens.Contains(t)) return true;
         return t.All(c => c is '.' or ',' or '!' or '?' or '-' or '–' or '—' or ' ' or '\u266a' or '\u266b');
     }
 

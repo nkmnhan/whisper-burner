@@ -1,4 +1,7 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using System;
+using System.Threading;
 using WhisperLive.Helpers;
 using WhisperLive.Infrastructure;
 using WhisperLive.Components;
@@ -27,16 +30,25 @@ sealed partial class App : Application
     internal TranscriptViewModel TranscriptViewModel { get; private set; } = null!;
 
     private AppSettings _currentSettings = new();
+    private readonly System.Net.Http.IHttpClientFactory _httpFactory;
 
     public App()
     {
         AppLogger.Initialize();
         InitializeComponent();
 
+        var services = new ServiceCollection();
+        services.AddHttpClient("transcription")
+            .ConfigureHttpClient(c => c.Timeout = Timeout.InfiniteTimeSpan);
+        services.AddHttpClient("translation")
+            .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(10));
+        _httpFactory = services.BuildServiceProvider()
+            .GetRequiredService<System.Net.Http.IHttpClientFactory>();
+
         var aiProvider = new ClaudeCliProvider();
 
         RecordingService = new Services.Audio.RecordingService();
-        TranscriptionClient = new Services.Audio.TranscriptionClient();
+        TranscriptionClient = new Services.Audio.TranscriptionClient(_httpFactory);
         SubtitleService = new Services.Audio.SubtitleService();
         RecordingManager = new Services.Audio.RecordingManager(RecordingService, TranscriptionClient, SubtitleService);
         SessionAssistant = new SessionAssistantService(RecordingManager, aiProvider, () => _currentSettings);
@@ -59,12 +71,16 @@ sealed partial class App : Application
 
         var isRecording = RecordingManager.State != RecordingState.Idle;
 
-        TranslationService.EndSession();
-        TranslationService.SegmentTranslated -= OnTranscriptSegmentTranslated;
+        var oldService = TranslationService;
+        oldService.EndSession();
+        oldService.SegmentTranslated -= OnTranscriptSegmentTranslated;
+
         TranslationService = BuildTranslationService(settings);
         TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
         if (isRecording)
             TranslationService.StartSession();
+
+        oldService.Dispose();
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -86,9 +102,12 @@ sealed partial class App : Application
         RecordingManager.SegmentAdded += (_, seg) => TranslationService.EnqueueSegment(seg);
         TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
 
-        MainWindow.Closed += async (s, _) =>
+        MainWindow.Closed += (s, _) =>
         {
-            await RecordingManager.StopAsync();
+            RecordingManager.StopAsync()
+                .ContinueWith(_ => { })
+                .Wait(TimeSpan.FromSeconds(5));
+
             TranscriptViewModel.FinalizeSession();
             SessionAssistant.EndSession();
             TranslationService.EndSession();
@@ -118,16 +137,16 @@ sealed partial class App : Application
         TitleBarHelper.ApplySystemThemeToCaptionButtons(MainWindow, ThemeHelper.ActualTheme);
     }
 
-    internal static ITranslationService BuildTranslationService(AppSettings settings)
+    internal ITranslationService BuildTranslationService(AppSettings settings)
     {
         if (!settings.EnableTranslation)
             return new DisabledTranslationService();
 
         ITranslationProvider provider = settings.TranslationProvider switch
         {
-            "google" => new GoogleTranslationProvider(settings.GoogleTranslateApiKey),
-            "deepl"  => new DeepLTranslationProvider(settings.DeepLApiKey),
-            _        => new DockerTranslationProvider(settings.ApiUrl), // "docker" + legacy "whisper"
+            "google" => new GoogleTranslationProvider(_httpFactory, settings.GoogleTranslateApiKey),
+            "deepl"  => new DeepLTranslationProvider(_httpFactory, settings.DeepLApiKey),
+            _        => new DockerTranslationProvider(_httpFactory, settings.ApiUrl),
         };
 
         return new TranslationService(

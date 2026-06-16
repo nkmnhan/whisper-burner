@@ -1,4 +1,3 @@
-using System;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -19,12 +18,13 @@ public sealed class DeepLTranslationProvider : ITranslationProvider
     private const string FreeApiBase = "https://api-free.deepl.com/v2";
     private const string ProApiBase  = "https://api.deepl.com/v2";
 
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
+    private readonly HttpClient _http;
     private readonly string _apiKey;
 
-    public DeepLTranslationProvider(string apiKey)
+    public DeepLTranslationProvider(IHttpClientFactory httpFactory, string apiKey)
     {
         _apiKey = apiKey;
+        _http = httpFactory.CreateClient("translation");
         _http.DefaultRequestHeaders.Add("Authorization", $"DeepL-Auth-Key {apiKey}");
     }
 

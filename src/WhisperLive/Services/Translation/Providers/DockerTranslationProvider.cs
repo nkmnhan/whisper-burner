@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -11,11 +10,12 @@ namespace WhisperLive.Services.Translation.Providers;
 /// <summary>Translates via the fast-whisper API (/translate) using deep-translator — no API key required.</summary>
 public sealed class DockerTranslationProvider : ITranslationProvider
 {
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
+    private readonly HttpClient _http;
     private readonly string _apiBase;
 
-    public DockerTranslationProvider(string apiBase)
+    public DockerTranslationProvider(IHttpClientFactory httpFactory, string apiBase)
     {
+        _http = httpFactory.CreateClient("translation");
         _apiBase = apiBase.TrimEnd('/');
     }
 

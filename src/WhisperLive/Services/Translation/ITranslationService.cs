@@ -3,7 +3,7 @@ using WhisperLive.Models;
 
 namespace WhisperLive.Services.Translation;
 
-public interface ITranslationService
+public interface ITranslationService : IDisposable
 {
     /// <summary>ISO 639-1 target language code (e.g. "vi", "zh", "en").</summary>
     string TargetLanguage { get; }
