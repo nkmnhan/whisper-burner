@@ -30,7 +30,7 @@ public sealed class AppSettings
 
     public bool EnableTranslation { get; set; } = false;
     public string TranslationTargetLanguage { get; set; } = "vi";
-    public string TranslationProvider { get; set; } = "deepl";
+    public string TranslationProvider { get; set; } = "docker";
     public string DeepLApiKey { get; set; } = "";
     public string GoogleTranslateApiKey { get; set; } = "";
 

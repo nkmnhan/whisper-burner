@@ -8,10 +8,7 @@ using System.Threading.Tasks;
 
 namespace WhisperLive.Services.Translation.Providers;
 
-/// <summary>
-/// Translates via the local Whisper Docker API (/translate).
-/// Uses deep-translator (Google Translate) inside the container — no API key required.
-/// </summary>
+/// <summary>Translates via the fast-whisper API (/translate) using deep-translator — no API key required.</summary>
 public sealed class DockerTranslationProvider : ITranslationProvider
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };

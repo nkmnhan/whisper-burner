@@ -8,14 +8,7 @@ using WhisperLive.Services.Translation.Providers;
 
 namespace WhisperLive.Services.Translation;
 
-/// <summary>
-/// Background translation pipeline. Always active when instantiated.
-/// For the disabled case, the factory returns DisabledTranslationService instead.
-///
-/// - Unbounded channel: no segment is ever dropped, regardless of API speed.
-/// - SemaphoreSlim(3): limits concurrent API calls to prevent rate-limit cascades.
-/// - On translation complete, fires SegmentTranslated for UI updates.
-/// </summary>
+/// <summary>Background translation pipeline. Unbounded channel (no drops), max 3 concurrent API calls.</summary>
 public sealed class TranslationService : ITranslationService, IDisposable
 {
     private const int MaxConcurrent = 3;
@@ -24,7 +17,7 @@ public sealed class TranslationService : ITranslationService, IDisposable
     private readonly ITranslationProvider _provider;
     private readonly SemaphoreSlim _concurrencySemaphore = new(MaxConcurrent, MaxConcurrent);
 
-    // Every segment queued is eventually translated — no eviction under load.
+    // No eviction under load — every segment is eventually translated.
     private readonly Channel<SubtitleSegment> _channel = Channel.CreateUnbounded<SubtitleSegment>(
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
 
@@ -47,8 +40,7 @@ public sealed class TranslationService : ITranslationService, IDisposable
     public void StartSession()
     {
         EndSession();
-        // Drain any items left in the channel from a previous session.
-        // Without this, stale segments would be consumed by this session's worker.
+        // Drain stale segments from a previous session.
         while (_channel.Reader.TryRead(out _)) { }
 
         _sessionCts = new CancellationTokenSource();
@@ -64,9 +56,7 @@ public sealed class TranslationService : ITranslationService, IDisposable
         _sessionCts.Dispose();
         _sessionCts = null;
 
-        // The CTS cancel above terminates ConsumeAsync (ReadAllAsync throws OCE) and all
-        // in-flight TranslateWithSemaphoreAsync tasks. No blocking wait needed — the tasks
-        // exit asynchronously and any late SegmentTranslated events are harmless no-ops.
+        // CTS cancel terminates ConsumeAsync and all in-flight tasks asynchronously.
         _workerTask = null;
 
         AppLogger.Info("TranslationService session ended");
@@ -95,7 +85,6 @@ public sealed class TranslationService : ITranslationService, IDisposable
         catch (Exception ex)
         {
             AppLogger.Warning(ex, "Translation failed for segment {Id} after all retries", segment.Id);
-            // Segment stays absent from _completedTexts; EndSession writes original-text fallback.
         }
         finally
         {

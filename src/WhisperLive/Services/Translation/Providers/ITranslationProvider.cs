@@ -3,17 +3,11 @@ using System.Threading.Tasks;
 
 namespace WhisperLive.Services.Translation.Providers;
 
-/// <summary>
-/// Translates a single sentence to a target language.
-/// Implementations: <see cref="DeepLTranslationProvider"/>, <see cref="GoogleTranslationProvider"/>.
-/// </summary>
+/// <summary>Translates a single sentence to a target language.</summary>
 public interface ITranslationProvider
 {
     string Name { get; }
 
-    /// <summary>
-    /// Translates <paramref name="text"/> into <paramref name="targetLanguage"/> (ISO 639-1 code).
-    /// Throws on unrecoverable error; caller handles retries.
-    /// </summary>
+    /// <summary>Translates <paramref name="text"/> to <paramref name="targetLanguage"/> (ISO 639-1). Throws on error; caller retries.</summary>
     Task<string> TranslateAsync(string text, string targetLanguage, CancellationToken ct = default);
 }

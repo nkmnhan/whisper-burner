@@ -117,14 +117,14 @@
                             Width="160"
                             HorizontalAlignment="Right"
                             SelectionChanged="OnTranslationProviderChanged">
-                            <ComboBoxItem Content="whisper (free)" />
+                            <ComboBoxItem Content="docker (free)" />
                             <ComboBoxItem Content="deepl" />
                             <ComboBoxItem Content="google" />
                         </ComboBox>
                     </controls:SettingsCard>
                     <controls:SettingsCard
                         x:Name="DockerProviderInfoCard"
-                        Description="Translates via the Whisper Docker API using Google Translate — no API key required."
+                        Description="Translates via the fast-whisper API using deep-translator — no API key required. Start the API server first."
                         Visibility="Collapsed" />
                     <controls:SettingsCard x:Name="DeepLApiKeyCard" Description="DeepL API key (free tier: deepl.com/pro-api)" Header="DeepL API key">
                         <TextBox

@@ -126,8 +126,8 @@ sealed partial class App : Application
         ITranslationProvider provider = settings.TranslationProvider switch
         {
             "google" => new GoogleTranslationProvider(settings.GoogleTranslateApiKey),
-            "whisper" => new DockerTranslationProvider(settings.ApiUrl),
-            _        => new DeepLTranslationProvider(settings.DeepLApiKey),
+            "deepl"  => new DeepLTranslationProvider(settings.DeepLApiKey),
+            _        => new DockerTranslationProvider(settings.ApiUrl), // "docker" + legacy "whisper"
         };
 
         return new TranslationService(
