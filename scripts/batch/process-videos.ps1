@@ -11,7 +11,7 @@ param(
 )
 
 $profile = if ($Gpu) { "gpu" } else { "cpu" }
-$service = "whisper-$profile"
+$service = "fast-whisper-$profile"
 
 $videosDir = Join-Path $PSScriptRoot "..\..\videos"
 $outputDir = Join-Path $PSScriptRoot "..\..\videos\output"
@@ -19,9 +19,9 @@ $outputDir = Join-Path $PSScriptRoot "..\..\videos\output"
 $videoExts = @(".mp4", ".mkv", ".wmv", ".avi", ".mov", ".webm",
                ".flac", ".mp3", ".wav", ".m4a", ".ogg", ".ts", ".m2ts", ".3gp")
 
-$composeFile = Join-Path $PSScriptRoot "..\..\docker\whisper\docker-compose.yml"
+$composeFile = Join-Path $PSScriptRoot "..\..\docker\docker-compose.yml"
 
-function Invoke-Whisper([string[]]$CmdArgs) {
+function Invoke-Transcribe([string[]]$CmdArgs) {
     docker compose -f $composeFile --profile $profile run --rm $service @CmdArgs
 }
 
@@ -62,22 +62,22 @@ foreach ($file in $videos) {
     }
 
     if (-not $BurnOnly -and -not (Test-Path -LiteralPath $srtPath)) {
-        $whisperArgs = @("whisper", $file.Name, "--model", $Model, "--task", $Task,
-                         "--output_dir", "/app/output", "--output_format", $OutputFormat)
-        if ($Language) { $whisperArgs += "--language", $Language }
-        if (-not $Gpu)  { $whisperArgs += "--fp16", "False" }
+        $transcribeArgs = @("python", "/opt/batch_transcribe.py", $file.Name,
+                            "--model", $Model, "--task", $Task,
+                            "--output_dir", "/app/output", "--output_format", $OutputFormat)
+        if ($Language) { $transcribeArgs += "--language", $Language }
 
-        Invoke-Whisper $whisperArgs
-        if ($LASTEXITCODE -ne 0) { Write-Warning "whisper failed for '$($file.Name)'"; continue }
+        Invoke-Transcribe $transcribeArgs
+        if ($LASTEXITCODE -ne 0) { Write-Warning "Transcription failed for '$($file.Name)'"; continue }
     } elseif (-not $BurnOnly) {
         Write-Host "  SRT exists, skipping transcription"
     }
 
     if ($TargetLang -and (Test-Path -LiteralPath $srtPath) -and -not (Test-Path -LiteralPath $burnSrtPath)) {
         Write-Host "  Translating subtitles to '$TargetLang' -> $burnSrtOut"
-        Invoke-Whisper @("python", "/opt/translate_srt.py",
+        Invoke-Transcribe @("python", "/opt/translate_srt.py",
                          "/app/$srtOut", "/app/$burnSrtOut", $TargetLang)
-        if ($LASTEXITCODE -ne 0) { Write-Warning "translation failed for '$($file.Name)'"; continue }
+        if ($LASTEXITCODE -ne 0) { Write-Warning "Translation failed for '$($file.Name)'"; continue }
     } elseif ($TargetLang -and (Test-Path -LiteralPath $burnSrtPath)) {
         Write-Host "  Translated SRT exists, skipping translation"
     }
@@ -93,7 +93,7 @@ foreach ($file in $videos) {
     }
 
     Write-Host "  Burning subtitles -> $mp4Out"
-    Invoke-Whisper @("ffmpeg", "-y", "-fflags", "+discardcorrupt", "-err_detect", "ignore_err",
+    Invoke-Transcribe @("ffmpeg", "-y", "-fflags", "+discardcorrupt", "-err_detect", "ignore_err",
                      "-i", $file.Name, "-vf", "subtitles='$(EscapeFilter $burnSrtOut)'", $mp4Out)
 
     if ($LASTEXITCODE -ne 0) { Write-Warning "ffmpeg burn failed for '$($file.Name)'" }

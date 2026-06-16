@@ -1,4 +1,55 @@
 services:
+  fast-whisper-gpu:
+    build:
+      context: .
+      args:
+        VARIANT: gpu
+    profiles:
+      - gpu
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - DEVICE=cuda
+      - COMPUTE_TYPE=float16
+      - BEAM_SIZE=5
+      - MODEL_CACHE=/models
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ../models:/models
+      - ../videos:/app
+      - ./batch_transcribe.py:/opt/batch_transcribe.py:ro
+      - ./translate_srt.py:/opt/translate_srt.py:ro
+
+  fast-whisper-cpu:
+    build:
+      context: .
+      args:
+        VARIANT: cpu
+    profiles:
+      - cpu
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - DEVICE=cpu
+      - COMPUTE_TYPE=int8
+      - BEAM_SIZE=1
+      - MODEL_CACHE=/models
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ../models:/models
+      - ../videos:/app
+      - ./batch_transcribe.py:/opt/batch_transcribe.py:ro
+      - ./translate_srt.py:/opt/translate_srt.py:ro
+
   fast-whisper-api-gpu:
     build:
       context: .
@@ -33,7 +84,7 @@ services:
       retries: 12
       start_period: 120s
     volumes:
-      - ../../models/fast-whisper:/models
+      - ../models:/models
       - ./api_server.py:/app/api_server.py:ro
 
   fast-whisper-api-cpu:
@@ -63,5 +114,5 @@ services:
       retries: 12
       start_period: 120s
     volumes:
-      - ../../models/fast-whisper:/models
+      - ../models:/models
       - ./api_server.py:/app/api_server.py:ro
