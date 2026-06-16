@@ -13,13 +13,13 @@ param(
 $profile = if ($Gpu) { "gpu" } else { "cpu" }
 $service = "whisper-$profile"
 
-$videosDir = ".\videos"
-$outputDir = ".\videos\output"
+$videosDir = Join-Path $PSScriptRoot "..\..\videos"
+$outputDir = Join-Path $PSScriptRoot "..\..\videos\output"
 
 $videoExts = @(".mp4", ".mkv", ".wmv", ".avi", ".mov", ".webm",
                ".flac", ".mp3", ".wav", ".m4a", ".ogg", ".ts", ".m2ts", ".3gp")
 
-$composeFile = Join-Path $PSScriptRoot "docker\whisper\docker-compose.yml"
+$composeFile = Join-Path $PSScriptRoot "..\..\docker\whisper\docker-compose.yml"
 
 function Invoke-Whisper([string[]]$CmdArgs) {
     docker compose -f $composeFile --profile $profile run --rm $service @CmdArgs

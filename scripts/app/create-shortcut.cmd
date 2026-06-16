@@ -1,12 +1,12 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0..\.."
 
-set EXE=%~dp0release\WhisperLive.exe
+set EXE=%~dp0..\..\release\WhisperLive.exe
 set SHORTCUT=%USERPROFILE%\Desktop\WhisperLive.lnk
 
 if not exist "%EXE%" (
-    echo  App not found. Run build-release.cmd first.
+    echo  App not found. Run scripts\app\build-release.cmd first.
     pause
     exit /b 1
 )
@@ -15,7 +15,7 @@ powershell -NoProfile -Command ^
   "$ws = New-Object -ComObject WScript.Shell; ^
    $s = $ws.CreateShortcut('%SHORTCUT%'); ^
    $s.TargetPath = '%EXE%'; ^
-   $s.WorkingDirectory = '%~dp0release'; ^
+   $s.WorkingDirectory = '%~dp0..\..\release'; ^
    $s.IconLocation = '%EXE%,0'; ^
    $s.Description = 'WhisperLive'; ^
    $s.Save()"

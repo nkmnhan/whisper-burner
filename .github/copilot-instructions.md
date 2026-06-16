@@ -24,7 +24,7 @@ dotnet run -c Debug
 ### WinUI 3 App — Release (self-contained, no admin)
 
 ```powershell
-.\build-release.cmd
+.\scripts\app\build-release.cmd
 # outputs to release\ with WindowsAppSdkSelfContained=true
 ```
 
@@ -35,18 +35,18 @@ Run `dotnet build` after **every** C# change before reporting done.
 ```powershell
 # GPU
 docker compose --profile gpu build
-.\process-videos-gpu.cmd
+.\scripts\batch\process-videos-gpu.cmd
 
 # CPU
 docker compose --profile cpu build
-.\process-videos-cpu.cmd
+.\scripts\batch\process-videos-cpu.cmd
 ```
 
 ### Docker — Whisper API server (used by WhisperLive app)
 
 ```powershell
-.\start-api-gpu.cmd   # docker compose --profile api-gpu up --build
-.\start-api-cpu.cmd   # docker compose --profile api-cpu up --build
+.\scripts\api\start-whisper-gpu.cmd   # docker compose --profile api-gpu up --build
+.\scripts\api\start-whisper-cpu.cmd   # docker compose --profile api-cpu up --build
 ```
 
 API runs at `http://localhost:5000`. Endpoints: `GET /health`, `GET /models`, `POST /transcribe`.

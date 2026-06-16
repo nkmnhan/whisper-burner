@@ -10,94 +10,6 @@ Also contains a **WinUI 3 desktop app** (`src/WhisperLive/`) for real-time syste
 
 ## Quick-Reference Alias Glossary
 
-When the user says one of these words, map it immediately to the file(s) listed.
-
-### UI — Pages & Windows
-
-| Alias | File(s) |
-|---|---|
-| **live page**, transcript page, main page, recording page | `Views/LiveTranscriptPage.xaml` + `.cs` |
-| **sessions page**, history page, saved sessions | `Views/SessionsPage.xaml` + `.cs` |
-| **settings page**, config page | `Views/SettingsPage.xaml` + `.cs` |
-| **overlay**, caption box, subtitle overlay, always-on-top box | `Components/CaptionOverlayWindow.xaml` + `.cs` |
-| **shell**, nav shell, nav window, main window | `MainWindow.xaml` + `.cs` |
-| **app entry**, app singletons, service wiring | `App.xaml.cs` |
-
-### UI — Controls & Elements (all live in `LiveTranscriptPage` unless noted)
-
-| Alias | Element / File(s) |
-|---|---|
-| **chips**, skill chips, suggestion chips, seeding chips | `x:Name="SuggestionChipsPanel"` buttons + `OnSuggestionClicked` handler in `LiveTranscriptPage.xaml.cs`; style → `Styles/Brushes.xaml` (`SuggestionChipButtonStyle`); model → `Models/SessionSkill.cs` |
-| **chat list**, assistant chat, chat bubbles, message list | `x:Name="AssistantChatList"` ListView in `LiveTranscriptPage.xaml`; template selector → `Helpers/AssistantMessageTemplateSelector.cs`; model → `Models/AssistantMessage.cs` |
-| **ask box**, question box, assistant input, prompt box | `x:Name="AssistantQuestionBox"` AutoSuggestBox in `LiveTranscriptPage.xaml` |
-| **assistant panel**, ai panel, copilot panel | `x:Name="AssistantPanel"` Border in `LiveTranscriptPage.xaml` |
-| **transcript list**, segment list, subtitle list | `x:Name="TranscriptList"` ListView in `LiveTranscriptPage.xaml`; data → `ViewModels/TranscriptViewModel.cs` |
-| **thinking indicator**, spinner, loading indicator | `x:Name="ThinkingIndicator"` + `ShowThinkingStoryboard` / `HideThinkingStoryboard` in `LiveTranscriptPage.xaml` |
-| **pre-context box**, session context box, meeting notes box, agenda box | `x:Name="PreContextBox"` TextBox in `LiveTranscriptPage.xaml` |
-| **context history**, recent prompts flyout | `OnContextHistoryClicked` in `LiveTranscriptPage.xaml.cs` |
-| **translation chip**, language chip | `x:Name="TranslationChip"` Border in `LiveTranscriptPage.xaml` |
-| **record button**, start/stop button | `x:Name="RecordButton"` in `LiveTranscriptPage.xaml` |
-| **ghost button** | `Components/GhostButton.cs`; style → `Styles/Brushes.xaml` (`GhostButtonStyle`) |
-
-### Services
-
-| Alias | File(s) |
-|---|---|
-| **srt writer**, streaming srt, srt writing | `Services/Audio/StreamingSrtWriter.cs`, interface → `Services/Audio/ISrtSessionWriter.cs` |
-| **recording service**, audio capture, loopback capture, wasapi | `Services/Audio/RecordingService.cs`, interface → `IRecordingService.cs` |
-| **recording manager**, recorder, recording orchestrator | `Services/Audio/RecordingManager.cs`, interface → `IRecordingManager.cs` |
-| **transcription client**, whisper client, api client | `Services/Audio/TranscriptionClient.cs`, interface → `ITranscriptionClient.cs` |
-| **subtitle service**, segment store, subtitle buffer | `Services/Audio/SubtitleService.cs`, interface → `ISubtitleService.cs` |
-| **translation service**, translator | `Services/Translation/TranslationService.cs`, interface → `ITranslationService.cs` |
-| **disabled translation**, no-op translation | `Services/Translation/DisabledTranslationService.cs` |
-| **translation provider**, deepl, google translate, docker translate | `Services/Translation/Providers/` — `DeepLTranslationProvider.cs`, `GoogleTranslationProvider.cs`, `DockerTranslationProvider.cs`, `PassThroughTranslationProvider.cs` |
-| **assistant service**, ai service, session assistant | `Services/Assistant/SessionAssistantService.cs`, interface → `ISessionAssistantService.cs` |
-| **claude provider**, claude cli, ai backend | `Services/Assistant/ClaudeCliProvider.cs`, interface → `IAiProvider.cs` |
-| **ai session**, claude session, chat session | `Services/Assistant/IAiSession.cs` (implemented inside `ClaudeCliProvider.cs`) |
-| **export service**, assistant export | `Services/Assistant/AssistantExportService.cs`, interface → `IAssistantExportService.cs` |
-
-### Models
-
-| Alias | File(s) |
-|---|---|
-| **segment**, subtitle segment | `Models/SubtitleSegment.cs` |
-| **translated segment**, translation view | `Models/TranslatedSegmentView.cs` |
-| **session skill**, skill, skill model | `Models/SessionSkill.cs` |
-| **assistant message**, chat message | `Models/AssistantMessage.cs` |
-| **corrected segment**, ai correction | `Models/CorrectedSegment.cs` |
-| **notes bubble**, session notes | `Models/NotesBubble.cs`, `Models/SessionNotes.cs` |
-| **saved prompt**, context preset | `Models/SavedPrompt.cs` |
-| **recording options** | `Models/RecordingOptions.cs` |
-| **recording state** | `Models/RecordingState.cs` |
-| **audio chunk** | `Models/AudioChunkInfo.cs` |
-| **transcript display mode** | `Models/TranscriptDisplayMode.cs` |
-| **translation state** | `Models/TranslationSegmentState.cs` |
-
-### Infrastructure & Helpers
-
-| Alias | File(s) |
-|---|---|
-| **settings**, app settings, config, json settings | `Infrastructure/AppSettings.cs` → `~/whisper.live/settings.json` |
-| **logger**, logging, app logger | `Infrastructure/AppLogger.cs` |
-| **theme helper**, dark/light theme | `Helpers/ThemeHelper.cs` |
-| **window helper**, window tracking | `Helpers/WindowHelper.cs` |
-| **title bar helper** | `Helpers/TitleBarHelper.cs` |
-| **message template selector**, chat template selector | `Helpers/AssistantMessageTemplateSelector.cs` |
-| **markdown helper**, markdown rendering | `Helpers/MarkdownHelper.cs` |
-| **brushes**, styles, theme colors, button styles | `Styles/Brushes.xaml` |
-| **view model**, transcript vm | `ViewModels/TranscriptViewModel.cs` |
-
-### Claude Context Files (runtime, not source)
-
-| Alias | Path |
-|---|---|
-| **global claude md**, global ai instructions, assistant persona file | `~/whisper.live/CLAUDE.md` — user-editable in Settings page |
-| **session claude md**, per-session context file | `~/whisper.live/session-active/CLAUDE.md` — written by `SessionAssistantService.StartSession()` |
-
----
-
-## Quick-Reference Alias Glossary
-
 When the user says one of these words, map it immediately to the correct file(s) and design reference.
 
 **WinUI Gallery** — Local: `C:\nkmn\Projects\WinUI-Gallery\WinUIGallery\Samples\<Name>` · GitHub: `https://github.com/microsoft/WinUI-Gallery/tree/main/WinUIGallery/Samples/<Name>`
@@ -243,7 +155,7 @@ dotnet run -c Debug
 ### WinUI 3 App — Release (self-contained, no admin)
 
 ```powershell
-.\build-release.cmd
+.\scripts\app\build-release.cmd
 ```
 
 ### Docker / Batch transcription
@@ -251,11 +163,11 @@ dotnet run -c Debug
 ```powershell
 # GPU (default)
 docker compose --profile gpu build
-.\process-videos-gpu.cmd
+.\scripts\batch\process-videos-gpu.cmd
 
 # CPU
 docker compose --profile cpu build
-.\process-videos-cpu.cmd
+.\scripts\batch\process-videos-cpu.cmd
 ```
 
 ## Architecture

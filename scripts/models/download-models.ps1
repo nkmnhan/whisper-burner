@@ -35,7 +35,7 @@ param(
 )
 
 $variant = if ($Gpu) { "gpu" } else { "cpu" }
-$compose = Join-Path $PSScriptRoot "docker\$Engine\docker-compose.yml"
+$compose = Join-Path $PSScriptRoot "..\..\docker\$Engine\docker-compose.yml"
 $profile = "api-$variant"
 
 if ($Engine -eq "whisper") {

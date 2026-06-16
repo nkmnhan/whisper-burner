@@ -58,10 +58,10 @@ docker compose --profile gpu build
 
 ```powershell
 # GPU (recommended)
-.\process-videos-gpu.cmd
+.\scripts\batch\process-videos-gpu.cmd
 
 # CPU
-.\process-videos-cpu.cmd
+.\scripts\batch\process-videos-cpu.cmd
 ```
 
 Outputs saved to `videos/output/`:
@@ -72,7 +72,7 @@ Outputs saved to `videos/output/`:
 
 ## Translate Subtitles
 
-Double-click **`translate.cmd`** to launch an interactive translator.
+Double-click **`scripts\batch\translate.cmd`** to launch an interactive translator.
 
 It displays a language menu, prompts for a code, then transcribes every video in `videos/` and translates the resulting `.srt`:
 
@@ -109,7 +109,7 @@ Translated SRT files are saved alongside the originals in `videos/output/`:
 ## PowerShell Options
 
 ```powershell
-.\process-videos.ps1 [-Model <model>] [-Language <lang>] [-Task <task>] [-TargetLang <lang>] [-OutputFormat <fmt>] [-Gpu] [-SkipBurn] [-BurnOnly]
+.\scripts\batch\process-videos.ps1 [-Model <model>] [-Language <lang>] [-Task <task>] [-TargetLang <lang>] [-OutputFormat <fmt>] [-Gpu] [-SkipBurn] [-BurnOnly]
 ```
 
 | Parameter | Default | Description |
@@ -127,19 +127,19 @@ Translated SRT files are saved alongside the originals in `videos/output/`:
 
 ```powershell
 # Transcribe with GPU, largest model
-.\process-videos.ps1 -Gpu -Model large-v3
+.\scripts\batch\process-videos.ps1 -Gpu -Model large-v3
 
 # Force Japanese source, GPU
-.\process-videos.ps1 -Gpu -Language Japanese
+.\scripts\batch\process-videos.ps1 -Gpu -Language Japanese
 
 # Transcribe and translate SRT to Vietnamese (GPU)
-.\process-videos.ps1 -Gpu -TargetLang vi
+.\scripts\batch\process-videos.ps1 -Gpu -TargetLang vi
 
 # Transcribe only, no burn
-.\process-videos.ps1 -Gpu -SkipBurn
+.\scripts\batch\process-videos.ps1 -Gpu -SkipBurn
 
 # Burn subtitles into MP4 from existing SRT, skip re-transcription
-.\process-videos.ps1 -Gpu -BurnOnly
+.\scripts\batch\process-videos.ps1 -Gpu -BurnOnly
 ```
 
 ---
@@ -166,15 +166,15 @@ Real-time **system audio capture → Whisper API transcription → live subtitle
 Start the API server first:
 
 ```powershell
-.\start-api-gpu.cmd
+.\scripts\api\start-whisper-gpu.cmd
 # or
-.\start-api-cpu.cmd
+.\scripts\api\start-whisper-cpu.cmd
 ```
 
 ### Quick Start
 
 ```powershell
-.\build-release.cmd
+.\scripts\app\build-release.cmd
 ```
 
 Then launch the app from `release\WhisperLive.exe`.
@@ -190,16 +190,21 @@ Then launch the app from `release\WhisperLive.exe`.
 
 ```
 whisper-burner/
-├── Dockerfile                  # Python 3.12-slim + ffmpeg + openai-whisper
-├── docker-compose.yml          # gpu and cpu profiles
-├── process-videos.ps1          # Main batch script
-├── process-videos-gpu.cmd      # Double-click launcher (GPU)
-├── process-videos-cpu.cmd      # Double-click launcher (CPU)
-├── translate.cmd               # Translate subtitles (e.g. translate.cmd vi)
-├── translate_srt.py            # SRT translation helper (runs inside container)
-├── videos/                     # Drop source videos here
-│   └── output/                 # Generated SRT + MP4
-└── models/                     # Whisper model cache (auto-populated)
+├── docker/
+│   ├── whisper/          # openai-whisper engine (Dockerfile, docker-compose.yml)
+│   └── fast-whisper/     # faster-whisper engine (Dockerfile, docker-compose.yml)
+├── models/               # Whisper model cache (auto-populated)
+├── scripts/
+│   ├── app/              # build-release.cmd, run-app.cmd, create-shortcut.cmd
+│   ├── api/              # start-whisper-{cpu,gpu}.cmd, start-fast-whisper-{cpu,gpu}.cmd
+│   ├── batch/            # process-videos.ps1, process-videos-{cpu,gpu}.cmd, translate.cmd
+│   ├── models/           # download-models.ps1, download-*-model*.cmd
+│   └── tools/            # claude-start.cmd, start-copilot.cmd, docker-build.cmd
+├── src/
+│   └── WhisperLive/      # WinUI 3 desktop app
+├── videos/               # Drop source videos here
+│   └── output/           # Generated SRT + MP4
+└── api_server.py         # FastAPI Whisper API (runs inside Docker)
 ```
 
 ---

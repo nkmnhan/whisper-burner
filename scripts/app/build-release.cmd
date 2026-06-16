@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0..\.."
 
 echo.
 echo  WhisperLive -- Release Build
@@ -57,9 +57,9 @@ if %errorlevel% neq 0 (
 
 echo.
 echo  Build succeeded.
-echo  App: %~dp0release\WhisperLive.exe
+echo  App: %~dp0..\..\release\WhisperLive.exe
 echo.
-echo  First time? Run create-shortcut.cmd to put a shortcut on your Desktop,
+echo  First time? Run scripts\app\create-shortcut.cmd to put a shortcut on your Desktop,
 echo  then right-click the shortcut and choose "Pin to taskbar".
 echo.
 echo  Future updates: just run this file again. The shortcut keeps working.
