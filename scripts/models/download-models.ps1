@@ -1,28 +1,10 @@
 <#
 .SYNOPSIS
-    Pre-download Whisper models into the local models/ directory.
-
-.DESCRIPTION
-    Runs a one-off container using the existing image to download the model
-    so the API server starts instantly instead of downloading on first request.
-    Build the image first with start-whisper-*.cmd or start-fast-whisper-*.cmd,
-    or run: docker compose -f docker\<engine>\docker-compose.yml --profile api-cpu build
-
-.PARAMETER Engine
-    Which engine to download for: "whisper" or "fast-whisper". Default: fast-whisper.
-
-.PARAMETER Model
-    Model name to download. Default: small.
-    Choices: tiny, base, small, medium, large-v3, turbo
-
-.PARAMETER Gpu
-    Use the GPU-variant image (only if you built with GPU variant).
-
+    Pre-download a faster-whisper model so the API server starts instantly.
 .EXAMPLE
     .\download-models.ps1
-    .\download-models.ps1 -Engine whisper -Model medium
-    .\download-models.ps1 -Engine fast-whisper -Model large-v3
-    .\download-models.ps1 -Engine fast-whisper -Model small -Gpu
+    .\download-models.ps1 -Model large-v3
+    .\download-models.ps1 -Model small -Gpu
 #>
 param(
     [ValidateSet("whisper", "fast-whisper")]

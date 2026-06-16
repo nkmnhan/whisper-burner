@@ -7,14 +7,8 @@ using Microsoft.UI.Xaml.Documents;
 namespace WhisperLive.Helpers;
 
 /// <summary>
-/// Attached property that parses a limited Markdown subset and populates a
-/// <see cref="RichTextBlock"/> with typed inlines. No external packages required.
-/// <para>
-/// <b>Supported:</b> headings (#/##/###), bullet lists (- / *), numbered lists,
-/// inline bold (**), italic (*), code (`), horizontal rules, pipe tables (rendered
-/// as monospaced rows — not aligned columns). Escaped Markdown, nested formatting,
-/// links, and fenced code blocks are <b>not</b> supported.
-/// </para>
+/// Attached property that parses a Markdown subset into a <see cref="RichTextBlock"/>.
+/// Supported: headings, bullets, numbered lists, bold/italic/code, tables, horizontal rules.
 /// Usage: &lt;RichTextBlock helpers:MarkdownHelper.Text="{x:Bind Text}" /&gt;
 /// </summary>
 public static class MarkdownHelper
@@ -45,17 +39,15 @@ public static class MarkdownHelper
         {
             var line = rawLine.TrimEnd();
 
-            // Skip table separator rows: |---|:---:|---| etc.
+            // Skip table separator rows: |---|:---:|---|
             if (IsTableSeparator(line)) continue;
 
-            // Table data row: | cell | cell |
             if (line.StartsWith('|') && line.EndsWith('|'))
             {
                 rtb.Blocks.Add(BuildTableRow(line));
                 continue;
             }
 
-            // Headings
             if (line.StartsWith("### "))
             {
                 rtb.Blocks.Add(BuildHeading(line[4..], 13, topMargin: 6));
@@ -72,21 +64,18 @@ public static class MarkdownHelper
                 continue;
             }
 
-            // Horizontal rules — render as empty spacing paragraph
             if (line is "---" or "***" or "___" || line.All(c => c == '-' || c == '*' || c == '_'))
             {
                 rtb.Blocks.Add(new Paragraph { Margin = new Thickness(0, 4, 0, 4) });
                 continue;
             }
 
-            // Empty line → spacing paragraph
             if (string.IsNullOrEmpty(line))
             {
                 rtb.Blocks.Add(new Paragraph { Margin = new Thickness(0, 2, 0, 2) });
                 continue;
             }
 
-            // Bullet list: "- text" or "* text"
             if (line.Length >= 2 && line[1] == ' ' && (line[0] == '-' || line[0] == '*'))
             {
                 var para = new Paragraph { Margin = new Thickness(8, 0, 0, 2) };
@@ -95,7 +84,6 @@ public static class MarkdownHelper
                 continue;
             }
 
-            // Numbered list: "1. text"
             var dotIdx = line.IndexOf(". ");
             if (dotIdx > 0 && dotIdx <= 3 && line[..dotIdx].All(char.IsDigit))
             {
@@ -105,20 +93,18 @@ public static class MarkdownHelper
                 continue;
             }
 
-            // Plain paragraph
             var plain = new Paragraph { Margin = new Thickness(0, 0, 0, 2) };
             AddInlines(plain.Inlines, line);
             rtb.Blocks.Add(plain);
         }
     }
 
-    // Parse **bold**, *italic*, and `code` spans within a line.
+    // Parse inline **bold**, *italic*, `code`.
     private static void AddInlines(InlineCollection inlines, string text)
     {
         var i = 0;
         while (i < text.Length)
         {
-            // Bold: **text**
             if (i + 1 < text.Length && text[i] == '*' && text[i + 1] == '*')
             {
                 var end = text.IndexOf("**", i + 2, StringComparison.Ordinal);
@@ -146,7 +132,6 @@ public static class MarkdownHelper
                 }
             }
 
-            // Inline code: `text`
             if (text[i] == '`')
             {
                 var end = text.IndexOf('`', i + 1);

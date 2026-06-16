@@ -5,12 +5,7 @@ using System.IO;
 
 namespace WhisperLive.Infrastructure;
 
-/// <summary>
-/// Static logger wrapper around Serilog.
-/// Call <see cref="Initialize"/> once at startup; use the typed methods everywhere else.
-/// Logs go to: ~/whisper.live/logs/app-.log (daily rolling, 7-day retention)
-/// and to the VS Debug output window in DEBUG builds.
-/// </summary>
+/// <summary>Serilog wrapper. Call Initialize() once; writes to ~/whisper.live/logs/ (7-day rolling).</summary>
 public static class AppLogger
 {
     private static readonly string _logDir = Path.Combine(

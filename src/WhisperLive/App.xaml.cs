@@ -26,8 +26,6 @@ sealed partial class App : Application
     internal ITranslationService TranslationService { get; private set; }
     internal TranscriptViewModel TranscriptViewModel { get; private set; } = null!;
 
-    // Current settings cached in memory — updated by ApplySettings(), read by SessionAssistant
-    // without any disk I/O so AskAsync never blocks the UI thread on a file read.
     private AppSettings _currentSettings = new();
 
     public App()
@@ -44,8 +42,6 @@ sealed partial class App : Application
         SessionAssistant = new SessionAssistantService(RecordingManager, aiProvider, () => _currentSettings);
         AssistantExport = new AssistantExportService();
 
-        // Disabled placeholder — replaced by ApplySettings() in LiveTranscriptPage.OnLoaded
-        // once AppSettings are loaded asynchronously on the UI thread.
         TranslationService = BuildTranslationService(new AppSettings());
 
         UnhandledException += (_, e) =>
@@ -57,24 +53,16 @@ sealed partial class App : Application
         _ = ClaudeCliProvider.EnsureGlobalClaudeMdAsync();
     }
 
-    /// <summary>
-    /// Rebuilds <see cref="TranslationService"/> from freshly-loaded settings and re-wires
-    /// the <see cref="TranscriptViewModel"/> handler to the new service instance.
-    /// Called by <see cref="LiveTranscriptPage"/> after its async settings load completes,
-    /// and also live during a recording when the user changes translation settings.
-    /// </summary>
     internal void ApplySettings(AppSettings settings)
     {
         _currentSettings = settings;
 
         var isRecording = RecordingManager.State != RecordingState.Idle;
 
-        // End the current session cleanly before swapping — closes any open SRT writer.
         TranslationService.EndSession();
         TranslationService.SegmentTranslated -= OnTranscriptSegmentTranslated;
         TranslationService = BuildTranslationService(settings);
         TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
-        // DisabledTranslationService.StartSession() is a no-op, so this is always safe.
         if (isRecording)
             TranslationService.StartSession();
     }
@@ -98,7 +86,6 @@ sealed partial class App : Application
         RecordingManager.SegmentAdded += (_, seg) => TranslationService.EnqueueSegment(seg);
         TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
 
-        // Gallery pattern: close all tracked windows when main closes.
         MainWindow.Closed += async (s, _) =>
         {
             await RecordingManager.StopAsync();

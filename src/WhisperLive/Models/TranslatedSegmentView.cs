@@ -5,12 +5,7 @@ using Windows.UI.Text;
 
 namespace WhisperLive.Models;
 
-/// <summary>
-/// Observable view-model for a single transcript row.
-/// Starts in <see cref="TranslationSegmentState.Provisional"/> (italic, dimmed).
-/// Transitions to <see cref="TranslationSegmentState.Translated"/> when the translation
-/// arrives — triggering an in-place UI update without re-rendering the whole list.
-/// </summary>
+/// <summary>Observable view-model for a single transcript row with translation state.</summary>
 public sealed class TranslatedSegmentView : INotifyPropertyChanged
 {
     private string? _translatedText;
@@ -21,13 +16,12 @@ public sealed class TranslatedSegmentView : INotifyPropertyChanged
     {
         Original = original;
         _isTranslationEnabled = isTranslationEnabled;
-        // Pre-reserve a full bilingual row height immediately so the layout never
-        // changes when the real translation arrives — eliminating scroll jitter.
+        // Pre-reserve row height so layout doesn't shift when translation arrives.
         if (isTranslationEnabled)
             _translatedText = "\u00A0";
     }
 
-    /// <summary>Original Whisper segment — provides Id, Start, End, and original Text.</summary>
+    /// <summary>The source Whisper segment.</summary>
     public SubtitleSegment Original { get; }
 
     public string OriginalText => Original.Text;
@@ -74,41 +68,24 @@ public sealed class TranslatedSegmentView : INotifyPropertyChanged
             ? FontStyle.Italic
             : FontStyle.Normal;
 
-    /// <summary>
-    /// Dimmed while pending; further dimmed as secondary line when translated (or when
-    /// translation is enabled and the placeholder is showing); full opacity otherwise.
-    /// </summary>
+    /// <summary>Dimmed while pending; secondary opacity when translated; full otherwise.</summary>
     public double OriginalOpacity =>
         _state == TranslationSegmentState.Provisional
             ? (_isTranslationEnabled ? 0.50 : 0.65)
             : HasTranslation ? 0.50 : 1.0;
 
-    /// <summary>
-    /// Smaller when translation is enabled (the row is always bilingual); normal otherwise.
-    /// Pre-reserved at insert time so the layout never changes when the translation arrives.
-    /// </summary>
+    /// <summary>Smaller in bilingual mode; pre-reserved so layout never shifts on translation.</summary>
     public double OriginalFontSize => _isTranslationEnabled ? 12.0 : 14.0;
 
-    /// <summary>
-    /// Translated text row: always visible when translation is enabled (placeholder or real text);
-    /// collapsed when translation is disabled.
-    /// </summary>
+    /// <summary>Visible when translation is enabled; collapsed otherwise.</summary>
     public Visibility TranslatedVisibility =>
         _isTranslationEnabled ? Visibility.Visible : Visibility.Collapsed;
 
-    /// <summary>
-    /// Original text row: hidden when mode=Translated and a translation exists;
-    /// always visible otherwise (also acts as the fallback for failed translations).
-    /// </summary>
     public Visibility OriginalVisibility => Visibility.Visible;
 
     // ── Mutation ──────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Called by <see cref="Services.Translation.TranslationService"/> on the UI thread
-    /// when translation completes. Replaces the pre-reserved placeholder with the real text —
-    /// only the text value changes, not Visibility or font size, so no layout shift occurs.
-    /// </summary>
+    /// <summary>Sets translated text and transitions state to Translated.</summary>
     public void ApplyTranslation(string translated)
     {
         TranslatedText = translated;

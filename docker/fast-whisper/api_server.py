@@ -13,13 +13,10 @@ _AVAILABLE_MODELS = ["tiny", "base", "small", "medium", "large-v3", "turbo"]
 _MODEL_NAME_MAP = {"turbo": "large-v3-turbo"}
 
 _DEFAULT_MODEL = os.environ.get("WHISPER_MODEL", "small")
-# DEVICE: "cpu" or "cuda" — set per profile in docker-compose.yml
 _DEVICE = os.environ.get("DEVICE", "cpu")
-# COMPUTE_TYPE: "int8" (fastest on CPU), "float16" (GPU), "float32" (fallback)
 _COMPUTE_TYPE = os.environ.get("COMPUTE_TYPE", "int8")
-# BEAM_SIZE: 1 = greedy/fastest, 5 = default beam search
+# 1 = greedy (fastest), 5 = beam search
 _BEAM_SIZE = int(os.environ.get("BEAM_SIZE", "5"))
-# MODEL_CACHE: directory where downloaded models are stored (mounted volume)
 _MODEL_CACHE = os.environ.get("MODEL_CACHE") or None
 
 _loaded: dict[str, WhisperModel] = {}
@@ -103,8 +100,7 @@ async def transcribe(
         if initial_prompt:
             kwargs["initial_prompt"] = initial_prompt
 
-        # Run the CPU-bound transcription off the async event loop so FastAPI
-        # stays responsive to health checks and other requests during processing.
+        # Run CPU-bound transcription off the async event loop.
         seg_list = await asyncio.to_thread(
             _run_transcription, _get_model(model), tmp_path, **kwargs
         )

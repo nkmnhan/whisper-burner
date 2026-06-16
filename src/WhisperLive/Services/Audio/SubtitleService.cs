@@ -50,14 +50,19 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
     {
         foreach (var seg in segments)
         {
+            var cleanedText = StripLeadingConnectors(seg.Text);
+            if (cleanedText.Length == 0) continue;
+
             SubtitleSegment globalSeg;
             lock (_segLock)
             {
-                var deduped = _segments.Count > 0
-                    ? seg with { Text = StripLeadingOverlap(_segments[^1].Text, seg.Text) }
-                    : seg;
-                if (deduped.Text.Length == 0) continue;
-                globalSeg = deduped with { Id = _segments.Count + 1 };
+                // Check against last 3 segments to catch repetitions that skip a segment
+                var deduped = cleanedText;
+                var checkCount = Math.Min(3, _segments.Count);
+                for (var i = 1; i <= checkCount && deduped.Length > 0; i++)
+                    deduped = StripLeadingOverlap(_segments[^i].Text, deduped);
+                if (deduped.Length == 0) continue;
+                globalSeg = seg with { Text = deduped, Id = _segments.Count + 1 };
                 _segments.Add(globalSeg);
             }
             WriteSrtEntry(globalSeg);
@@ -65,10 +70,18 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         }
     }
 
-    // Strips word-level prefix of `current` that overlaps with a suffix of `prev`.
-    // Handles Whisper's chunk-boundary repetition (e.g. prev: "Make the most of."
-    // curr: "Make the most of means use your time" → "means use your time").
-    // Minimum 2-word overlap required to avoid false positives on short common phrases.
+    // Strips leading "..." or "- " continuation markers Whisper emits at chunk boundaries.
+    private static string StripLeadingConnectors(string text)
+    {
+        var t = text.Trim();
+        while (t.StartsWith("...")) t = t[3..].TrimStart();
+        if (t.StartsWith("- ") || t.StartsWith("– ") || t.StartsWith("— "))
+            t = t[2..].TrimStart();
+        return t;
+    }
+
+    // Strips word-level prefix of `current` that overlaps a suffix of `prev`.
+    // Handles Whisper chunk-boundary repetition. Requires min 2-word overlap.
     private static string StripLeadingOverlap(string prev, string current)
     {
         const int MinOverlapWords = 2;
@@ -76,7 +89,8 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         var prevWords = NormalizeWords(prev);
         var currWords = NormalizeWords(current);
 
-        var maxK = Math.Min(prevWords.Count - 1, currWords.Count);
+        // Include full prevWords.Count so a sentence repeated verbatim at curr start is caught.
+        var maxK = Math.Min(prevWords.Count, currWords.Count);
         if (maxK < MinOverlapWords) return current;
 
         for (var k = maxK; k >= MinOverlapWords; k--)

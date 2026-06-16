@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using WhisperLive.Infrastructure;
@@ -113,7 +114,8 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
             {
                 try
                 {
-                    var segments = await _transcription.TranscribeChunkAsync(chunk, options, ct);
+                    var chunkOptions = BuildChunkOptions(options);
+                    var segments = await _transcription.TranscribeChunkAsync(chunk, chunkOptions, ct);
                     _subtitle.AppendSegments(segments);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
@@ -124,10 +126,24 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         catch (OperationCanceledException) { }
         finally
         {
-            // Drain any chunks still queued in the channel after cancellation and delete their temp files.
+            // Drain queued chunks after cancellation.
             while (_recording.Chunks.TryRead(out var leftover))
                 try { File.Delete(leftover.FilePath); } catch { }
         }
+    }
+
+    // Injects last ~100 transcript words as initial_prompt for vocabulary continuity.
+    private RecordingOptions BuildChunkOptions(RecordingOptions options)
+    {
+        string prompt;
+        lock (_segLock)
+        {
+            prompt = string.Join(" ",
+                _recentSegments
+                    .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    .TakeLast(100));
+        }
+        return string.IsNullOrEmpty(prompt) ? options : options with { InitialPrompt = prompt };
     }
 
     private void SetState(RecordingState state)

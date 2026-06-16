@@ -4,11 +4,6 @@ using System.Collections.Generic;
 
 namespace WhisperLive.Helpers;
 
-// Helper class to allow the app to find the Window that contains an
-// arbitrary UIElement (GetWindowForElement).  To do this, we keep track
-// of all active Windows.  The app code must call WindowHelper.CreateWindow
-// rather than "new Window" so we can keep track of all the relevant
-// windows.  In the future, we would like to support this in platform APIs.
 public partial class WindowHelper
 {
     static public Window CreateWindow()
@@ -42,7 +37,6 @@ public partial class WindowHelper
         return null;
     }
 
-    // get dpi for an element
     static public double GetRasterizationScaleForElement(UIElement element)
     {
         if (element.XamlRoot != null)

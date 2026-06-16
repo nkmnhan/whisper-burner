@@ -48,7 +48,7 @@ services:
       - WHISPER_MODEL=small
       - DEVICE=cpu
       - COMPUTE_TYPE=int8
-      - BEAM_SIZE=5
+      - BEAM_SIZE=1
       - MODEL_CACHE=/models
       - PYTHONDONTWRITEBYTECODE=1
     ports:
