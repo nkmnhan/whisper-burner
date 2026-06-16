@@ -233,6 +233,14 @@ public sealed class ClaudeCliProvider : IAiProvider
                 }
             }
 
+            // Tell Claude which SRT file belongs to the current session so it can read it directly
+            // for long sessions that exceed the inline MaxInlineSegments buffer.
+            if (context?.LiveTranscriptPath is { } srtPath && File.Exists(srtPath))
+            {
+                args.Add("--append-system-prompt");
+                args.Add($"Current session SRT: \"{srtPath.Replace('\\', '/')}\"");
+            }
+
             // Only inject prior-conversation summary on the first turn after a context rotation.
             // Static persona lives in ~/whisper.live/CLAUDE.md (auto-loaded from working dir).
             // Per-session context lives in ~/whisper.live/session-active/CLAUDE.md (loaded via --add-dir).
@@ -267,22 +275,6 @@ public sealed class ClaudeCliProvider : IAiProvider
             }
 
             return string.Join(",", patterns);
-        }
-
-        private static string BuildSystemPromptSuffix(string systemPromptBase, AiCallContext? context)
-        {
-            var prompt = systemPromptBase;
-
-            if (context?.LiveTranscriptPath is { } srtPath && File.Exists(srtPath))
-                prompt += $"\n\nCurrent session SRT: \"{srtPath.Replace('\\', '/')}\"";
-
-            foreach (var folder in context?.ContextPaths ?? [])
-            {
-                if (!string.IsNullOrWhiteSpace(folder))
-                    prompt += $"\n\nProject folder: \"{folder.Replace('\\', '/')}\"";
-            }
-
-            return prompt;
         }
 
         public void Dispose()

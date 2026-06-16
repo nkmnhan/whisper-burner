@@ -42,8 +42,8 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
 
     public void StartSession(string? preContext = null)
     {
+        EndSession();
         WriteSessionClaudeMd(preContext?.Trim());
-        _chatSession = null;
         _sessionCts = new CancellationTokenSource();
     }
 
@@ -116,7 +116,8 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
         contextPaths.AddRange(settings.ContextFolderPaths);
         return new AiCallContext(
             AllowedReadPaths: settings.AllowedReadPaths,
-            ContextPaths: contextPaths
+            ContextPaths: contextPaths,
+            LiveTranscriptPath: _recordingManager.CurrentSessionPath
         );
     }
 

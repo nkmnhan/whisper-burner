@@ -43,6 +43,7 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         _srtWriter = null;
         if (CurrentSessionPath is not null)
             AppLogger.Info("Session file closed: {Path}", CurrentSessionPath);
+        CurrentSessionPath = null;
     }
 
     public void AppendSegments(IEnumerable<SubtitleSegment> segments)

@@ -107,16 +107,26 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
 
     private async Task ConsumeChunksAsync(RecordingOptions options, CancellationToken ct)
     {
-        await foreach (var chunk in _recording.Chunks.ReadAllAsync(ct))
+        try
         {
-            try
+            await foreach (var chunk in _recording.Chunks.ReadAllAsync(ct))
             {
-                var segments = await _transcription.TranscribeChunkAsync(chunk, options, ct);
-                _subtitle.AppendSegments(segments);
+                try
+                {
+                    var segments = await _transcription.TranscribeChunkAsync(chunk, options, ct);
+                    _subtitle.AppendSegments(segments);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
+                catch (Exception ex) { AppLogger.Error(ex, "Transcription error on chunk"); }
+                finally { try { File.Delete(chunk.FilePath); } catch { } }
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
-            catch (Exception ex) { AppLogger.Error(ex, "Transcription error on chunk"); }
-            finally { try { File.Delete(chunk.FilePath); } catch { } }
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            // Drain any chunks still queued in the channel after cancellation and delete their temp files.
+            while (_recording.Chunks.TryRead(out var leftover))
+                try { File.Delete(leftover.FilePath); } catch { }
         }
     }
 
@@ -130,6 +140,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
     {
         _cts?.Cancel();
         _cts?.Dispose();
+        _subtitle.SegmentAdded -= OnSubtitleSegmentAdded;
         _consumeTask = null;
     }
 }
