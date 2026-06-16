@@ -10,10 +10,11 @@ _MODEL_NAME_MAP = {"turbo": "large-v3-turbo"}
 
 
 def format_time(seconds: float) -> str:
-    h = int(seconds // 3600)
-    m = int((seconds % 3600) // 60)
-    s = int(seconds % 60)
-    ms = int(round(seconds % 1, 3) * 1000)
+    total_ms = round(seconds * 1000)
+    ms = total_ms % 1000
+    s  = (total_ms // 1000) % 60
+    m  = (total_ms // 60_000) % 60
+    h  = total_ms // 3_600_000
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
