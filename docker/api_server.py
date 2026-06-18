@@ -98,6 +98,7 @@ async def transcribe(
             "language": None if language in ("auto", "") else language,
             "task": task,
             "beam_size": _BEAM_SIZE,
+            "vad_filter": True,
         }
         if initial_prompt:
             kwargs["initial_prompt"] = initial_prompt
