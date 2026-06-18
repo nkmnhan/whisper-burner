@@ -73,7 +73,7 @@ public sealed class TranscriptionClient : ITranscriptionClient
         var segments = raw
             .Where(s => !string.IsNullOrWhiteSpace(s.Text))
             .Where(s => !IsHallucination(s.Text))
-            .Where(s => s.End > chunk.OverlapSeconds)
+            .Where(s => s.Start >= chunk.OverlapSeconds)
             .Select(s => new SubtitleSegment(
                 s.Id,
                 s.Start + chunk.OffsetSeconds,
