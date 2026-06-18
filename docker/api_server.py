@@ -43,6 +43,22 @@ def _run_transcription(model: WhisperModel, path: str, **kwargs) -> list:
     return list(segments)
 
 
+def _clean_text(text: str) -> str:
+    """Remove faster-whisper blank/filler artifacts from segment text."""
+    # Blank tokens: "_____"
+    text = re.sub(r'_+', '', text)
+    # Spaced-dot filler: ". . ." or ". ." (faster-whisper pause artifact)
+    text = re.sub(r'(\s*\.\s*){3,}', ' ', text)
+    text = re.sub(r' \. ', ' ', text)
+    # Orphaned trailing punctuation left after stripping: "and ." → "and"
+    text = re.sub(r'\s+[.,]\s*$', '', text)
+    # Orphaned leading punctuation: ". the" → "the"
+    text = re.sub(r'^[.,]\s+', '', text)
+    # Normalize whitespace
+    text = re.sub(r'\s{2,}', ' ', text)
+    return text.strip()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print(
@@ -114,12 +130,13 @@ async def transcribe(
 
     segments = []
     for i, s in enumerate(seg_list, 1):
-        text = re.sub(r'_+', '', s.text).strip()
+        raw = s.text
+        text = _clean_text(raw)
         if not text:
-            print(f"[blank] Segment {i} became empty after stripping blank tokens: {s.text!r}", flush=True)
+            print(f"[blank] Segment {i} empty after cleaning: {raw!r}", flush=True)
             continue
-        if "_" in s.text:
-            print(f"[blank] Stripped blank tokens from segment {i}: {s.text!r} → {text!r}", flush=True)
+        if text != raw.strip():
+            print(f"[blank] Cleaned segment {i}: {raw!r} → {text!r}", flush=True)
         segments.append({"id": i, "start": s.start, "end": s.end, "text": text})
     return {"text": " ".join(s["text"] for s in segments), "segments": segments}
 
