@@ -43,7 +43,7 @@ def translate_texts(texts: list[str], target: str) -> list[str]:
         print(f"  Translating batch {chunk_num}/{len(chunks)} ({len(indices)} subtitles)...", flush=True)
         batch = [texts[i] for i in indices]
         joined = SEPARATOR.join(batch)
-        translated = translator.translate(joined)
+        translated = translator.translate(joined) or ""
         parts = translated.split(SEPARATOR)
 
         if len(parts) == len(batch):
@@ -53,7 +53,7 @@ def translate_texts(texts: list[str], target: str) -> list[str]:
             # Separator didn't survive — fall back to one-by-one for this batch
             print(f"  Batch {chunk_num}: separator mismatch, falling back to individual requests...", flush=True)
             for i, text in zip(indices, batch):
-                results[i] = translator.translate(text)
+                results[i] = translator.translate(text) or text
                 time.sleep(0.2)
 
     return results

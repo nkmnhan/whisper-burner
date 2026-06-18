@@ -13,6 +13,8 @@ _AVAILABLE_MODELS = ["tiny", "base", "small", "medium", "large-v3", "turbo"]
 _MODEL_NAME_MAP = {"turbo": "large-v3-turbo"}
 
 _DEFAULT_MODEL = os.environ.get("WHISPER_MODEL", "small")
+if _DEFAULT_MODEL not in _AVAILABLE_MODELS:
+    raise ValueError(f"WHISPER_MODEL={_DEFAULT_MODEL!r} is not valid; choose from {_AVAILABLE_MODELS}")
 _DEVICE = os.environ.get("DEVICE", "cpu")
 _COMPUTE_TYPE = os.environ.get("COMPUTE_TYPE", "int8")
 # 1 = greedy (fastest), 5 = beam search
@@ -101,8 +103,9 @@ async def transcribe(
             kwargs["initial_prompt"] = initial_prompt
 
         # Run CPU-bound transcription off the async event loop.
+        # _get_model is inside the lambda so model loading also happens off the event loop.
         seg_list = await asyncio.to_thread(
-            _run_transcription, _get_model(model), tmp_path, **kwargs
+            lambda: _run_transcription(_get_model(model), tmp_path, **kwargs)
         )
     finally:
         os.unlink(tmp_path)

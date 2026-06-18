@@ -22,7 +22,7 @@ $videoExts = @(".mp4", ".mkv", ".wmv", ".avi", ".mov", ".webm",
 $composeFile = Join-Path $PSScriptRoot "..\..\docker\docker-compose.yml"
 
 function Invoke-Transcribe([string[]]$CmdArgs) {
-    docker compose -f $composeFile --profile $profile run --rm -d $service @CmdArgs
+    docker compose -f $composeFile --profile $profile run --rm $service @CmdArgs
 }
 
 function EscapeFilter([string]$path) {

@@ -24,6 +24,8 @@ public sealed partial class LiveTranscriptPage : Page
     private List<SessionSkill> _allSkills = [];
     private bool _isAsking;
     private CancellationTokenSource? _suggestDebounce;
+    private CancellationTokenSource? _healthCheckCts;
+    private bool _apiHealthy;
     private bool _suppressNextFocus;
     private readonly NotifyCollectionChangedEventHandler _onChatCollectionChanged;
 
@@ -84,13 +86,14 @@ public sealed partial class LiveTranscriptPage : Page
         _allSkills = [.. SessionSkill.Defaults, .. _settings.CustomSkills];
 
         ApplyState(Manager.State);
-
-        if (Manager.State == RecordingState.Idle)
-            await CheckApiHealthAsync();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        SetHealthPolling(false);
+        _suggestDebounce?.Cancel();
+        _suggestDebounce?.Dispose();
+        _suggestDebounce = null;
         Manager.StateChanged -= OnStateChanged;
         CurrentApp.TranscriptViewModel.Segments.CollectionChanged -= OnSegmentsChanged;
         if (App.CaptionOverlay is { } overlayOnUnload) overlayOnUnload.Hidden -= OnOverlayHidden;
@@ -113,12 +116,39 @@ public sealed partial class LiveTranscriptPage : Page
             ShowOverlayButton.Visibility = Visibility.Visible;
     }
 
+    private void SetHealthPolling(bool active)
+    {
+        _healthCheckCts?.Cancel();
+        _healthCheckCts?.Dispose();
+        _healthCheckCts = active ? new CancellationTokenSource() : null;
+        if (active)
+        {
+            _apiHealthy = false;
+            _ = PollHealthAsync(_healthCheckCts!.Token);
+        }
+    }
+
+    private async Task PollHealthAsync(CancellationToken ct)
+    {
+        await CheckApiHealthAsync();
+        while (!ct.IsCancellationRequested)
+        {
+            try { await Task.Delay(TimeSpan.FromSeconds(5), ct); }
+            catch (OperationCanceledException) { break; }
+            if (!ct.IsCancellationRequested)
+                await CheckApiHealthAsync();
+        }
+    }
+
     private async Task CheckApiHealthAsync()
     {
-        SetStatusDot("StatusDotCautionBrush", "Checking API…");
-        MainButton.IsEnabled = false;
-        var healthy = await CurrentApp.TranscriptionClient.CheckHealthAsync(_settings.ApiUrl);
-        SetApiReady(healthy);
+        if (!_apiHealthy)
+        {
+            SetStatusDot("StatusDotCautionBrush", "Checking API…");
+            MainButton.IsEnabled = false;
+        }
+        _apiHealthy = await CurrentApp.TranscriptionClient.CheckHealthAsync(_settings.ApiUrl);
+        SetApiReady(_apiHealthy);
     }
 
     private void SetApiReady(bool ready)
@@ -154,6 +184,7 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void ApplyState(RecordingState state)
     {
+        SetHealthPolling(state == RecordingState.Idle);
         switch (state)
         {
             case RecordingState.Idle:
@@ -217,11 +248,10 @@ public sealed partial class LiveTranscriptPage : Page
                 Task: _settings.EnableTranslation && _settings.TranslationProvider == "whisper"
                     ? "translate" : "transcribe");
 
-            var contextText = PreContextBox.Text.Trim();
-            if (!string.IsNullOrEmpty(contextText))
+            if (!string.IsNullOrEmpty(sessionContext))
             {
-                _settings.RecentSessionContexts.RemoveAll(p => p == contextText);
-                _settings.RecentSessionContexts.Insert(0, contextText);
+                _settings.RecentSessionContexts.RemoveAll(p => p == sessionContext);
+                _settings.RecentSessionContexts.Insert(0, sessionContext);
                 if (_settings.RecentSessionContexts.Count > 10)
                     _settings.RecentSessionContexts.RemoveRange(10, _settings.RecentSessionContexts.Count - 10);
                 _ = _settings.SaveAsync();
@@ -233,7 +263,7 @@ public sealed partial class LiveTranscriptPage : Page
                 _settings.EnableTranslation ? TranslationSvc.TargetLanguage : null);
 
             if (_settings.EnableAssistant)
-                Assistant.StartSession(PreContextBox.Text);
+                Assistant.StartSession(sessionContext);
 
             if (_settings.EnableTranslation)
                 TranslationSvc.StartSession();
@@ -256,8 +286,6 @@ public sealed partial class LiveTranscriptPage : Page
                 ? $"Saved → {System.IO.Path.GetFileName(p)}" : null;
             if (saved is not null)
                 ShowActionStatus(saved);
-
-            await CheckApiHealthAsync();
         }
     }
 
@@ -434,6 +462,7 @@ public sealed partial class LiveTranscriptPage : Page
         if (_isAsking) return;
 
         _suggestDebounce?.Cancel();
+        _suggestDebounce?.Dispose();
         _suggestDebounce = new CancellationTokenSource();
         var cts = _suggestDebounce;
 

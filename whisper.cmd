@@ -76,8 +76,8 @@ echo    [1] CPU  (no GPU required)
 echo    [2] GPU  (requires NVIDIA + Docker NVIDIA runtime)
 echo.
 set /p DEV= Select (1 or 2):
-if "%DEV%"=="1" set PROFILE=api-cpu
-if "%DEV%"=="2" set PROFILE=api-gpu
+if "%DEV%"=="1" set PROFILE=cpu
+if "%DEV%"=="2" set PROFILE=gpu
 if "%PROFILE%"=="" ( echo  Invalid choice. & pause & goto MENU )
 echo.
 echo  Action:
