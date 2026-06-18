@@ -17,7 +17,7 @@ echo     [4] Build release
 echo     [5] Create desktop shortcut
 echo.
 echo   Whisper API
-echo     [6] Start API
+echo     [6] Manage API
 echo     [7] Download model
 echo.
 echo   Batch Processing
@@ -80,9 +80,39 @@ if "%DEV%"=="1" set PROFILE=api-cpu
 if "%DEV%"=="2" set PROFILE=api-gpu
 if "%PROFILE%"=="" ( echo  Invalid choice. & pause & goto MENU )
 echo.
-echo  Starting Whisper API [%PROFILE%] on http://localhost:5000 ...
+echo  Action:
+echo    [1] Start   (start if not running)
+echo    [2] Stop    (stop and remove container)
+echo    [3] Recreate (stop, rebuild image, start fresh)
+echo    [4] Status  (show running containers)
 echo.
-docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% up --build -d
+set /p ACT= Select action (1-4):
+echo.
+
+if "%ACT%"=="1" (
+    echo  Starting [%PROFILE%] ...
+    docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% up --build -d
+    goto API_DONE
+)
+if "%ACT%"=="2" (
+    echo  Stopping [%PROFILE%] ...
+    docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% down
+    goto API_DONE
+)
+if "%ACT%"=="3" (
+    echo  Recreating [%PROFILE%] ...
+    docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% down
+    docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% up --build -d
+    goto API_DONE
+)
+if "%ACT%"=="4" (
+    echo  Running containers:
+    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    goto API_DONE
+)
+echo  Invalid choice.
+
+:API_DONE
 pause
 goto MENU
 
