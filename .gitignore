@@ -1,7 +1,5 @@
-# Model cache — keep subdirectory placeholders, ignore actual model files
+# Model cache — keep subdirectory placeholder, ignore actual model files
 /models/**
-!/models/whisper/
-!/models/whisper/.gitkeep
 !/models/fast-whisper/
 !/models/fast-whisper/.gitkeep
 
@@ -24,6 +22,9 @@
 # Generated outputs
 /videos/output/
 /videos/*.srt
+
+# Docker file-mount stubs (Docker Desktop on Windows creates these on the host)
+/videos/*.py
 
 # Keep videos folder in Git
 !/videos/.gitkeep
