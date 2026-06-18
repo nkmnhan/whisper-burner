@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -66,7 +66,11 @@ public sealed class TranscriptionClient : ITranscriptionClient
         var json = await response.Content.ReadAsStringAsync(ct);
         var result = JsonSerializer.Deserialize<TranscribeResponse>(json, _json);
 
-        var segments = result?.Segments?
+        var raw = result?.Segments ?? [];
+        foreach (var s in raw.Where(s => s.Text.Contains('_')))
+            AppLogger.Warning("Chunk #{Index} — blank token from API: {Text}", chunk.ChunkIndex, s.Text.Trim());
+
+        var segments = raw
             .Where(s => !string.IsNullOrWhiteSpace(s.Text))
             .Where(s => !IsHallucination(s.Text))
             .Where(s => s.End > chunk.OverlapSeconds)
@@ -75,7 +79,7 @@ public sealed class TranscriptionClient : ITranscriptionClient
                 s.Start + chunk.OffsetSeconds,
                 s.End + chunk.OffsetSeconds,
                 s.Text.Trim()))
-            .ToList() ?? [];
+            .ToList();
 
         AppLogger.Debug("Chunk #{Index} → {Count} segment(s)", chunk.ChunkIndex, segments.Count);
         return segments;
@@ -93,6 +97,7 @@ public sealed class TranscriptionClient : ITranscriptionClient
     {
         var t = text.Trim();
         if (_silenceTokens.Contains(t)) return true;
+        if (t.All(c => c == '_' || c == ' ')) return true;
         return t.All(c => c is '.' or ',' or '!' or '?' or '-' or '–' or '—' or ' ' or '\u266a' or '\u266b');
     }
 

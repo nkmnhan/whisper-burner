@@ -115,6 +115,9 @@ async def transcribe(
         {"id": i, "start": s.start, "end": s.end, "text": s.text.strip()}
         for i, s in enumerate(seg_list, 1)
     ]
+    for s in segments:
+        if "_" in s["text"]:
+            print(f"[blank] Whisper emitted blank token in segment {s['id']}: {s['text']!r}", flush=True)
     return {"text": " ".join(s["text"] for s in segments), "segments": segments}
 
 
