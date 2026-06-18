@@ -43,20 +43,20 @@ def _run_transcription(model: WhisperModel, path: str, **kwargs) -> list:
     return list(segments)
 
 
+# Matches faster-whisper output artifacts in one pass.
+# group 'space'  → replace with ' '  (spaced-dot filler, lone dot, multi-space)
+# group 'drop'   → replace with ''   (blank tokens, 'ndn' hallucination, orphaned punct)
+_RE_CLEAN = re.compile(
+    r'(?P<space>(?:\s*\.\s*){3,}| \. |\s{2,})'
+    r'|(?P<drop>_+|\bndn\b|\s+[.,]\s*$|^[.,]\s+)',
+    re.MULTILINE,
+)
+
+
 def _clean_text(text: str) -> str:
-    """Remove faster-whisper blank/filler artifacts from segment text."""
-    # Blank tokens: "_____"
-    text = re.sub(r'_+', '', text)
-    # Spaced-dot filler: ". . ." or ". ." (faster-whisper pause artifact)
-    text = re.sub(r'(\s*\.\s*){3,}', ' ', text)
-    text = re.sub(r' \. ', ' ', text)
-    # Orphaned trailing punctuation left after stripping: "and ." → "and"
-    text = re.sub(r'\s+[.,]\s*$', '', text)
-    # Orphaned leading punctuation: ". the" → "the"
-    text = re.sub(r'^[.,]\s+', '', text)
-    # Normalize whitespace
-    text = re.sub(r'\s{2,}', ' ', text)
-    return text.strip()
+    return _RE_CLEAN.sub(
+        lambda m: ' ' if m.lastgroup == 'space' else '', text
+    ).strip()
 
 
 @asynccontextmanager
