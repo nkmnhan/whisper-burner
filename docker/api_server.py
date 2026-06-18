@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import tempfile
 from contextlib import asynccontextmanager
 
@@ -111,13 +112,15 @@ async def transcribe(
     finally:
         os.unlink(tmp_path)
 
-    segments = [
-        {"id": i, "start": s.start, "end": s.end, "text": s.text.strip()}
-        for i, s in enumerate(seg_list, 1)
-    ]
-    for s in segments:
-        if "_" in s["text"]:
-            print(f"[blank] Whisper emitted blank token in segment {s['id']}: {s['text']!r}", flush=True)
+    segments = []
+    for i, s in enumerate(seg_list, 1):
+        text = re.sub(r'_+', '', s.text).strip()
+        if not text:
+            print(f"[blank] Segment {i} became empty after stripping blank tokens: {s.text!r}", flush=True)
+            continue
+        if "_" in s.text:
+            print(f"[blank] Stripped blank tokens from segment {i}: {s.text!r} → {text!r}", flush=True)
+        segments.append({"id": i, "start": s.start, "end": s.end, "text": text})
     return {"text": " ".join(s["text"] for s in segments), "segments": segments}
 
 
