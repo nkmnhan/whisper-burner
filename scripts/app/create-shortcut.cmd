@@ -11,14 +11,7 @@ if not exist "%EXE%" (
     exit /b 1
 )
 
-powershell -NoProfile -Command ^
-  "$ws = New-Object -ComObject WScript.Shell; ^
-   $s = $ws.CreateShortcut('%SHORTCUT%'); ^
-   $s.TargetPath = '%EXE%'; ^
-   $s.WorkingDirectory = '%~dp0..\..\release'; ^
-   $s.IconLocation = '%EXE%,0'; ^
-   $s.Description = 'WhisperLive'; ^
-   $s.Save()"
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = '%EXE%'; $s.WorkingDirectory = '%~dp0..\..\release'; $s.IconLocation = '%EXE%,0'; $s.Description = 'WhisperLive'; $s.Save()"
 
 echo.
 echo  Shortcut created on Desktop: WhisperLive.lnk

@@ -34,7 +34,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host ""
 Write-Host "Downloading model '$Model' - this may take several minutes on first run..."
-& docker compose -f $compose --profile $profile run --rm --no-deps $service python -c "$pyCmd"
+& docker compose -f $compose --profile $profile run --rm -d --no-deps $service python -c "$pyCmd"
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
