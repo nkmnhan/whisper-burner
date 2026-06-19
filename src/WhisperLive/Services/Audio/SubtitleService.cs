@@ -53,25 +53,42 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
             var cleanedText = StripLeadingConnectors(seg.Text);
             if (cleanedText.Length == 0) continue;
 
-            SubtitleSegment globalSeg;
+            // First lock: find insertion point and snapshot up to 3 preceding texts.
+            // Released immediately so concurrent FireChunkAsync threads don't serialize
+            // during the O(n·w) StripLeadingOverlap string work below.
+            int insertIdx;
+            string[] preceding;
             lock (_segLock)
             {
-                // Find the insertion index sorted by Start time.
-                // Chunks may arrive out of order when fired concurrently.
-                var insertIdx = _segments.Count;
+                insertIdx = _segments.Count;
                 for (var i = _segments.Count - 1; i >= 0; i--)
                 {
                     if (_segments[i].Start <= seg.Start) break;
                     insertIdx = i;
                 }
-
-                // Dedup against up to 3 temporally preceding segments (not last-added).
-                var deduped = cleanedText;
                 var checkCount = Math.Min(3, insertIdx);
-                for (var i = 1; i <= checkCount && deduped.Length > 0; i++)
-                    deduped = StripLeadingOverlap(_segments[insertIdx - i].Text, deduped);
-                if (deduped.Length == 0) continue;
+                preceding = new string[checkCount];
+                for (var i = 0; i < checkCount; i++)
+                    preceding[i] = _segments[insertIdx - 1 - i].Text;
+            }
 
+            // Dedup against up to 3 temporally preceding segments — pure string work, no lock.
+            var deduped = cleanedText;
+            for (var i = 0; i < preceding.Length && deduped.Length > 0; i++)
+                deduped = StripLeadingOverlap(preceding[i], deduped);
+            if (deduped.Length == 0) continue;
+
+            // Second lock: recompute insertion index (another thread may have inserted
+            // since we released) then insert.
+            SubtitleSegment globalSeg;
+            lock (_segLock)
+            {
+                insertIdx = _segments.Count;
+                for (var i = _segments.Count - 1; i >= 0; i--)
+                {
+                    if (_segments[i].Start <= seg.Start) break;
+                    insertIdx = i;
+                }
                 globalSeg = seg with { Text = deduped, Id = _segments.Count + 1 };
                 _segments.Insert(insertIdx, globalSeg);
             }

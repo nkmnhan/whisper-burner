@@ -102,11 +102,17 @@ sealed partial class App : Application
         RecordingManager.SegmentAdded += (_, seg) => TranslationService.EnqueueSegment(seg);
         TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
 
-        MainWindow.Closed += (s, _) =>
+        MainWindow.Closed += async (s, _) =>
         {
-            RecordingManager.StopAsync()
-                .ContinueWith(_ => { })
-                .Wait(TimeSpan.FromSeconds(5));
+            try
+            {
+                await RecordingManager.StopAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (TimeoutException)
+            {
+                AppLogger.Warning("StopAsync timed out on window close — forcing shutdown");
+            }
+            catch (OperationCanceledException) { }
 
             TranscriptViewModel.FinalizeSession();
             SessionAssistant.EndSession();

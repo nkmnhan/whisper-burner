@@ -19,6 +19,10 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
     private Task? _consumeTask;
     private readonly object _segLock = new();
     private readonly List<string> _recentSegments = [];
+    private readonly SemaphoreSlim _inflightSemaphore = new(2, 2);
+    private int _consecutiveFailures;
+
+    public event EventHandler? ApiStalled;
 
     public RecordingState State { get; private set; } = RecordingState.Idle;
     public string? CurrentSessionPath => _subtitle.CurrentSessionPath;
@@ -46,6 +50,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         if (State != RecordingState.Idle) return Task.CompletedTask;
 
         lock (_segLock) _recentSegments.Clear();
+        Interlocked.Exchange(ref _consecutiveFailures, 0);
         _cts = new CancellationTokenSource();
         _transcription.ResetPrompt();
         _subtitle.StartSession();
@@ -136,34 +141,67 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
 
     private async Task FireChunkAsync(AudioChunkInfo chunk, RecordingOptions options, CancellationToken ct)
     {
+        try { await _inflightSemaphore.WaitAsync(ct); }
+        catch (OperationCanceledException) { TryDeleteChunk(chunk); return; }
+
+        var success = false;
         try
         {
-            var segments = await _transcription.TranscribeChunkAsync(chunk, BuildChunkOptions(options), ct);
-            if (!ct.IsCancellationRequested)
-                _subtitle.AppendSegments(segments);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-        catch (Exception ex)
-        {
-            AppLogger.Warning(ex, "Chunk #{Index} timed out or failed — skipping", chunk.ChunkIndex);
+            for (var attempt = 0; attempt < 2; attempt++)
+            {
+                if (attempt > 0)
+                {
+                    try { await Task.Delay(2_000, ct); }
+                    catch (OperationCanceledException) { return; }
+                }
+                try
+                {
+                    var segs = await _transcription.TranscribeChunkAsync(chunk, BuildChunkOptions(options), ct);
+                    if (!ct.IsCancellationRequested)
+                        _subtitle.AppendSegments(segs);
+                    success = true;
+                    Interlocked.Exchange(ref _consecutiveFailures, 0);
+                    return;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+                catch (Exception ex)
+                {
+                    AppLogger.Warning(ex,
+                        attempt == 0
+                            ? "Chunk #{Index} failed — retrying in 2s"
+                            : "Chunk #{Index} failed after retry — skipping",
+                        chunk.ChunkIndex);
+                }
+            }
         }
         finally
         {
-            try { File.Delete(chunk.FilePath); } catch { }
+            _inflightSemaphore.Release();
+            TryDeleteChunk(chunk);
         }
+
+        if (!success)
+        {
+            var count = Interlocked.Increment(ref _consecutiveFailures);
+            if (count >= 3) ApiStalled?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private static void TryDeleteChunk(AudioChunkInfo chunk)
+    {
+        try { File.Delete(chunk.FilePath); } catch { }
     }
 
     // Injects last ~100 transcript words as initial_prompt for vocabulary continuity.
     private RecordingOptions BuildChunkOptions(RecordingOptions options)
     {
-        string prompt;
-        lock (_segLock)
-        {
-            prompt = string.Join(" ",
-                _recentSegments
-                    .SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        // Snapshot under lock, then do LINQ + string.Join outside so concurrent
+        // FireChunkAsync threads don't serialize during the string-split work.
+        List<string> snapshot;
+        lock (_segLock) snapshot = [.._recentSegments];
+        var prompt = string.Join(" ",
+            snapshot.SelectMany(s => s.Split(' ', StringSplitOptions.RemoveEmptyEntries))
                     .TakeLast(100));
-        }
         return string.IsNullOrEmpty(prompt) ? options : options with { InitialPrompt = prompt };
     }
 
@@ -179,5 +217,6 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         _cts?.Dispose();
         _subtitle.SegmentAdded -= OnSubtitleSegmentAdded;
         _consumeTask = null;
+        _inflightSemaphore.Dispose();
     }
 }
