@@ -11,6 +11,7 @@ public interface IRecordingManager
     string? CurrentSessionPath { get; }
     event EventHandler<RecordingState>? StateChanged;
     event EventHandler<SubtitleSegment>? SegmentAdded;
+    event EventHandler? ApiStalled;
     IReadOnlyList<string> GetRecentSegments();
     Task StartAsync(RecordingOptions options);
     Task StopAsync();

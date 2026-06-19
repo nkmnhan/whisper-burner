@@ -21,7 +21,7 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     public event EventHandler<SubtitleSegment>? SegmentAdded;
 
-    public IReadOnlyList<SubtitleSegment> AllSegments => _segments;
+    public IReadOnlyList<SubtitleSegment> AllSegments { get { lock (_segLock) return [.._segments]; } }
     public string? CurrentSessionPath { get; private set; }
     public string SessionsDirectory => _sessionsDir;
 

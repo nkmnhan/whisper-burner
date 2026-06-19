@@ -119,6 +119,8 @@ public sealed class TranslationService : ITranslationService, IDisposable
     public void Dispose()
     {
         EndSession();
-        _concurrencySemaphore.Dispose();
+        // _concurrencySemaphore has no OS handle (no AvailableWaitHandle used) so GC
+        // reclaim is safe. Disposing here races with Release() in fire-and-forget
+        // TranslateWithSemaphoreAsync tasks that are still in flight after EndSession().
     }
 }

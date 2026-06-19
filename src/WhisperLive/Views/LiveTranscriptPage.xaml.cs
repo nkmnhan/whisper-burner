@@ -8,6 +8,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using WhisperLive.Infrastructure;
 using WhisperLive.Models;
@@ -23,6 +24,7 @@ public sealed partial class LiveTranscriptPage : Page
     private readonly ObservableCollection<AssistantMessage> _chatMessages = [];
     private List<SessionSkill> _allSkills = [];
     private bool _isAsking;
+    private CancellationTokenSource? _askCts;
     private CancellationTokenSource? _suggestDebounce;
     private CancellationTokenSource? _healthCheckCts;
     private bool _apiHealthy;
@@ -68,6 +70,7 @@ public sealed partial class LiveTranscriptPage : Page
         CurrentApp.ApplySettings(_settings);
 
         Manager.StateChanged += OnStateChanged;
+        Manager.ApiStalled += OnApiStalled;
         CurrentApp.TranscriptViewModel.Segments.CollectionChanged += OnSegmentsChanged;
         if (App.CaptionOverlay is { } overlayOnLoad) overlayOnLoad.Hidden += OnOverlayHidden;
 
@@ -95,9 +98,13 @@ public sealed partial class LiveTranscriptPage : Page
         _suggestDebounce?.Dispose();
         _suggestDebounce = null;
         Manager.StateChanged -= OnStateChanged;
+        Manager.ApiStalled -= OnApiStalled;
         CurrentApp.TranscriptViewModel.Segments.CollectionChanged -= OnSegmentsChanged;
         if (App.CaptionOverlay is { } overlayOnUnload) overlayOnUnload.Hidden -= OnOverlayHidden;
         _chatMessages.CollectionChanged -= _onChatCollectionChanged;
+        _askCts?.Cancel();
+        _askCts?.Dispose();
+        _askCts = null;
     }
 
     private void OnSegmentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -181,6 +188,13 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void OnStateChanged(object? sender, RecordingState state) =>
         DispatcherQueue.TryEnqueue(() => ApplyState(state));
+
+    private void OnApiStalled(object? sender, EventArgs e) =>
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (Manager.State == RecordingState.Recording)
+                SetStatusDot("StatusDotCautionBrush", "API not responding — restart Docker");
+        });
 
     private void ApplyState(RecordingState state)
     {
@@ -424,6 +438,11 @@ public sealed partial class LiveTranscriptPage : Page
         AssistantQuestionBox.IsEnabled = false;
         ShowThinking();
 
+        _askCts?.Cancel();
+        _askCts?.Dispose();
+        _askCts = new CancellationTokenSource();
+        var askToken = _askCts.Token;
+
         _chatMessages.Add(new AssistantMessage("You", question, DateTimeOffset.Now));
 
         try
@@ -431,8 +450,13 @@ public sealed partial class LiveTranscriptPage : Page
             // Force onto the thread pool so Process.Start and context-building
             // never block the UI thread — all UI updates already happened above.
             var answer = await Task.Run(
-                () => Assistant.AskAsync(question, new AskOptions(IncludeBufferedTranscript: true)));
+                () => Assistant.AskAsync(question, new AskOptions(IncludeBufferedTranscript: true), askToken),
+                askToken);
             _chatMessages.Add(new AssistantMessage("Claude", answer, DateTimeOffset.Now));
+        }
+        catch (OperationCanceledException)
+        {
+            _chatMessages.Add(new AssistantMessage("Claude", "⚠ Request cancelled.", DateTimeOffset.Now));
         }
         catch (Exception ex)
         {

@@ -82,12 +82,20 @@ public sealed class RecordingService : IRecordingService
         try
         {
             while (await timer.WaitForNextTickAsync(ct))
-                FlushChunk(waveFormat, options);
+            {
+                try { FlushChunk(waveFormat, options); }
+                catch (Exception ex) { AppLogger.Warning(ex, "FlushChunk failed — audio chunk dropped"); }
+            }
         }
         catch (OperationCanceledException) { }
-
-        FlushChunk(waveFormat, options);
-        _channel.Writer.TryComplete();
+        finally
+        {
+            // Final flush on stop: drain any audio buffered since the last tick.
+            // TryComplete() must always run so ConsumeChunksAsync can exit cleanly.
+            try { FlushChunk(waveFormat, options); }
+            catch (Exception ex) { AppLogger.Warning(ex, "Final FlushChunk failed on stop"); }
+            _channel.Writer.TryComplete();
+        }
     }
 
     private void FlushChunk(WaveFormat waveFormat, RecordingOptions options)
