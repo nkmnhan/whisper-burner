@@ -56,14 +56,24 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
             SubtitleSegment globalSeg;
             lock (_segLock)
             {
-                // Check against last 3 segments to catch repetitions that skip a segment
+                // Find the insertion index sorted by Start time.
+                // Chunks may arrive out of order when fired concurrently.
+                var insertIdx = _segments.Count;
+                for (var i = _segments.Count - 1; i >= 0; i--)
+                {
+                    if (_segments[i].Start <= seg.Start) break;
+                    insertIdx = i;
+                }
+
+                // Dedup against up to 3 temporally preceding segments (not last-added).
                 var deduped = cleanedText;
-                var checkCount = Math.Min(3, _segments.Count);
+                var checkCount = Math.Min(3, insertIdx);
                 for (var i = 1; i <= checkCount && deduped.Length > 0; i++)
-                    deduped = StripLeadingOverlap(_segments[^i].Text, deduped);
+                    deduped = StripLeadingOverlap(_segments[insertIdx - i].Text, deduped);
                 if (deduped.Length == 0) continue;
+
                 globalSeg = seg with { Text = deduped, Id = _segments.Count + 1 };
-                _segments.Add(globalSeg);
+                _segments.Insert(insertIdx, globalSeg);
             }
             WriteSrtEntry(globalSeg);
             SegmentAdded?.Invoke(this, globalSeg);

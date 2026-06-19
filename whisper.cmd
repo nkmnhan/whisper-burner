@@ -71,6 +71,7 @@ goto MENU
 :: ─────────────────────────────────────────
 :START_API
 set PROFILE=
+set WHISPER_MODEL=
 echo  Device:
 echo    [1] CPU  (no GPU required)
 echo    [2] GPU  (requires NVIDIA + Docker NVIDIA runtime)
@@ -79,6 +80,24 @@ set /p DEV= Select (1 or 2):
 if "%DEV%"=="1" set PROFILE=cpu
 if "%DEV%"=="2" set PROFILE=gpu
 if "%PROFILE%"=="" ( echo  Invalid choice. & pause & goto MENU )
+echo.
+echo  Model (must match a previously downloaded model):
+echo    [1] tiny
+echo    [2] base
+echo    [3] small
+echo    [4] medium  (default)
+echo    [5] large-v3
+echo    [6] turbo
+echo.
+set /p MC= Select model (1-6, default 4):
+if "%MC%"=="" set MC=4
+if "%MC%"=="1" set WHISPER_MODEL=tiny
+if "%MC%"=="2" set WHISPER_MODEL=base
+if "%MC%"=="3" set WHISPER_MODEL=small
+if "%MC%"=="4" set WHISPER_MODEL=medium
+if "%MC%"=="5" set WHISPER_MODEL=large-v3
+if "%MC%"=="6" set WHISPER_MODEL=large-v3-turbo
+if "%WHISPER_MODEL%"=="" ( echo  Invalid choice. & pause & goto MENU )
 echo.
 echo  Action:
 echo    [1] Start   (start if not running)
@@ -90,7 +109,7 @@ set /p ACT= Select action (1-4):
 echo.
 
 if "%ACT%"=="1" (
-    echo  Starting [%PROFILE%] ...
+    echo  Starting [%PROFILE%] model=[%WHISPER_MODEL%] ...
     docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% up --build -d
     goto API_DONE
 )
@@ -100,7 +119,7 @@ if "%ACT%"=="2" (
     goto API_DONE
 )
 if "%ACT%"=="3" (
-    echo  Recreating [%PROFILE%] ...
+    echo  Recreating [%PROFILE%] model=[%WHISPER_MODEL%] ...
     docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% down
     docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% up --build -d
     goto API_DONE

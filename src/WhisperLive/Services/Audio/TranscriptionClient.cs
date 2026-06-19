@@ -59,7 +59,7 @@ public sealed class TranscriptionClient : ITranscriptionClient
             chunk.ChunkIndex, fileBytes.Length, chunk.OverlapSeconds);
 
         using var reqCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        reqCts.CancelAfter(TimeSpan.FromSeconds(60));
+        reqCts.CancelAfter(TimeSpan.FromSeconds(120));
         using var response = await _http.PostAsync($"{options.ApiUrl}/transcribe", form, reqCts.Token);
         response.EnsureSuccessStatusCode();
 

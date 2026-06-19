@@ -106,53 +106,51 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         SegmentAdded?.Invoke(this, seg);
     }
 
-    // Fires up to MaxInFlight transcription requests concurrently and drains results in
-    // chunk-index order, so segments are appended in the correct temporal sequence.
-    // This lets chunk N+1 start while chunk N is still in-flight, hiding GPU round-trip latency.
-    private const int MaxInFlight = 2;
-
     private async Task ConsumeChunksAsync(RecordingOptions options, CancellationToken ct)
     {
-        var inFlight = new Queue<(AudioChunkInfo Chunk, Task<IEnumerable<SubtitleSegment>> Work)>();
         try
         {
             await foreach (var chunk in _recording.Chunks.ReadAllAsync(ct))
             {
-                if (inFlight.Count >= MaxInFlight)
-                    await DrainOldestAsync(inFlight, ct);
+                // Skip stale chunks if the pipeline has fallen behind real-time.
+                var current = chunk;
+                while (_recording.Chunks.TryRead(out var newer))
+                {
+                    AppLogger.Warning("Skipping stale chunk #{Index} — pipeline behind", current.ChunkIndex);
+                    try { File.Delete(current.FilePath); } catch { }
+                    current = newer;
+                }
 
-                inFlight.Enqueue((chunk, _transcription.TranscribeChunkAsync(chunk, BuildChunkOptions(options), ct)));
+                // Fire and forget — don't block the recording loop waiting for any individual chunk.
+                // Each chunk lands in the transcript whenever its response arrives.
+                _ = FireChunkAsync(current, options, ct);
             }
-
-            while (inFlight.Count > 0)
-                await DrainOldestAsync(inFlight, ct);
         }
         catch (OperationCanceledException) { }
         finally
         {
-            while (inFlight.Count > 0)
-            {
-                var (chunk, work) = inFlight.Dequeue();
-                try { await work.WaitAsync(TimeSpan.FromSeconds(2)); } catch { }
-                try { File.Delete(chunk.FilePath); } catch { }
-            }
             while (_recording.Chunks.TryRead(out var leftover))
                 try { File.Delete(leftover.FilePath); } catch { }
         }
     }
 
-    private async Task DrainOldestAsync(
-        Queue<(AudioChunkInfo Chunk, Task<IEnumerable<SubtitleSegment>> Work)> inFlight,
-        CancellationToken ct)
+    private async Task FireChunkAsync(AudioChunkInfo chunk, RecordingOptions options, CancellationToken ct)
     {
-        var (chunk, work) = inFlight.Dequeue();
         try
         {
-            _subtitle.AppendSegments(await work);
+            var segments = await _transcription.TranscribeChunkAsync(chunk, BuildChunkOptions(options), ct);
+            if (!ct.IsCancellationRequested)
+                _subtitle.AppendSegments(segments);
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-        catch (Exception ex) { AppLogger.Error(ex, "Transcription error on chunk #{Index}", chunk.ChunkIndex); }
-        finally { try { File.Delete(chunk.FilePath); } catch { } }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            AppLogger.Warning(ex, "Chunk #{Index} timed out or failed — skipping", chunk.ChunkIndex);
+        }
+        finally
+        {
+            try { File.Delete(chunk.FilePath); } catch { }
+        }
     }
 
     // Injects last ~100 transcript words as initial_prompt for vocabulary continuity.

@@ -30,8 +30,18 @@ public sealed class TranscriptViewModel
         _dq.TryEnqueue(() =>
         {
             var view = new TranslatedSegmentView(seg, _isTranslationEnabled());
-            Segments.Add(view);
-            if (Segments.Count > MaxSegments)
+
+            // Insert at the correct position by Start time so late-arriving chunks
+            // from earlier in the session appear in the right place.
+            var insertIdx = Segments.Count;
+            for (var i = Segments.Count - 1; i >= 0; i--)
+            {
+                if (Segments[i].Original.Start <= seg.Start) break;
+                insertIdx = i;
+            }
+            Segments.Insert(insertIdx, view);
+
+            while (Segments.Count > MaxSegments)
                 Segments.RemoveAt(0);
             if (!_isTranslationEnabled())
                 view.MarkPassthrough();

@@ -27,7 +27,7 @@ services:
               count: all
               capabilities: [gpu]
     environment:
-      - WHISPER_MODEL=medium
+      - WHISPER_MODEL=${WHISPER_MODEL:-medium}
       - DEVICE=cuda
       - COMPUTE_TYPE=float16
       - BEAM_SIZE=5
@@ -37,7 +37,7 @@ services:
       - "5000:5000"
     healthcheck: *healthcheck
     volumes:
-      - ../models/fast-whisper:/models
+      - whisper-models:/models
       - ../videos:/app
       - ./api_server.py:/app/api_server.py:ro
       - ./batch_transcribe.py:/opt/batch_transcribe.py:ro
@@ -55,7 +55,7 @@ services:
       - 1.1.1.1
       - 8.8.8.8
     environment:
-      - WHISPER_MODEL=medium
+      - WHISPER_MODEL=${WHISPER_MODEL:-medium}
       - DEVICE=cpu
       - COMPUTE_TYPE=int8
       - BEAM_SIZE=1
@@ -65,8 +65,12 @@ services:
       - "5000:5000"
     healthcheck: *healthcheck
     volumes:
-      - ../models/fast-whisper:/models
+      - whisper-models:/models
       - ../videos:/app
       - ./api_server.py:/app/api_server.py:ro
       - ./batch_transcribe.py:/opt/batch_transcribe.py:ro
       - ./translate_srt.py:/opt/translate_srt.py:ro
+
+volumes:
+  whisper-models:
+    name: whisper-models
