@@ -111,16 +111,16 @@ public sealed class RecordingService : IRecordingService
 
         double overlapTarget = Math.Min(MaxOverlapSeconds, options.ChunkDurationSeconds * MaxOverlapFraction);
         double chunkOverlap = _overlapTail.Length > 0 ? overlapTarget : 0.0;
-        byte[] wavData;
+        byte[] pcmData;
         if (_overlapTail.Length > 0)
         {
-            wavData = new byte[_overlapTail.Length + freshData.Length];
-            _overlapTail.CopyTo(wavData, 0);
-            freshData.CopyTo(wavData, _overlapTail.Length);
+            pcmData = new byte[_overlapTail.Length + freshData.Length];
+            _overlapTail.CopyTo(pcmData, 0);
+            freshData.CopyTo(pcmData, _overlapTail.Length);
         }
         else
         {
-            wavData = freshData;
+            pcmData = freshData;
         }
 
         int overlapBytes = (int)(overlapTarget * waveFormat.AverageBytesPerSecond);
@@ -130,16 +130,20 @@ public sealed class RecordingService : IRecordingService
 
         double wavStartTime = _offsetSeconds - chunkOverlap;
 
-        var path = Path.Combine(Path.GetTempPath(), $"whisper_{_chunkIndex:D4}.wav");
-        using (var writer = new WaveFileWriter(path, waveFormat))
-            writer.Write(wavData, 0, wavData.Length);
+        // Build WAV in memory — avoids temp-file disk I/O on the hot path.
+        // WaveFileWriter closes the underlying MemoryStream on Dispose, but
+        // MemoryStream.ToArray() still works on a disposed instance.
+        var ms = new MemoryStream(pcmData.Length + 64);
+        using (var writer = new WaveFileWriter(ms, waveFormat))
+            writer.Write(pcmData, 0, pcmData.Length);
+        byte[] wavBytes = ms.ToArray();
 
-        AppLogger.Debug("Flushed chunk #{Index} — {Bytes} bytes (overlap={Overlap}s) → {Path}",
-            _chunkIndex, wavData.Length, chunkOverlap, path);
-        if (!_channel.Writer.TryWrite(new AudioChunkInfo(path, _chunkIndex, wavStartTime, chunkOverlap)))
+        AppLogger.Debug("Flushed chunk #{Index} — {Bytes} bytes (overlap={Overlap}s)",
+            _chunkIndex, wavBytes.Length, chunkOverlap);
+
+        if (!_channel.Writer.TryWrite(new AudioChunkInfo(wavBytes, _chunkIndex, wavStartTime, chunkOverlap)))
         {
             AppLogger.Warning("Audio chunk #{Index} dropped — consumer backlog full; transcript gap possible", _chunkIndex);
-            try { File.Delete(path); } catch { }
         }
         _offsetSeconds += options.ChunkDurationSeconds;
         _chunkIndex++;

@@ -23,6 +23,9 @@ _BEAM_SIZE = int(os.environ.get("BEAM_SIZE", "5"))
 _MODEL_CACHE = os.environ.get("MODEL_CACHE") or None
 
 _loaded: dict[str, WhisperModel] = {}
+# faster-whisper model objects are NOT thread-safe. Serialize all inference calls
+# so concurrent HTTP requests don't corrupt internal model state.
+_inference_lock: asyncio.Lock | None = None
 
 
 def _get_model(name: str) -> WhisperModel:
@@ -61,6 +64,8 @@ def _clean_text(text: str) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _inference_lock
+    _inference_lock = asyncio.Lock()
     print(
         f"[startup] pre-loading model '{_DEFAULT_MODEL}' "
         f"(device={_DEVICE}, compute_type={_COMPUTE_TYPE}, cache={_MODEL_CACHE})…",
@@ -120,11 +125,12 @@ async def transcribe(
         if initial_prompt:
             kwargs["initial_prompt"] = initial_prompt
 
-        # Run CPU-bound transcription off the async event loop.
-        # _get_model is inside the lambda so model loading also happens off the event loop.
-        seg_list = await asyncio.to_thread(
-            lambda: _run_transcription(_get_model(model), tmp_path, **kwargs)
-        )
+        # Serialize inference: faster-whisper model is not thread-safe.
+        # Requests queue here so the model processes one chunk at a time.
+        async with _inference_lock:
+            seg_list = await asyncio.to_thread(
+                lambda: _run_transcription(_get_model(model), tmp_path, **kwargs)
+            )
     finally:
         os.unlink(tmp_path)
 

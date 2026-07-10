@@ -28,22 +28,31 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
     public void StartSession()
     {
         EndSession();
-        _segments.Clear();
-        CurrentSessionPath = null;
         // Pre-compute path at session-start time so the timestamp reflects when recording began,
         // not when the first audio chunk arrived. File is created lazily on first TryWrite.
         Directory.CreateDirectory(_sessionsDir);
         var sessionPath = Path.Combine(_sessionsDir, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.srt");
-        _srtWriter = new StreamingSrtWriter(() => sessionPath);
+        lock (_segLock)
+        {
+            _segments.Clear();
+            _srtWriter = new StreamingSrtWriter(() => sessionPath);
+        }
     }
 
     public void EndSession()
     {
-        _srtWriter?.Dispose();
-        _srtWriter = null;
-        if (CurrentSessionPath is not null)
-            AppLogger.Info("Session file closed: {Path}", CurrentSessionPath);
-        CurrentSessionPath = null;
+        ISrtSessionWriter? writer;
+        string? pathToLog;
+        lock (_segLock)
+        {
+            writer = _srtWriter;
+            _srtWriter = null;
+            pathToLog = CurrentSessionPath;
+            CurrentSessionPath = null;
+        }
+        writer?.Dispose();
+        if (pathToLog is not null)
+            AppLogger.Info("Session file closed: {Path}", pathToLog);
     }
 
     public void AppendSegments(IEnumerable<SubtitleSegment> segments)
@@ -154,11 +163,18 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     private void WriteSrtEntry(SubtitleSegment seg)
     {
-        if (_srtWriter?.TryWrite(seg) == true && CurrentSessionPath is null)
+        bool opened = false;
+        string? newPath = null;
+        lock (_segLock)
         {
-            CurrentSessionPath = _srtWriter.CurrentPath;
-            AppLogger.Info("Session file opened: {Path}", CurrentSessionPath!);
+            if (_srtWriter?.TryWrite(seg) == true && CurrentSessionPath is null)
+            {
+                CurrentSessionPath = _srtWriter.CurrentPath;
+                newPath = CurrentSessionPath;
+                opened = true;
+            }
         }
+        if (opened) AppLogger.Info("Session file opened: {Path}", newPath!);
     }
 
     public void ApplyCorrections(IReadOnlyList<CorrectedSegment> corrections)

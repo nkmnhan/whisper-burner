@@ -1,13 +1,15 @@
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using System;
+using System.Net.Http;
 using System.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using WhisperLive.Helpers;
 using WhisperLive.Infrastructure;
 using WhisperLive.Components;
 using WhisperLive.Models;
 using WhisperLive.Services.Assistant;
 using WhisperLive.Services.Audio;
+using WhisperLive.Services.Cli;
 using WhisperLive.Services.Translation;
 using WhisperLive.Services.Translation.Providers;
 using WhisperLive.ViewModels;
@@ -29,26 +31,26 @@ sealed partial class App : Application
     internal ITranslationService TranslationService { get; private set; }
     internal TranscriptViewModel TranscriptViewModel { get; private set; } = null!;
 
-    private AppSettings _currentSettings = new();
-    private readonly System.Net.Http.IHttpClientFactory _httpFactory;
+    private volatile AppSettings _currentSettings = new();
+
+    // IHttpClientFactory manages handler pooling and lifetime — see RegisterHttpClients().
+    // The ServiceProvider is held here to prevent the factory from being GC'd.
+    private readonly IServiceProvider _serviceProvider;
+    private readonly System.Net.Http.IHttpClientFactory _httpClientFactory;
+    private CliPipeServer? _cliServer;
 
     public App()
     {
         AppLogger.Initialize();
         InitializeComponent();
 
-        var services = new ServiceCollection();
-        services.AddHttpClient("transcription")
-            .ConfigureHttpClient(c => c.Timeout = Timeout.InfiniteTimeSpan);
-        services.AddHttpClient("translation")
-            .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(10));
-        _httpFactory = services.BuildServiceProvider()
-            .GetRequiredService<System.Net.Http.IHttpClientFactory>();
+        _serviceProvider = RegisterHttpClients();
+        _httpClientFactory = _serviceProvider.GetRequiredService<System.Net.Http.IHttpClientFactory>();
 
         var aiProvider = new ClaudeCliProvider();
 
         RecordingService = new Services.Audio.RecordingService();
-        TranscriptionClient = new Services.Audio.TranscriptionClient(_httpFactory);
+        TranscriptionClient = new Services.Audio.TranscriptionClient(_httpClientFactory);
         SubtitleService = new Services.Audio.SubtitleService();
         RecordingManager = new Services.Audio.RecordingManager(RecordingService, TranscriptionClient, SubtitleService);
         SessionAssistant = new SessionAssistantService(RecordingManager, aiProvider, () => _currentSettings);
@@ -63,6 +65,39 @@ sealed partial class App : Application
         };
 
         _ = ClaudeCliProvider.EnsureGlobalClaudeMdAsync();
+    }
+
+    /// <summary>
+    /// Registers named HttpClients with IHttpClientFactory.
+    /// The transcription client uses a SocketsHttpHandler with PooledConnectionLifetime to
+    /// evict connections before the Docker/uvicorn server's keep-alive timeout closes them,
+    /// preventing SocketException (995/10054) on stale reused sockets.
+    /// </summary>
+    private static IServiceProvider RegisterHttpClients()
+    {
+        var services = new ServiceCollection();
+
+        services.AddHttpClient(Services.Audio.TranscriptionClient.ClientName, client =>
+        {
+            client.Timeout = Timeout.InfiniteTimeSpan;
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(30),
+            MaxConnectionsPerServer = 4,
+        });
+
+        services.AddHttpClient(DockerTranslationProvider.ClientName, client =>
+            client.Timeout = TimeSpan.FromSeconds(10));
+
+        services.AddHttpClient(DeepLTranslationProvider.ClientName, client =>
+            client.Timeout = TimeSpan.FromSeconds(10));
+
+        services.AddHttpClient(GoogleTranslationProvider.ClientName, client =>
+            client.Timeout = TimeSpan.FromSeconds(10));
+
+        return services.BuildServiceProvider();
     }
 
     internal void ApplySettings(AppSettings settings)
@@ -128,10 +163,13 @@ sealed partial class App : Application
             }
 
             AppLogger.CloseAndFlush();
+            _cliServer?.Dispose();
         };
 
         _ = InitializeThemeAsync();
         AppLogger.Info("Main window launched");
+
+        _cliServer = new CliPipeServer(RecordingManager, () => _currentSettings, ApplySettings);
     }
 
     private void OnTranscriptSegmentTranslated(object? sender, SegmentTranslationReadyEventArgs e) =>
@@ -150,9 +188,9 @@ sealed partial class App : Application
 
         ITranslationProvider provider = settings.TranslationProvider switch
         {
-            "google" => new GoogleTranslationProvider(_httpFactory, settings.GoogleTranslateApiKey),
-            "deepl"  => new DeepLTranslationProvider(_httpFactory, settings.DeepLApiKey),
-            _        => new DockerTranslationProvider(_httpFactory, settings.ApiUrl),
+            "google" => new GoogleTranslationProvider(_httpClientFactory, settings.GoogleTranslateApiKey),
+            "deepl"  => new DeepLTranslationProvider(_httpClientFactory, settings.DeepLApiKey),
+            _        => new DockerTranslationProvider(_httpClientFactory, settings.ApiUrl),
         };
 
         return new TranslationService(

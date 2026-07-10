@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Http;
 using WhisperLive.Infrastructure;
 
 namespace WhisperLive.Services.Translation.Providers;
@@ -15,24 +16,25 @@ namespace WhisperLive.Services.Translation.Providers;
 /// </summary>
 public sealed class DeepLTranslationProvider : ITranslationProvider
 {
+    internal const string ClientName = "translation-deepl";
+
     private const string FreeApiBase = "https://api-free.deepl.com/v2";
     private const string ProApiBase  = "https://api.deepl.com/v2";
 
-    private readonly HttpClient _http;
+    private readonly IHttpClientFactory _factory;
     private readonly string _apiKey;
 
-    public DeepLTranslationProvider(IHttpClientFactory httpFactory, string apiKey)
+    public DeepLTranslationProvider(IHttpClientFactory factory, string apiKey)
     {
         _apiKey = apiKey;
-        _http = httpFactory.CreateClient("translation");
-        _http.DefaultRequestHeaders.Add("Authorization", $"DeepL-Auth-Key {apiKey}");
+        _factory = factory;
     }
 
     public string Name => "DeepL";
 
     public async Task<string> TranslateAsync(string text, string targetLanguage, CancellationToken ct = default)
     {
-        // DeepL uses uppercase language codes and regional variants (e.g. "VI", "ZH", "PT-BR").
+        using var http = _factory.CreateClient(ClientName);
         var targetCode = MapLanguageCode(targetLanguage);
         var baseUrl = _apiKey.EndsWith(":fx", StringComparison.Ordinal) ? FreeApiBase : ProApiBase;
 
@@ -42,7 +44,10 @@ public sealed class DeepLTranslationProvider : ITranslationProvider
             new System.Collections.Generic.KeyValuePair<string, string>("target_lang", targetCode),
         });
 
-        using var response = await _http.PostAsync($"{baseUrl}/translate", content, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/translate") { Content = content };
+        request.Headers.Add("Authorization", $"DeepL-Auth-Key {_apiKey}");
+
+        using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<DeepLResponse>(_jsonOptions, ct);

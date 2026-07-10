@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -17,8 +18,9 @@ public sealed class TranslationService : ITranslationService, IDisposable
     private readonly ITranslationProvider _provider;
     private readonly SemaphoreSlim _concurrencySemaphore = new(MaxConcurrent, MaxConcurrent);
 
-    // No eviction under load — every segment is eventually translated.
-    private readonly Channel<SubtitleSegment> _channel = Channel.CreateUnbounded<SubtitleSegment>(
+    // A fresh channel is created per session so that a new worker never shares a reader
+    // with a lingering worker from the previous session (SingleReader=true constraint).
+    private Channel<SubtitleSegment> _channel = Channel.CreateUnbounded<SubtitleSegment>(
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
 
     private CancellationTokenSource? _sessionCts;
@@ -40,8 +42,10 @@ public sealed class TranslationService : ITranslationService, IDisposable
     public void StartSession()
     {
         EndSession();
-        // Drain stale segments from a previous session.
-        while (_channel.Reader.TryRead(out _)) { }
+        // Fresh channel per session — prevents two concurrent readers on a SingleReader channel
+        // if the previous session's ConsumeAsync worker hasn't fully exited yet.
+        _channel = Channel.CreateUnbounded<SubtitleSegment>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
 
         _sessionCts = new CancellationTokenSource();
         _workerTask = Task.Run(() => ConsumeAsync(_sessionCts.Token));
@@ -76,7 +80,11 @@ public sealed class TranslationService : ITranslationService, IDisposable
 
     private async Task TranslateWithSemaphoreAsync(SubtitleSegment segment, CancellationToken ct)
     {
-        await _concurrencySemaphore.WaitAsync(ct);
+        // WaitAsync is outside the try/catch below, so catch it separately to avoid
+        // an unobserved exception when this fire-and-forget task is cancelled pre-semaphore.
+        try { await _concurrencySemaphore.WaitAsync(ct); }
+        catch (OperationCanceledException) { return; }
+
         try
         {
             await TranslateWithRetryAsync(segment, ct);
@@ -99,7 +107,10 @@ public sealed class TranslationService : ITranslationService, IDisposable
         {
             try
             {
+                var sw = Stopwatch.StartNew();
                 var translated = await _provider.TranslateAsync(segment.Text, TargetLanguage, ct);
+                sw.Stop();
+                PipelineMetrics.Instance.RecordTranslation(sw.Elapsed.TotalMilliseconds);
                 SegmentTranslated?.Invoke(this, new SegmentTranslationReadyEventArgs(segment.Id, translated));
                 return;
             }

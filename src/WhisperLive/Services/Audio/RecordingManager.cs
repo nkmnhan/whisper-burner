@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +19,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
     private Task? _consumeTask;
     private readonly object _segLock = new();
     private readonly List<string> _recentSegments = [];
-    private readonly SemaphoreSlim _inflightSemaphore = new(2, 2);
+    private readonly SemaphoreSlim _inflightSemaphore = new(3, 3);
     private int _consecutiveFailures;
 
     public event EventHandler? ApiStalled;
@@ -51,6 +51,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
 
         lock (_segLock) _recentSegments.Clear();
         Interlocked.Exchange(ref _consecutiveFailures, 0);
+        PipelineMetrics.Instance.Reset();
         _cts = new CancellationTokenSource();
         _transcription.ResetPrompt();
         _subtitle.StartSession();
@@ -77,10 +78,19 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         }
         _consumeTask = null;
 
+        // FireChunkAsync tasks are fire-and-forget. Drain the inflight semaphore (max=3)
+        // by acquiring all slots — this unblocks only when every chunk task has released,
+        // guaranteeing no more writes to _subtitle after EndSession().
+        await _inflightSemaphore.WaitAsync().ConfigureAwait(false);
+        await _inflightSemaphore.WaitAsync().ConfigureAwait(false);
+        await _inflightSemaphore.WaitAsync().ConfigureAwait(false);
+        _inflightSemaphore.Release(3);
+
         _subtitle.SegmentAdded -= OnSubtitleSegmentAdded;
         _subtitle.EndSession();
         _cts = null;
 
+        PipelineMetrics.Instance.LogSummary();
         SetState(RecordingState.Idle);
     }
 
@@ -122,27 +132,34 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
                 while (_recording.Chunks.TryRead(out var newer))
                 {
                     AppLogger.Warning("Skipping stale chunk #{Index} — pipeline behind", current.ChunkIndex);
-                    try { File.Delete(current.FilePath); } catch { }
                     current = newer;
                 }
 
-                // Fire and forget — don't block the recording loop waiting for any individual chunk.
-                // Each chunk lands in the transcript whenever its response arrives.
+                // Drop chunk if both inflight slots are already occupied.
+                // When chunk rate > API throughput (e.g. 2s chunks on slow CPU), queuing tasks on
+                // the semaphore means they wait minutes before running — transcript freezes on stale
+                // audio. Dropping here keeps the two in-flight tasks processing the freshest audio.
+                if (_inflightSemaphore.CurrentCount == 0)
+                {
+                    AppLogger.Warning("Chunk #{Index} dropped — API saturated (chunk rate > throughput)", current.ChunkIndex);
+                    continue;
+                }
+
                 _ = FireChunkAsync(current, options, ct);
             }
         }
         catch (OperationCanceledException) { }
         finally
         {
-            while (_recording.Chunks.TryRead(out var leftover))
-                try { File.Delete(leftover.FilePath); } catch { }
+            // In-memory chunks: no files to clean up, just drain the channel.
+            while (_recording.Chunks.TryRead(out _)) { }
         }
     }
 
     private async Task FireChunkAsync(AudioChunkInfo chunk, RecordingOptions options, CancellationToken ct)
     {
         try { await _inflightSemaphore.WaitAsync(ct); }
-        catch (OperationCanceledException) { TryDeleteChunk(chunk); return; }
+        catch (OperationCanceledException) { return; }
 
         var success = false;
         try
@@ -156,9 +173,15 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
                 }
                 try
                 {
+                    var bytes = chunk.WavData.Length;
+                    var sw = Stopwatch.StartNew();
                     var segs = await _transcription.TranscribeChunkAsync(chunk, BuildChunkOptions(options), ct);
+                    sw.Stop();
                     if (!ct.IsCancellationRequested)
+                    {
                         _subtitle.AppendSegments(segs);
+                        PipelineMetrics.Instance.RecordTranscription(sw.Elapsed.TotalMilliseconds, bytes, segs.Count());
+                    }
                     success = true;
                     Interlocked.Exchange(ref _consecutiveFailures, 0);
                     return;
@@ -177,7 +200,6 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         finally
         {
             _inflightSemaphore.Release();
-            TryDeleteChunk(chunk);
         }
 
         if (!success)
@@ -185,11 +207,6 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
             var count = Interlocked.Increment(ref _consecutiveFailures);
             if (count >= 3) ApiStalled?.Invoke(this, EventArgs.Empty);
         }
-    }
-
-    private static void TryDeleteChunk(AudioChunkInfo chunk)
-    {
-        try { File.Delete(chunk.FilePath); } catch { }
     }
 
     // Injects last ~100 transcript words as initial_prompt for vocabulary continuity.

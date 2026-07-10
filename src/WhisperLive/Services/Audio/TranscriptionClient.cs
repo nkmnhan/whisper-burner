@@ -1,11 +1,11 @@
-﻿using System.Collections.Generic;
-using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Http;
 using WhisperLive.Infrastructure;
 using WhisperLive.Models;
 
@@ -13,11 +13,13 @@ namespace WhisperLive.Services.Audio;
 
 public sealed class TranscriptionClient : ITranscriptionClient
 {
-    private readonly HttpClient _http;
+    internal const string ClientName = "transcription";
 
-    public TranscriptionClient(IHttpClientFactory httpFactory)
+    private readonly IHttpClientFactory _factory;
+
+    public TranscriptionClient(IHttpClientFactory factory)
     {
-        _http = httpFactory.CreateClient("transcription");
+        _factory = factory;
     }
 
     private static readonly JsonSerializerOptions _json = new()
@@ -29,9 +31,10 @@ public sealed class TranscriptionClient : ITranscriptionClient
     {
         try
         {
+            using var http = _factory.CreateClient(ClientName);
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(3));
-            using var response = await _http.GetAsync($"{apiUrl}/health", cts.Token);
+            using var response = await http.GetAsync($"{apiUrl}/health", cts.Token);
             return response.IsSuccessStatusCode;
         }
         catch { return false; }
@@ -42,12 +45,13 @@ public sealed class TranscriptionClient : ITranscriptionClient
     public async Task<IEnumerable<SubtitleSegment>> TranscribeChunkAsync(
         AudioChunkInfo chunk, RecordingOptions options, CancellationToken ct)
     {
+        using var http = _factory.CreateClient(ClientName);
         using var form = new MultipartFormDataContent();
 
-        var fileBytes = await File.ReadAllBytesAsync(chunk.FilePath, ct);
-        var fileContent = new ByteArrayContent(fileBytes);
+        // Chunk is already a complete WAV in memory — no disk read required.
+        var fileContent = new ByteArrayContent(chunk.WavData);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
-        form.Add(fileContent, "file", Path.GetFileName(chunk.FilePath));
+        form.Add(fileContent, "file", $"chunk_{chunk.ChunkIndex:D4}.wav");
         form.Add(new StringContent(options.Language), "language");
         form.Add(new StringContent(options.Model), "model");
         if (!string.IsNullOrEmpty(options.InitialPrompt))
@@ -56,11 +60,11 @@ public sealed class TranscriptionClient : ITranscriptionClient
             form.Add(new StringContent(options.Task), "task");
 
         AppLogger.Debug("Transcribing chunk #{Index} ({Bytes} bytes, overlap={Overlap}s)",
-            chunk.ChunkIndex, fileBytes.Length, chunk.OverlapSeconds);
+            chunk.ChunkIndex, chunk.WavData.Length, chunk.OverlapSeconds);
 
         using var reqCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         reqCts.CancelAfter(TimeSpan.FromSeconds(60));
-        using var response = await _http.PostAsync($"{options.ApiUrl}/transcribe", form, reqCts.Token);
+        using var response = await http.PostAsync($"{options.ApiUrl}/transcribe", form, reqCts.Token);
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadAsStringAsync(ct);

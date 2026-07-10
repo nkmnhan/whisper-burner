@@ -65,25 +65,37 @@ public sealed class SessionAssistantService : ISessionAssistantService, IDisposa
 
     public async Task<string> AskAsync(string question, AskOptions? options = null, CancellationToken cancellationToken = default)
     {
-        // Link caller's token with the session lifecycle token so EndSession() cancels in-flight asks.
-        using var linked = _sessionCts is { } cts
-            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token)
-            : null;
-        var ct = linked?.Token ?? cancellationToken;
-
-        var session = await GetOrCreateChatSessionAsync(ct);
-        if (session is null) return "No active session.";
-
+        // EndSession() can dispose _sessionCts between our null-check and accessing .Token.
+        // Treat ObjectDisposedException the same as "no active session".
+        CancellationTokenSource? linked = null;
         try
         {
-            var prompt = BuildPrompt(question, options);
-            var context = BuildCallContext();
-            return await session.SendAsync(prompt, context, ct);
+            linked = _sessionCts is { } cts
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token)
+                : null;
         }
-        catch (Exception ex)
+        catch (ObjectDisposedException)
         {
-            AppLogger.Warning(ex, "Session assistant question failed");
-            return $"⚠ Couldn't reach {_aiProvider.Name} — {ex.Message}";
+            return "No active session.";
+        }
+
+        using (linked)
+        {
+            var ct = linked?.Token ?? cancellationToken;
+            var session = await GetOrCreateChatSessionAsync(ct);
+            if (session is null) return "No active session.";
+
+            try
+            {
+                var prompt = BuildPrompt(question, options);
+                var context = BuildCallContext();
+                return await session.SendAsync(prompt, context, ct);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warning(ex, "Session assistant question failed");
+                return $"⚠ Couldn't reach {_aiProvider.Name} — {ex.Message}";
+            }
         }
     }
 

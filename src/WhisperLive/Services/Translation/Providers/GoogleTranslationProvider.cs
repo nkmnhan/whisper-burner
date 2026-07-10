@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Http;
 
 namespace WhisperLive.Services.Translation.Providers;
 
@@ -13,14 +14,16 @@ namespace WhisperLive.Services.Translation.Providers;
 /// </summary>
 public sealed class GoogleTranslationProvider : ITranslationProvider
 {
+    internal const string ClientName = "translation-google";
+
     private const string ApiBase = "https://translation.googleapis.com/language/translate/v2";
 
-    private readonly HttpClient _http;
+    private readonly IHttpClientFactory _factory;
     private readonly string _apiKey;
 
-    public GoogleTranslationProvider(IHttpClientFactory httpFactory, string apiKey)
+    public GoogleTranslationProvider(IHttpClientFactory factory, string apiKey)
     {
-        _http = httpFactory.CreateClient("translation");
+        _factory = factory;
         _apiKey = apiKey;
     }
 
@@ -28,12 +31,13 @@ public sealed class GoogleTranslationProvider : ITranslationProvider
 
     public async Task<string> TranslateAsync(string text, string targetLanguage, CancellationToken ct = default)
     {
+        using var http = _factory.CreateClient(ClientName);
         var url = $"{ApiBase}?key={Uri.EscapeDataString(_apiKey)}" +
                   $"&q={Uri.EscapeDataString(text)}" +
                   $"&target={Uri.EscapeDataString(targetLanguage)}" +
                   "&format=text";
 
-        using var response = await _http.GetAsync(url, ct);
+        using var response = await http.GetAsync(url, ct);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<GoogleResponse>(ct);
