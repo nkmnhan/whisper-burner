@@ -279,9 +279,6 @@ public sealed partial class LiveTranscriptPage : Page
             if (_settings.EnableAssistant)
                 Assistant.StartSession(sessionContext);
 
-            if (_settings.EnableTranslation)
-                TranslationSvc.StartSession();
-
             await Manager.StartAsync(options);
         }
         else
@@ -289,9 +286,6 @@ public sealed partial class LiveTranscriptPage : Page
             await Manager.StopAsync();
             if (_settings.EnableAssistant)
                 Assistant.EndSession();
-
-            if (_settings.EnableTranslation)
-                TranslationSvc.EndSession();
 
             // Resolve any rows still waiting for translation — show original text cleanly.
             CurrentApp.TranscriptViewModel.FinalizeSession();
@@ -324,8 +318,6 @@ public sealed partial class LiveTranscriptPage : Page
         ActionStatus.Text = string.Empty;
         PreContextBox.Text = _settings.DefaultSessionContext;
         CurrentApp.SubtitleService.StartSession();
-        if (_settings.EnableTranslation)
-            TranslationSvc.StartSession();
     }
 
     private void OnShowOverlayClicked(object sender, RoutedEventArgs e)

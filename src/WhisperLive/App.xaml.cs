@@ -137,6 +137,17 @@ sealed partial class App : Application
         RecordingManager.SegmentAdded += (_, seg) => TranslationService.EnqueueSegment(seg);
         TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
 
+        // Start/stop TranslationService in sync with RecordingManager state changes.
+        // This ensures translation starts regardless of whether recording is triggered
+        // from the UI or via the CLI pipe server.
+        RecordingManager.StateChanged += (_, state) =>
+        {
+            if (state == RecordingState.Recording)
+                TranslationService.StartSession();
+            else if (state == RecordingState.Idle)
+                TranslationService.EndSession();
+        };
+
         MainWindow.Closed += async (s, _) =>
         {
             try

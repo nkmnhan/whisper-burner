@@ -19,7 +19,12 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
     private Task? _consumeTask;
     private readonly object _segLock = new();
     private readonly List<string> _recentSegments = [];
-    private readonly SemaphoreSlim _inflightSemaphore = new(3, 3);
+    // Only 1 concurrent transcription in-flight. asyncio.Lock on the server
+    // serialises requests anyway — having more than 1 in-flight just queues stale
+    // audio on the server (measured: semaphore(3) caused 20s latency chains).
+    // Drop guard kicks in immediately when the single slot is occupied, so
+    // ConsumeChunksAsync always re-reads the freshest chunk from the channel.
+    private readonly SemaphoreSlim _inflightSemaphore = new(1, 1);
     private int _consecutiveFailures;
 
     public event EventHandler? ApiStalled;
@@ -78,13 +83,10 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         }
         _consumeTask = null;
 
-        // FireChunkAsync tasks are fire-and-forget. Drain the inflight semaphore (max=3)
-        // by acquiring all slots — this unblocks only when every chunk task has released,
+        // Drain the single inflight slot — unblocks only when FireChunkAsync has released,
         // guaranteeing no more writes to _subtitle after EndSession().
         await _inflightSemaphore.WaitAsync().ConfigureAwait(false);
-        await _inflightSemaphore.WaitAsync().ConfigureAwait(false);
-        await _inflightSemaphore.WaitAsync().ConfigureAwait(false);
-        _inflightSemaphore.Release(3);
+        _inflightSemaphore.Release(1);
 
         _subtitle.SegmentAdded -= OnSubtitleSegmentAdded;
         _subtitle.EndSession();

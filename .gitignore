@@ -63,3 +63,12 @@ BundleArtifacts/
 *.appxupload
 *.cer
 release/
+
+# WinUI 3 compiled XAML artifacts dumped to repo root (release build side-effect)
+release*.xbf
+releaseComponents/
+releaseStyles/
+releaseViews/
+
+# Test results (keep .gitkeep, ignore generated JSON)
+tests/results/*.json

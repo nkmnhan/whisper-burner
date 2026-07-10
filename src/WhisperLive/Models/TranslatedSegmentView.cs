@@ -68,11 +68,14 @@ public sealed class TranslatedSegmentView : INotifyPropertyChanged
             ? FontStyle.Italic
             : FontStyle.Normal;
 
-    /// <summary>Dimmed while pending; secondary opacity when translated; full otherwise.</summary>
+    /// <summary>
+    /// Full opacity while awaiting translation so the original is always readable.
+    /// Dims to secondary once translation has arrived (original becomes the subtitle).
+    /// </summary>
     public double OriginalOpacity =>
         _state == TranslationSegmentState.Provisional
-            ? (_isTranslationEnabled ? 0.50 : 0.65)
-            : HasTranslation ? 0.50 : 1.0;
+            ? 1.0
+            : HasTranslation ? 0.55 : 1.0;
 
     /// <summary>Smaller in bilingual mode; pre-reserved so layout never shifts on translation.</summary>
     public double OriginalFontSize => _isTranslationEnabled ? 12.0 : 14.0;

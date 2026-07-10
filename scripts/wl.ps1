@@ -22,8 +22,8 @@ param(
     [string]$Language,
     [int]$Chunk = 0,
 
-    # settings command
-    [System.Nullable[bool]]$EnableTranslation,
+    # settings command — pass "true"/"false" as strings
+    [string]$EnableTranslation    = "",
     [string]$TranslationTarget,
     [string]$TranslationProvider,
 
@@ -37,7 +37,7 @@ $argsMap = @{}
 if ($Model)                                 { $argsMap["model"]               = $Model }
 if ($Language)                              { $argsMap["language"]             = $Language }
 if ($Chunk -gt 0)                           { $argsMap["chunk"]                = "$Chunk" }
-if ($null -ne $EnableTranslation)           { $argsMap["enableTranslation"]    = $EnableTranslation.ToString().ToLower() }
+if ($null -ne $EnableTranslation -and $EnableTranslation -ne "") { $argsMap["enableTranslation"] = $EnableTranslation.ToLower() }
 if ($TranslationTarget)                     { $argsMap["translationTarget"]    = $TranslationTarget }
 if ($TranslationProvider)                   { $argsMap["translationProvider"]  = $TranslationProvider }
 
