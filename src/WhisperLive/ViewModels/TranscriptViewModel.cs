@@ -2,6 +2,7 @@ using Microsoft.UI.Dispatching;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using WhisperLive.Infrastructure;
 using WhisperLive.Models;
 
 namespace WhisperLive.ViewModels;
@@ -51,8 +52,21 @@ public sealed class TranscriptViewModel
         _dq.TryEnqueue(() =>
         {
             var view = Segments.FirstOrDefault(v => v.Original.Id == segmentId);
-            view?.ApplyTranslation(translatedText);
+            if (view is null)
+            {
+                AppLogger.Debug("Translation for segment {Id} had no matching row (scrolled off or session changed)", segmentId);
+                return;
+            }
+            view.ApplyTranslation(translatedText);
         });
+
+    /// <summary>
+    /// A segment's translation was abandoned after all retries. Resolve the row to
+    /// its original text so it stops showing the "pending" (italic) placeholder.
+    /// </summary>
+    public void OnSegmentTranslationFailed(int segmentId) =>
+        _dq.TryEnqueue(() =>
+            Segments.FirstOrDefault(v => v.Original.Id == segmentId)?.MarkFailed());
 
     /// <summary>
     /// Called when the recording session ends. Any segment still in

@@ -116,9 +116,11 @@ sealed partial class App : Application
         var oldService = TranslationService;
         oldService.EndSession();
         oldService.SegmentTranslated -= OnTranscriptSegmentTranslated;
+        oldService.SegmentTranslationFailed -= OnTranscriptSegmentTranslationFailed;
 
         TranslationService = BuildTranslationService(settings);
         TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
+        TranslationService.SegmentTranslationFailed += OnTranscriptSegmentTranslationFailed;
         if (isRecording)
             TranslationService.StartSession();
 
@@ -143,6 +145,7 @@ sealed partial class App : Application
         RecordingManager.SegmentAdded += (_, seg) => TranscriptViewModel.OnSegmentAdded(seg);
         RecordingManager.SegmentAdded += (_, seg) => TranslationService.EnqueueSegment(seg);
         TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
+        TranslationService.SegmentTranslationFailed += OnTranscriptSegmentTranslationFailed;
 
         // Start/stop TranslationService in sync with RecordingManager state changes.
         // This ensures translation starts regardless of whether recording is triggered
@@ -192,6 +195,9 @@ sealed partial class App : Application
 
     private void OnTranscriptSegmentTranslated(object? sender, SegmentTranslationReadyEventArgs e) =>
         TranscriptViewModel.OnSegmentTranslated(e.SegmentId, e.TranslatedText);
+
+    private void OnTranscriptSegmentTranslationFailed(object? sender, int segmentId) =>
+        TranscriptViewModel.OnSegmentTranslationFailed(segmentId);
 
     private static async System.Threading.Tasks.Task InitializeThemeAsync()
     {

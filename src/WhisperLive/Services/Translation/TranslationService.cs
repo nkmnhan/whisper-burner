@@ -30,6 +30,7 @@ public sealed class TranslationService : ITranslationService, IDisposable
     public bool IsEnabled => true;
 
     public event EventHandler<SegmentTranslationReadyEventArgs>? SegmentTranslated;
+    public event EventHandler<int>? SegmentTranslationFailed;
 
     public TranslationService(ITranslationProvider provider, string targetLanguage)
     {
@@ -93,6 +94,8 @@ public sealed class TranslationService : ITranslationService, IDisposable
         catch (Exception ex)
         {
             AppLogger.Warning(ex, "Translation failed for segment {Id} after all retries", segment.Id);
+            // Resolve the UI row to its original text instead of leaving it "pending" forever.
+            SegmentTranslationFailed?.Invoke(this, segment.Id);
         }
         finally
         {

@@ -20,6 +20,14 @@ public interface ITranslationService : IDisposable
     /// </summary>
     event EventHandler<SegmentTranslationReadyEventArgs>? SegmentTranslated;
 
+    /// <summary>
+    /// Fired on a background thread when a segment's translation is abandoned after
+    /// all retries (not on session cancellation). Carries the segment ID so the UI
+    /// can resolve the row to its original text instead of leaving it "pending".
+    /// Handlers MUST marshal to the UI thread before touching any XAML element.
+    /// </summary>
+    event EventHandler<int>? SegmentTranslationFailed;
+
     /// <summary>Prepare a new session. Clears any leftover queue and resets the SRT writer.</summary>
     void StartSession();
 

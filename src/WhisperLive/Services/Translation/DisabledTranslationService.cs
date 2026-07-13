@@ -19,6 +19,12 @@ public sealed class DisabledTranslationService : ITranslationService
         remove { }
     }
 
+    public event EventHandler<int>? SegmentTranslationFailed
+    {
+        add { }
+        remove { }
+    }
+
     public void StartSession() { }
     public void EnqueueSegment(SubtitleSegment segment) { }
     public void EndSession() { }
