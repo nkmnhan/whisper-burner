@@ -16,10 +16,13 @@
         <!-- Dark overlay on top of acrylic — forces dark appearance in any system theme -->
         <Rectangle AutomationProperties.AccessibilityView="Raw" Fill="{ThemeResource CaptionOverlayDarkOverlayBrush}" />
 
-        <Grid Margin="16,12,16,12">
+        <Grid
+            x:Name="ContentRoot"
+            Margin="16,12,16,12"
+            VerticalAlignment="Bottom">
             <Grid.RowDefinitions>
                 <RowDefinition Height="32" />
-                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="32" />
             </Grid.RowDefinitions>
 
@@ -135,6 +138,7 @@
                 x:Name="CaptionsPanel"
                 Grid.Row="1"
                 Margin="0,4,0,0"
+                VerticalAlignment="Bottom"
                 SelectionMode="None"
                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                 ScrollViewer.VerticalScrollBarVisibility="Hidden">

@@ -84,9 +84,13 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         _consumeTask = null;
 
         // Drain the single inflight slot — unblocks only when FireChunkAsync has released,
-        // guaranteeing no more writes to _subtitle after EndSession().
-        await _inflightSemaphore.WaitAsync().ConfigureAwait(false);
-        _inflightSemaphore.Release(1);
+        // guaranteeing no more writes to _subtitle after EndSession(). Bounded: if an
+        // in-flight transcription doesn't honour cancellation within 5s (e.g. a socket
+        // stuck before its own timeout fires), stop anyway rather than hang the caller.
+        if (await _inflightSemaphore.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false))
+            _inflightSemaphore.Release(1);
+        else
+            AppLogger.Warning("Stop drain timed out — in-flight transcription didn't release in 5s");
 
         _subtitle.SegmentAdded -= OnSubtitleSegmentAdded;
         _subtitle.EndSession();

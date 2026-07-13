@@ -17,6 +17,9 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
 
     private readonly List<SubtitleSegment> _segments = [];
     private readonly object _segLock = new();
+    // Separate lock for the SRT writer so its synchronous disk flush (AutoFlush)
+    // never blocks readers of _segments (AllSegments, insert path).
+    private readonly object _writerLock = new();
     private ISrtSessionWriter? _srtWriter;
 
     public event EventHandler<SubtitleSegment>? SegmentAdded;
@@ -32,18 +35,15 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         // not when the first audio chunk arrived. File is created lazily on first TryWrite.
         Directory.CreateDirectory(_sessionsDir);
         var sessionPath = Path.Combine(_sessionsDir, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.srt");
-        lock (_segLock)
-        {
-            _segments.Clear();
-            _srtWriter = new StreamingSrtWriter(() => sessionPath);
-        }
+        lock (_segLock) _segments.Clear();
+        lock (_writerLock) _srtWriter = new StreamingSrtWriter(() => sessionPath);
     }
 
     public void EndSession()
     {
         ISrtSessionWriter? writer;
         string? pathToLog;
-        lock (_segLock)
+        lock (_writerLock)
         {
             writer = _srtWriter;
             _srtWriter = null;
@@ -165,7 +165,7 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
     {
         bool opened = false;
         string? newPath = null;
-        lock (_segLock)
+        lock (_writerLock)
         {
             if (_srtWriter?.TryWrite(seg) == true && CurrentSessionPath is null)
             {

@@ -28,7 +28,14 @@ sealed partial class App : Application
     internal IRecordingManager RecordingManager { get; }
     internal ISessionAssistantService SessionAssistant { get; }
     internal IAssistantExportService AssistantExport { get; }
-    internal ITranslationService TranslationService { get; private set; }
+    // Volatile: ApplySettings() swaps this on the UI/CLI thread while the
+    // RecordingManager.SegmentAdded handler reads it on a background thread.
+    private volatile ITranslationService _translationService = null!;
+    internal ITranslationService TranslationService
+    {
+        get => _translationService;
+        private set => _translationService = value;
+    }
     internal TranscriptViewModel TranscriptViewModel { get; private set; } = null!;
 
     private volatile AppSettings _currentSettings = new();

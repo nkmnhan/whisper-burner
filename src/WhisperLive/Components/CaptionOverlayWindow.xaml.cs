@@ -19,8 +19,13 @@ namespace WhisperLive.Components;
 public sealed partial class CaptionOverlayWindow : Window
 {
     private const int WindowWidth = 860;
+    // These are the MAX window heights (DIP). The window shrinks to fit its
+    // content below these caps so there is never dead space under the captions.
     private const int WindowHeightCollapsed = 280;
     private const int WindowHeightExpanded  = 440;
+    // Non-caption chrome inside the window (DIP): vertical margins (24) +
+    // header row (32) + chevron row (32) + inter-row spacing (~8).
+    private const int ChromeHeightDip = 96;
     private const int MaxCollapsedRows = 10;
     private const int MaxExpandedRows  = 30;
 
@@ -48,6 +53,11 @@ public sealed partial class CaptionOverlayWindow : Window
         ApplyAcrylicBackdrop();
 
         CaptionsPanel.ItemsSource = _overlayRows;
+        CaptionsPanel.MaxHeight = WindowHeightCollapsed - ChromeHeightDip;
+
+        // Window follows its content height (bottom-anchored), so few lines
+        // never leave a gap and many lines grow the box up to the cap.
+        ContentRoot.SizeChanged += (_, _) => ResizeToContent();
 
         var allSegments = ((App)Application.Current).TranscriptViewModel.Segments;
         allSegments.CollectionChanged += OnSegmentsChanged;
@@ -159,11 +169,33 @@ public sealed partial class CaptionOverlayWindow : Window
         _isExpanded = !_isExpanded;
         ChevronIcon.Glyph = _isExpanded ? "" : "";
 
-        int newHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
-        int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;
-        AppWindow.MoveAndResize(new RectInt32(AppWindow.Position.X, bottomEdge - newHeight, WindowWidth, newHeight));
-
+        // Raise/lower the caption cap; ResyncRows + ResizeToContent then size the
+        // window to whatever content actually fits.
+        CaptionsPanel.MaxHeight = (_isExpanded ? WindowHeightExpanded : WindowHeightCollapsed) - ChromeHeightDip;
         ResyncRows();
+        ResizeToContent();
+    }
+
+    /// <summary>
+    /// Resizes the window to fit its content height (clamped to the current cap),
+    /// keeping the bottom edge fixed so the overlay hugs its anchor with no gap.
+    /// </summary>
+    private void ResizeToContent()
+    {
+        if (ContentRoot.XamlRoot is null || ContentRoot.ActualHeight <= 0) return;
+
+        var scale = ContentRoot.XamlRoot.RasterizationScale;
+        // ActualHeight excludes ContentRoot's own vertical margin (12 + 12).
+        double dipHeight = ContentRoot.ActualHeight + 24;
+        int maxHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
+        dipHeight = Math.Min(dipHeight, maxHeight);
+
+        int physHeight = (int)Math.Ceiling(dipHeight * scale);
+        if (physHeight == AppWindow.Size.Height) return;
+
+        int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;
+        AppWindow.MoveAndResize(new RectInt32(
+            AppWindow.Position.X, bottomEdge - physHeight, WindowWidth, physHeight));
     }
 
     private void OnCloseClicked(object sender, RoutedEventArgs e)

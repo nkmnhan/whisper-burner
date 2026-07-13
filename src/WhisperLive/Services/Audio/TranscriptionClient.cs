@@ -74,10 +74,14 @@ public sealed class TranscriptionClient : ITranscriptionClient
         foreach (var s in raw.Where(s => s.Text.Contains('_')))
             AppLogger.Warning("Chunk #{Index} — blank token from API: {Text}", chunk.ChunkIndex, s.Text.Trim());
 
+        // NOTE: no timestamp-based overlap filter here. After VAD, legitimate new
+        // speech is almost always timestamped at ~0.0s, so dropping segments whose
+        // Start < OverlapSeconds discarded most real content. Duplicate text from the
+        // overlap prefix is removed downstream by SubtitleService.StripLeadingOverlap
+        // (word-level dedup), which is robust regardless of chunk timing.
         var segments = raw
             .Where(s => !string.IsNullOrWhiteSpace(s.Text))
             .Where(s => !IsHallucination(s.Text))
-            .Where(s => s.Start >= chunk.OverlapSeconds)
             .Select(s => new SubtitleSegment(
                 s.Id,
                 s.Start + chunk.OffsetSeconds,
