@@ -2,9 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Containerized OpenAI Whisper ASR with GPU/CPU Docker profiles. Batch-processes videos from `videos/` into SRT transcripts and burnt-in MP4s saved to `videos/output/`.
+**Primary product: a real-time speech-translation desktop app.** The **WinUI 3 app** (`src/WhisperLive/`) captures system audio, transcribes it via the Whisper API, translates each line live, and shows both in an always-on-top subtitle overlay; every session is saved as SRT. Audio-only pipeline: system audio → Whisper API → translation → overlay. Screen recording is Phase 2 (not yet implemented).
 
-Also contains a **WinUI 3 desktop app** (`src/WhisperLive/`) for real-time system-audio capture, live subtitle overlay, translation, and session save. Audio-only pipeline: system audio → Whisper API → always-on-top overlay. Screen recording is Phase 2 (not yet implemented).
+The **Docker** side (`docker/`) is the app's **ASR + translate API backend** — `api_server.py` (FastAPI + faster-whisper) exposing `/transcribe` and `/translate`, run via GPU/CPU compose profiles.
+
+> **Plan note (2026-07-13):** the project pivoted from a Docker *batch convert-and-burn* pipeline (transcribe a folder of videos and burn subtitles into MP4) to the real-time translation app above. The batch scripts in `scripts/batch/` remain as **legacy** but are no longer the focus.
 
 ---
 
@@ -158,26 +160,32 @@ dotnet run -c Debug
 .\scripts\app\build-release.cmd
 ```
 
-### Docker / Batch transcription
+### Docker — ASR/translate API backend (used by the app)
 
 ```powershell
-# GPU (default)
-docker compose --profile gpu build
-.\scripts\batch\process-videos-gpu.cmd
+# Start via the interactive menu (recommended):
+.\whisper.cmd   # [6] Manage API → CPU/GPU, model, Start/Reset
 
-# CPU
-docker compose --profile cpu build
-.\scripts\batch\process-videos-cpu.cmd
+# Or directly (api_server.py is volume-mounted — Reset picks up edits, no rebuild):
+docker compose -f docker/docker-compose.yml --profile cpu up -d   # or --profile gpu
+```
+
+### Docker / Batch transcription (legacy)
+
+```powershell
+# Legacy convert-and-burn pipeline — no longer the focus.
+docker compose -f docker/docker-compose.yml --profile gpu build
+.\scripts\batch\process-videos-gpu.cmd   # or -cpu
 ```
 
 ## Architecture
 
-### Docker pipeline
+### Docker backend (`docker/`)
 
-- `Dockerfile` — Python 3.12-slim, ffmpeg, openai-whisper
-- `docker-compose.yml` — `gpu`, `cpu`, `api-gpu`, and `api-cpu` profiles; mounts `./models` and `./videos`
-- `process-videos.ps1` — batch transcription + optional translation + subtitle burn
-- `videos/` — source files; `videos/output/` — SRT + MP4 outputs
+- `Dockerfile` — `python:3.12-slim`, ffmpeg, **faster-whisper**, deep-translator, FastAPI/uvicorn
+- `docker-compose.yml` — `gpu` and `cpu` profiles running `api_server.py` on port 5000; env: `WHISPER_MODEL`, `NUM_WORKERS`, `CPU_THREADS`, `LOG_RESULT`. `api_server.py` is volume-mounted (edit → Reset, no rebuild)
+- `api_server.py` — the app's backend: `GET /health`, `GET /models`, `POST /transcribe`, `POST /translate`
+- **Legacy batch:** `batch_transcribe.py` / `translate_srt.py` + `scripts/batch/process-videos.ps1` — transcribe `videos/` and burn subtitles into MP4 in `videos/output/` (still works; not the focus)
 
 ### WinUI 3 App (`src/WhisperLive/`)
 

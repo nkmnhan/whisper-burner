@@ -1,9 +1,10 @@
 # Copilot Instructions — whisper-burner
 
-Two independent components share this repository:
+**Primary product: a real-time speech-translation desktop app.**
 
-1. **Docker batch pipeline** — Whisper ASR + ffmpeg subtitle burning
-2. **WhisperLive WinUI 3 app** (`src/WhisperLive/`) — real-time system-audio capture → live subtitle overlay
+1. **WhisperLive WinUI 3 app** (`src/WhisperLive/`) — real-time system-audio capture → transcription → live translation → always-on-top subtitle overlay. This is the focus.
+2. **Docker ASR/translate API backend** (`docker/api_server.py`) — FastAPI + faster-whisper serving `/transcribe` and `/translate` that the app calls.
+3. **Legacy batch pipeline** (`scripts/batch/`) — the original Whisper ASR + ffmpeg subtitle-burn workflow. Still works, but the project pivoted (2026-07-13) away from it toward the real-time app; treat it as legacy.
 
 ---
 
@@ -30,41 +31,32 @@ dotnet run -c Debug
 
 Run `dotnet build` after **every** C# change before reporting done.
 
-### Docker — Batch transcription
+### Docker — Whisper API backend (used by the app)
 
 ```powershell
-# GPU
-docker compose --profile gpu build
-.\scripts\batch\process-videos-gpu.cmd
-
-# CPU
-docker compose --profile cpu build
-.\scripts\batch\process-videos-cpu.cmd
+# Interactive (recommended): whisper.cmd → [6] Manage API → CPU/GPU, model, Start/Reset
+docker compose -f docker/docker-compose.yml --profile cpu up -d    # or --profile gpu
 ```
 
-### Docker — Whisper API server (used by WhisperLive app)
+API runs at `http://127.0.0.1:5000`. Endpoints: `GET /health`, `GET /models`, `POST /transcribe`, `POST /translate`.
+`docker/api_server.py` is **volume-mounted** — restart/Reset the container to pick up edits; only rebuild (`--build`) after `Dockerfile`/dependency changes.
+
+### Docker — Batch transcription (legacy)
 
 ```powershell
-.\scripts\api\start-whisper-gpu.cmd   # docker compose --profile api-gpu up --build
-.\scripts\api\start-whisper-cpu.cmd   # docker compose --profile api-cpu up --build
-```
-
-API runs at `http://localhost:5000`. Endpoints: `GET /health`, `GET /models`, `POST /transcribe`.
-
-Rebuild with `--no-cache` after any `Dockerfile` change:
-```powershell
-docker compose --profile gpu build --no-cache
+docker compose -f docker/docker-compose.yml --profile gpu build
+.\scripts\batch\process-videos-gpu.cmd   # or -cpu
 ```
 
 ---
 
 ## Architecture
 
-### Docker pipeline
+### Docker backend
 
-`process-videos.ps1` orchestrates: transcribe via `docker compose run` → optional `translate_srt.py` inside container → ffmpeg subtitle burn. Outputs go to `videos/output/` only — never modify this directory.
+`docker/api_server.py` (FastAPI + faster-whisper + deep-translator) is the app's ASR/translate backend, served by uvicorn on port 5000 via the `gpu` / `cpu` compose profiles. Key env: `WHISPER_MODEL`, `NUM_WORKERS`, `CPU_THREADS`, `LOG_RESULT`. The file is volume-mounted, so edits apply on container restart.
 
-Four Docker profiles: `gpu`, `cpu`, `api-gpu`, `api-cpu`. The `api-*` profiles run `api_server.py` as a FastAPI/uvicorn service on port 5000.
+**Legacy batch:** `process-videos.ps1` orchestrates transcribe → optional `translate_srt.py` → ffmpeg subtitle burn, output to `videos/output/` (never modify that directory). No longer the project focus.
 
 ### WinUI 3 App (`src/WhisperLive/`)
 
