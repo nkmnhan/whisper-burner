@@ -12,8 +12,9 @@ public sealed class RecordingService : IRecordingService
 {
     private const double MaxOverlapSeconds = 1.5;
     private const double MaxOverlapFraction = 0.4;
+    private const int ChannelCapacity = 5;
 
-    private Channel<AudioChunkInfo> _channel = Channel.CreateBounded<AudioChunkInfo>(20);
+    private Channel<AudioChunkInfo> _channel = Channel.CreateBounded<AudioChunkInfo>(ChannelCapacity);
     private WasapiLoopbackCapture? _capture;
     private MemoryStream _buffer = new();
     private readonly object _lock = new();
@@ -29,7 +30,7 @@ public sealed class RecordingService : IRecordingService
     public Task StartAsync(RecordingOptions options, CancellationToken ct)
     {
         _channel = Channel.CreateBounded<AudioChunkInfo>(
-            new BoundedChannelOptions(5) { FullMode = BoundedChannelFullMode.DropOldest });
+            new BoundedChannelOptions(ChannelCapacity) { FullMode = BoundedChannelFullMode.DropOldest });
         _chunkIndex = 0;
         _offsetSeconds = 0;
         _buffer = new MemoryStream();
@@ -141,10 +142,12 @@ public sealed class RecordingService : IRecordingService
         AppLogger.Debug("Flushed chunk #{Index} — {Bytes} bytes (overlap={Overlap}s)",
             _chunkIndex, wavBytes.Length, chunkOverlap);
 
-        if (!_channel.Writer.TryWrite(new AudioChunkInfo(wavBytes, _chunkIndex, wavStartTime, chunkOverlap)))
-        {
-            AppLogger.Warning("Audio chunk #{Index} dropped — consumer backlog full; transcript gap possible", _chunkIndex);
-        }
+        // The channel is bounded with DropOldest, so TryWrite always succeeds — it
+        // silently evicts the oldest queued chunk when full. Check Count first so a
+        // real backlog eviction is logged instead of being invisible.
+        if (_channel.Reader.Count >= ChannelCapacity)
+            AppLogger.Warning("Audio chunk backlog full ({Capacity}) — evicting oldest queued chunk; transcript gap possible", ChannelCapacity);
+        _channel.Writer.TryWrite(new AudioChunkInfo(wavBytes, _chunkIndex, wavStartTime, chunkOverlap));
         _offsetSeconds += options.ChunkDurationSeconds;
         _chunkIndex++;
     }
