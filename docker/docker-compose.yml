@@ -32,6 +32,8 @@ services:
       - COMPUTE_TYPE=float16
       - BEAM_SIZE=5
       - MODEL_CACHE=/models
+      - NUM_WORKERS=${NUM_WORKERS:-2}
+      - LOG_RESULT=${LOG_RESULT:-false}
       - PYTHONDONTWRITEBYTECODE=1
     ports:
       - "5000:5000"
@@ -60,6 +62,9 @@ services:
       - COMPUTE_TYPE=int8
       - BEAM_SIZE=1
       - MODEL_CACHE=/models
+      - NUM_WORKERS=${NUM_WORKERS:-1}
+      - CPU_THREADS=${CPU_THREADS:-0}
+      - LOG_RESULT=${LOG_RESULT:-false}
       - PYTHONDONTWRITEBYTECODE=1
     ports:
       - "5000:5000"
