@@ -1,6 +1,7 @@
-# Model cache
-/models/*
-!/models/.gitkeep
+# Model cache — keep subdirectory placeholder, ignore actual model files
+/models/**
+!/models/fast-whisper/
+!/models/fast-whisper/.gitkeep
 
 # Video source files
 /videos/*.wmv
@@ -22,5 +23,52 @@
 /videos/output/
 /videos/*.srt
 
+# Docker file-mount stubs (Docker Desktop on Windows creates these on the host)
+/videos/*.py
+
 # Keep videos folder in Git
 !/videos/.gitkeep
+
+# .NET / C# build outputs
+bin/
+obj/
+publish/
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.rsuser
+
+# Rider
+.idea/
+
+# Vendored build tool DLLs (checked-in only as a workaround; prefer NuGet restore)
+src/WhisperBurner.WinUI/.tools/AppxPackage/*.dll
+
+# Windows App SDK / MSIX packaging
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+*.msixupload
+*.appxupload
+*.cer
+release/
+
+# WinUI 3 compiled XAML artifacts dumped to repo root (release build side-effect)
+release*.xbf
+releaseComponents/
+releaseStyles/
+releaseViews/
+
+# Test results (keep .gitkeep, ignore generated JSON)
+tests/results/*.json

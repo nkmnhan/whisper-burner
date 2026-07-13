@@ -1,0 +1,253 @@
+@echo off
+setlocal
+
+:MENU
+cls
+echo.
+echo  WhisperBurner
+echo  =============
+echo.
+echo   Dev Tools
+echo     [1] Start Claude
+echo     [2] Start Copilot
+echo.
+echo   App
+echo     [3] Run app (debug)
+echo     [4] Build release
+echo     [5] Create desktop shortcut
+echo.
+echo   Whisper API
+echo     [6] Manage API
+echo     [7] Download model
+echo.
+echo   Batch Processing
+echo     [8] Process videos
+echo     [9] Translate subtitles
+echo.
+echo   Docker
+echo     [10] Build Docker image
+echo.
+echo   [0] Exit
+echo.
+set /p ACTION= Select action:
+echo.
+
+if "%ACTION%"=="0" exit /b 0
+if "%ACTION%"=="1" goto START_CLAUDE
+if "%ACTION%"=="2" goto START_COPILOT
+if "%ACTION%"=="3" goto RUN_APP
+if "%ACTION%"=="4" goto BUILD_RELEASE
+if "%ACTION%"=="5" goto CREATE_SHORTCUT
+if "%ACTION%"=="6" goto START_API
+if "%ACTION%"=="7" goto DOWNLOAD_MODEL
+if "%ACTION%"=="8" goto PROCESS_VIDEOS
+if "%ACTION%"=="9" goto TRANSLATE
+if "%ACTION%"=="10" goto DOCKER_BUILD
+
+echo  Invalid choice.
+pause
+goto MENU
+
+:: ─────────────────────────────────────────
+:RUN_APP
+echo  Building and launching WhisperLive...
+echo.
+dotnet build "%~dp0src\WhisperLive\WhisperLive.csproj" -c Debug -v quiet
+if errorlevel 1 ( echo  Build failed. & pause & goto MENU )
+"%~dp0src\WhisperLive\bin\Debug\net9.0-windows10.0.22621.0\WhisperLive.exe"
+pause
+goto MENU
+
+:: ─────────────────────────────────────────
+:BUILD_RELEASE
+call "%~dp0scripts\app\build-release.cmd"
+goto MENU
+
+:: ─────────────────────────────────────────
+:CREATE_SHORTCUT
+call "%~dp0scripts\app\create-shortcut.cmd"
+goto MENU
+
+:: ─────────────────────────────────────────
+:START_API
+set PROFILE=
+set WHISPER_MODEL=
+set NUM_WORKERS=
+set LOG_RESULT=
+echo  Device:
+echo    [1] CPU  (no GPU required)
+echo    [2] GPU  (requires NVIDIA + Docker NVIDIA runtime)
+echo.
+set /p DEV= Select (1 or 2):
+if "%DEV%"=="1" set PROFILE=cpu
+if "%DEV%"=="2" set PROFILE=gpu
+if "%PROFILE%"=="" ( echo  Invalid choice. & pause & goto MENU )
+echo.
+echo  Model (must match a previously downloaded model):
+echo    [1] tiny
+echo    [2] base
+echo    [3] small
+echo    [4] medium  (default)
+echo    [5] large-v3
+echo    [6] turbo
+echo.
+set /p MC= Select model (1-6, default 4):
+if "%MC%"=="" set MC=4
+if "%MC%"=="1" set WHISPER_MODEL=tiny
+if "%MC%"=="2" set WHISPER_MODEL=base
+if "%MC%"=="3" set WHISPER_MODEL=small
+if "%MC%"=="4" set WHISPER_MODEL=medium
+if "%MC%"=="5" set WHISPER_MODEL=large-v3
+if "%MC%"=="6" set WHISPER_MODEL=large-v3-turbo
+if "%WHISPER_MODEL%"=="" ( echo  Invalid choice. & pause & goto MENU )
+echo.
+echo  Result logging (stream each transcription to the container logs)?
+echo    [1] Off  (default)
+echo    [2] On
+echo.
+set /p LR= Select (1 or 2, default 1):
+if "%LR%"=="2" (set LOG_RESULT=true) else (set LOG_RESULT=false)
+echo.
+echo  Parallel workers (concurrent transcriptions):
+echo    [1] Default  (gpu 2 / cpu 1)
+echo    [2] 1 worker
+echo    [3] 2 workers
+echo    [4] 4 workers
+echo.
+set /p NW= Select workers (1-4, default 1):
+if "%NW%"=="2" set NUM_WORKERS=1
+if "%NW%"=="3" set NUM_WORKERS=2
+if "%NW%"=="4" set NUM_WORKERS=4
+echo.
+echo  Action:
+echo    [1] Start    (start if not running)
+echo    [2] Stop     (stop and remove container)
+echo    [3] Reset    (recreate container - picks up code + env, NO image rebuild)
+echo    [4] Rebuild  (full image rebuild, then fresh start)
+echo    [5] Status   (show running containers)
+echo    [6] Logs     (follow logs in a new window)
+echo.
+set /p ACT= Select action (1-6):
+echo.
+
+set COMPOSE=docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE%
+
+if "%ACT%"=="1" (
+    echo  Starting [%PROFILE%] model=[%WHISPER_MODEL%] log_result=[%LOG_RESULT%] ...
+    %COMPOSE% up -d
+    goto API_DONE
+)
+if "%ACT%"=="2" (
+    echo  Stopping [%PROFILE%] ...
+    %COMPOSE% down
+    goto API_DONE
+)
+if "%ACT%"=="3" (
+    echo  Resetting [%PROFILE%] model=[%WHISPER_MODEL%] log_result=[%LOG_RESULT%] ...
+    %COMPOSE% up -d --force-recreate
+    goto API_DONE
+)
+if "%ACT%"=="4" (
+    echo  Rebuilding [%PROFILE%] model=[%WHISPER_MODEL%] ...
+    %COMPOSE% down
+    %COMPOSE% up -d --build --force-recreate
+    goto API_DONE
+)
+if "%ACT%"=="5" (
+    echo  Running containers:
+    docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    goto API_DONE
+)
+if "%ACT%"=="6" (
+    echo  Opening logs in a new window ^(Ctrl+C to stop^)...
+    start cmd /k "%COMPOSE% logs -f"
+    goto API_DONE
+)
+echo  Invalid choice.
+
+:API_DONE
+pause
+goto MENU
+
+:: ─────────────────────────────────────────
+:DOWNLOAD_MODEL
+set MODEL=
+echo  Select model:
+echo    [1] tiny     (~75 MB)   fastest, lowest accuracy
+echo    [2] base     (~145 MB)  fast
+echo    [3] small    (~465 MB)  good balance (default)
+echo    [4] medium   (~1.5 GB)  higher accuracy
+echo    [5] large-v3 (~3.1 GB)  best accuracy
+echo    [6] turbo    (~1.5 GB)  fast + accurate
+echo.
+set /p MC= Select model (1-6, default 3):
+if "%MC%"=="" set MC=3
+if "%MC%"=="1" set MODEL=tiny
+if "%MC%"=="2" set MODEL=base
+if "%MC%"=="3" set MODEL=small
+if "%MC%"=="4" set MODEL=medium
+if "%MC%"=="5" set MODEL=large-v3
+if "%MC%"=="6" set MODEL=turbo
+if "%MODEL%"=="" ( echo  Invalid choice. & pause & goto MENU )
+echo.
+echo  Device:
+echo    [1] CPU  (no GPU required)
+echo    [2] GPU  (requires NVIDIA + Docker NVIDIA runtime)
+echo.
+set /p DC= Select (1 or 2):
+if "%DC%"=="1" powershell -ExecutionPolicy Bypass -File "%~dp0scripts\api\download-models.ps1" -Model %MODEL%
+if "%DC%"=="2" powershell -ExecutionPolicy Bypass -File "%~dp0scripts\api\download-models.ps1" -Model %MODEL% -Gpu
+if not "%DC%"=="1" if not "%DC%"=="2" ( echo  Invalid choice. & pause & goto MENU )
+pause
+goto MENU
+
+:: ─────────────────────────────────────────
+:PROCESS_VIDEOS
+echo  Device:
+echo    [1] CPU
+echo    [2] GPU
+echo.
+set /p DV= Select (1 or 2):
+if "%DV%"=="1" powershell -ExecutionPolicy Bypass -File "%~dp0scripts\batch\process-videos.ps1"
+if "%DV%"=="2" powershell -ExecutionPolicy Bypass -File "%~dp0scripts\batch\process-videos.ps1" -Gpu
+if not "%DV%"=="1" if not "%DV%"=="2" ( echo  Invalid choice. & pause & goto MENU )
+pause
+goto MENU
+
+:: ─────────────────────────────────────────
+:TRANSLATE
+echo  Common codes: en  vi  zh  ja  ko  fr  de  es  ar  th
+echo.
+set /p LANG= Enter target language code:
+if "%LANG%"=="" ( echo  No language entered. & pause & goto MENU )
+echo.
+echo  Device:
+echo    [1] CPU
+echo    [2] GPU
+echo.
+set /p DT= Select (1 or 2):
+if "%DT%"=="1" powershell -ExecutionPolicy Bypass -File "%~dp0scripts\batch\process-videos.ps1" -TargetLang %LANG%
+if "%DT%"=="2" powershell -ExecutionPolicy Bypass -File "%~dp0scripts\batch\process-videos.ps1" -TargetLang %LANG% -Gpu
+if not "%DT%"=="1" if not "%DT%"=="2" ( echo  Invalid choice. & pause & goto MENU )
+pause
+goto MENU
+
+:: ─────────────────────────────────────────
+:DOCKER_BUILD
+echo  Building Docker image (gpu profile)...
+echo.
+docker compose -f "%~dp0docker\docker-compose.yml" --profile gpu build
+pause
+goto MENU
+
+:: ─────────────────────────────────────────
+:START_CLAUDE
+echo  Opening Claude in a new terminal...
+start cmd /k "SET CLAUDE_CODE_MAX_OUTPUT_TOKENS=64000 && claude --dangerously-skip-permissions"
+goto MENU
+
+:: ─────────────────────────────────────────
+:START_COPILOT
+echo  Opening Copilot in a new terminal...
+start cmd /k "copilot -i /allow-all"
+goto MENU

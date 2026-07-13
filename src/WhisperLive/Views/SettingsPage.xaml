@@ -1,0 +1,272 @@
+<Page
+    x:Class="WhisperLive.Views.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls">
+    <ScrollViewer>
+        <StackPanel MaxWidth="640" Margin="24,16" Spacing="8">
+
+            <TextBlock
+                Margin="0,0,0,12"
+                AutomationProperties.HeadingLevel="Level1"
+                Style="{StaticResource TitleTextBlockStyle}"
+                Text="Settings" />
+
+            <!-- Whisper API -->
+            <controls:SettingsExpander
+                x:Name="ApiExpander"
+                Description="Connection to the local Whisper Docker API"
+                Header="Whisper API"
+                IsExpanded="True">
+                <controls:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE968;" />
+                </controls:SettingsExpander.HeaderIcon>
+                <controls:SettingsExpander.Items>
+                    <controls:SettingsCard Description="http://localhost:5000" Header="API URL">
+                        <TextBox
+                            x:Name="ApiUrlBox"
+                            Width="260"
+                            HorizontalAlignment="Right"
+                            PlaceholderText="http://localhost:5000"
+                            TextChanged="OnApiUrlChanged" />
+                    </controls:SettingsCard>
+                    <controls:SettingsCard Description="Whisper model to use for transcription" Header="Model">
+                        <ComboBox
+                            x:Name="ModelBox"
+                            Width="160"
+                            HorizontalAlignment="Right"
+                            SelectionChanged="OnModelChanged">
+                            <ComboBoxItem Content="tiny" />
+                            <ComboBoxItem Content="base" />
+                            <ComboBoxItem Content="small" />
+                            <ComboBoxItem Content="medium" />
+                            <ComboBoxItem Content="large-v3" />
+                            <ComboBoxItem Content="turbo" />
+                        </ComboBox>
+                    </controls:SettingsCard>
+                    <controls:SettingsCard Description="Seconds of audio per transcription request (2–10)" Header="Chunk duration">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Slider
+                                x:Name="ChunkSlider"
+                                Width="160"
+                                Maximum="10"
+                                Minimum="2"
+                                StepFrequency="1"
+                                TickFrequency="1"
+                                TickPlacement="BottomRight"
+                                ValueChanged="OnChunkDurationChanged" />
+                            <TextBlock
+                                x:Name="ChunkLabel"
+                                Width="28"
+                                VerticalAlignment="Center"
+                                Text="5 s" />
+                        </StackPanel>
+                    </controls:SettingsCard>
+                    <controls:SettingsCard Description="Language spoken in the audio (auto = Whisper detects)" Header="Spoken language">
+                        <ComboBox
+                            x:Name="LanguageBox"
+                            Width="160"
+                            HorizontalAlignment="Right"
+                            SelectionChanged="OnLanguageChanged">
+                            <ComboBoxItem Content="auto" />
+                            <ComboBoxItem Content="en" />
+                            <ComboBoxItem Content="vi" />
+                            <ComboBoxItem Content="ja" />
+                            <ComboBoxItem Content="zh" />
+                            <ComboBoxItem Content="fr" />
+                            <ComboBoxItem Content="de" />
+                            <ComboBoxItem Content="es" />
+                        </ComboBox>
+                    </controls:SettingsCard>
+                </controls:SettingsExpander.Items>
+            </controls:SettingsExpander>
+
+            <!-- Translation -->
+            <controls:SettingsExpander
+                x:Name="TranslationExpander"
+                Description="Translate each segment to your language in real time"
+                Header="Translation"
+                IsExpanded="True">
+                <controls:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xF2B7;" />
+                </controls:SettingsExpander.HeaderIcon>
+                <controls:SettingsExpander.Items>
+                    <controls:SettingsCard Description="Translate segments in the background — never blocks new transcription" Header="Enable translation">
+                        <ToggleSwitch x:Name="EnableTranslationToggle" Toggled="OnEnableTranslationToggled" />
+                    </controls:SettingsCard>
+                    <controls:SettingsCard Description="Language to display in the overlay and saved as .xx.srt" Header="Target language">
+                        <ComboBox
+                            x:Name="TranslationTargetBox"
+                            Width="160"
+                            HorizontalAlignment="Right"
+                            SelectionChanged="OnTranslationTargetChanged">
+                            <ComboBoxItem Content="vi" />
+                            <ComboBoxItem Content="en" />
+                            <ComboBoxItem Content="ja" />
+                            <ComboBoxItem Content="zh" />
+                            <ComboBoxItem Content="fr" />
+                            <ComboBoxItem Content="de" />
+                            <ComboBoxItem Content="es" />
+                            <ComboBoxItem Content="ko" />
+                            <ComboBoxItem Content="th" />
+                        </ComboBox>
+                    </controls:SettingsCard>
+                    <controls:SettingsCard Description="Translation API backend" Header="Provider">
+                        <ComboBox
+                            x:Name="TranslationProviderBox"
+                            Width="160"
+                            HorizontalAlignment="Right"
+                            SelectionChanged="OnTranslationProviderChanged">
+                            <ComboBoxItem Content="docker (free)" />
+                            <ComboBoxItem Content="deepl" />
+                            <ComboBoxItem Content="google" />
+                        </ComboBox>
+                    </controls:SettingsCard>
+                    <controls:SettingsCard
+                        x:Name="DockerProviderInfoCard"
+                        Description="Translates via the fast-whisper API using deep-translator — no API key required. Start the API server first."
+                        Visibility="Collapsed" />
+                    <controls:SettingsCard x:Name="DeepLApiKeyCard" Description="DeepL API key (free tier: deepl.com/pro-api)" Header="DeepL API key">
+                        <TextBox
+                            x:Name="DeepLApiKeyBox"
+                            Width="260"
+                            HorizontalAlignment="Right"
+                            PlaceholderText="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx"
+                            TextChanged="OnDeepLApiKeyChanged" />
+                    </controls:SettingsCard>
+                    <controls:SettingsCard x:Name="GoogleApiKeyCard" Description="Google Cloud Translate API key (cloud.google.com/translate)" Header="Google API key">
+                        <TextBox
+                            x:Name="GoogleApiKeyBox"
+                            Width="260"
+                            HorizontalAlignment="Right"
+                            PlaceholderText="AIza..."
+                            TextChanged="OnGoogleApiKeyChanged" />
+                    </controls:SettingsCard>
+                </controls:SettingsExpander.Items>
+            </controls:SettingsExpander>
+
+            <!-- AI Assistant -->
+            <controls:SettingsExpander
+                x:Name="AssistantExpander"
+                Description="Claude AI for session Q&amp;A and context"
+                Header="AI Assistant"
+                IsExpanded="True">
+                <controls:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE8BD;" />
+                </controls:SettingsExpander.HeaderIcon>
+                <controls:SettingsExpander.Items>
+                    <controls:SettingsCard Description="Show the Assistant panel during sessions" Header="Enable assistant">
+                        <ToggleSwitch x:Name="EnableAssistantToggle" Toggled="OnEnableAssistantToggled" />
+                    </controls:SettingsCard>
+                    <controls:SettingsCard
+                        Description="Loaded by Claude CLI from ~/whisper.live/CLAUDE.md — defines assistant persona and rules for every session"
+                        Header="Global assistant instructions">
+                        <TextBox
+                            x:Name="GlobalClaudeMdBox"
+                            Width="360"
+                            MaxHeight="180"
+                            AcceptsReturn="True"
+                            FontFamily="Consolas"
+                            FontSize="12"
+                            PlaceholderText="# WhisperLive Session Assistant&#x0a;You are a session assistant…"
+                            TextWrapping="Wrap"
+                            TextChanged="OnGlobalClaudeMdChanged" />
+                    </controls:SettingsCard>
+                </controls:SettingsExpander.Items>
+            </controls:SettingsExpander>
+
+            <!-- Session skills -->
+            <controls:SettingsExpander
+                x:Name="SkillsExpander"
+                Description="Custom skill prompts shown as quick-access chips in the Assistant panel"
+                Header="Session skills"
+                IsExpanded="False">
+                <controls:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE945;" />
+                </controls:SettingsExpander.HeaderIcon>
+                <controls:SettingsExpander.Content>
+                    <Button x:Name="AddSkillButton" Click="OnAddSkillClicked">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE710;" />
+                            <TextBlock Text="Add skill" />
+                        </StackPanel>
+                    </Button>
+                </controls:SettingsExpander.Content>
+            </controls:SettingsExpander>
+
+            <!-- Context folders -->
+            <controls:SettingsExpander
+                x:Name="ContextFolderExpander"
+                Description="Folders (code repos, docs) the session assistant can read for extra context"
+                Header="Context folders"
+                IsExpanded="True">
+                <controls:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE8B7;" />
+                </controls:SettingsExpander.HeaderIcon>
+                <controls:SettingsExpander.Content>
+                    <Button x:Name="AddContextFolderButton" Click="OnAddContextFolderClicked">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE8B7;" />
+                            <TextBlock Text="Add folder" />
+                        </StackPanel>
+                    </Button>
+                </controls:SettingsExpander.Content>
+            </controls:SettingsExpander>
+
+            <!-- Default session context -->
+            <controls:SettingsCard Description="Pre-fills the context box at the start of every new session" Header="Default session context">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8BD;" />
+                </controls:SettingsCard.HeaderIcon>
+                <TextBox
+                    x:Name="DefaultContextBox"
+                    Width="360"
+                    MaxHeight="100"
+                    AcceptsReturn="True"
+                    PlaceholderText="Role, team, common abbreviations — shared across all sessions"
+                    TextWrapping="Wrap"
+                    TextChanged="OnDefaultContextChanged" />
+            </controls:SettingsCard>
+
+            <!-- Allowed read paths -->
+            <controls:SettingsExpander
+                x:Name="AllowedPathsExpander"
+                Description="Files and folders Claude can read during a session"
+                Header="Allowed Read Paths"
+                IsExpanded="True">
+                <controls:SettingsExpander.HeaderIcon>
+                    <FontIcon Glyph="&#xE8F4;" />
+                </controls:SettingsExpander.HeaderIcon>
+                <controls:SettingsExpander.Content>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="AddFolderButton" Click="OnAddFolderClicked">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontSize="14" Glyph="&#xE8B7;" />
+                                <TextBlock Text="Add folder" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="AddFileButton" Click="OnAddFileClicked">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontSize="14" Glyph="&#xE8A5;" />
+                                <TextBlock Text="Add file" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </controls:SettingsExpander.Content>
+            </controls:SettingsExpander>
+
+            <!-- Appearance -->
+            <controls:SettingsCard Description="Choose app color theme" Header="Appearance">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE790;" />
+                </controls:SettingsCard.HeaderIcon>
+                <ComboBox x:Name="ThemeCombo" SelectionChanged="OnThemeChanged">
+                    <ComboBoxItem Content="Light" Tag="Light" />
+                    <ComboBoxItem Content="Dark" Tag="Dark" />
+                    <ComboBoxItem Content="Use system setting" Tag="Default" />
+                </ComboBox>
+            </controls:SettingsCard>
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>

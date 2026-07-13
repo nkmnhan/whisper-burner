@@ -1,0 +1,787 @@
+<Page
+    x:Class="WhisperLive.Views.LiveTranscriptPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:components="using:WhisperLive.Components"
+    xmlns:helpers="using:WhisperLive.Helpers"
+    xmlns:models="using:WhisperLive.Models">
+    <Page.Resources>
+        <!-- Assistant chat bubbles — picked by AssistantMessageTemplateSelector based on Role -->
+        <DataTemplate x:Key="AssistantUserMessageTemplate" x:DataType="models:AssistantMessage">
+            <StackPanel Margin="48,0,0,0" Spacing="2">
+                <TextBlock
+                    HorizontalAlignment="Right"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="You" />
+                <Border
+                    Padding="12,8"
+                    HorizontalAlignment="Right"
+                    Background="{ThemeResource AssistantUserBubbleBrush}"
+                    CornerRadius="{StaticResource ControlCornerRadius}">
+                    <TextBlock Text="{x:Bind Text}" TextWrapping="Wrap" />
+                </Border>
+                <TextBlock
+                    HorizontalAlignment="Right"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind TimeDisplay}" />
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="AssistantResponseMessageTemplate" x:DataType="models:AssistantMessage">
+            <StackPanel Margin="0,0,48,0" Spacing="2">
+                <TextBlock
+                    HorizontalAlignment="Left"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Claude" />
+                <Border
+                    Padding="12,8"
+                    HorizontalAlignment="Left"
+                    Background="{ThemeResource AssistantResponseBubbleBrush}"
+                    CornerRadius="{StaticResource ControlCornerRadius}">
+                    <RichTextBlock
+                        helpers:MarkdownHelper.Text="{x:Bind Text}"
+                        IsTextSelectionEnabled="True"
+                        TextWrapping="Wrap" />
+                </Border>
+                <!-- Inline actions: GhostButton enforces arrow cursor inside the text-containing ListView -->
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <components:GhostButton
+                        Style="{StaticResource InlineActionButtonStyle}"
+                        Tag="{x:Bind Text}"
+                        Click="OnCopyResponseClicked"
+                        ToolTipService.ToolTip="Copy">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <FontIcon FontSize="12" Glyph="&#xE8C8;" />
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Copy" />
+                        </StackPanel>
+                    </components:GhostButton>
+                    <components:GhostButton
+                        Style="{StaticResource InlineActionButtonStyle}"
+                        Tag="{x:Bind Text}"
+                        Click="OnSaveResponseClicked"
+                        ToolTipService.ToolTip="Save to file">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <FontIcon FontSize="12" Glyph="&#xE74E;" />
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Save" />
+                        </StackPanel>
+                    </components:GhostButton>
+                </StackPanel>
+                <TextBlock
+                    HorizontalAlignment="Left"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind TimeDisplay}" />
+            </StackPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="AssistantErrorMessageTemplate" x:DataType="models:AssistantMessage">
+            <StackPanel Margin="0,0,48,0" Spacing="2">
+                <TextBlock
+                    HorizontalAlignment="Left"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Claude" />
+                <Border
+                    Padding="12,8"
+                    HorizontalAlignment="Left"
+                    Background="{ThemeResource AssistantErrorBubbleBrush}"
+                    CornerRadius="{StaticResource ControlCornerRadius}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon
+                            Margin="0,4,0,0"
+                            VerticalAlignment="Top"
+                            FontSize="12"
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Glyph="&#xE783;" />
+                        <TextBlock
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Text="{x:Bind Text}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <TextBlock
+                    HorizontalAlignment="Left"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind TimeDisplay}" />
+            </StackPanel>
+        </DataTemplate>
+        <helpers:AssistantMessageTemplateSelector
+            x:Key="AssistantMessageSelector"
+            ErrorTemplate="{StaticResource AssistantErrorMessageTemplate}"
+            ResponseTemplate="{StaticResource AssistantResponseMessageTemplate}"
+            UserTemplate="{StaticResource AssistantUserMessageTemplate}" />
+        <!-- Waveform storyboard — 5 bars staggered by 80 ms each -->
+        <Storyboard x:Name="WaveformStoryboard">
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.000"
+                Duration="0:0:0.6"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="Bar1Scale"
+                Storyboard.TargetProperty="ScaleY"
+                From="0.2" To="1.0" />
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.080"
+                Duration="0:0:0.6"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="Bar2Scale"
+                Storyboard.TargetProperty="ScaleY"
+                From="0.2" To="1.0" />
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.160"
+                Duration="0:0:0.6"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="Bar3Scale"
+                Storyboard.TargetProperty="ScaleY"
+                From="0.2" To="1.0" />
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.240"
+                Duration="0:0:0.6"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="Bar4Scale"
+                Storyboard.TargetProperty="ScaleY"
+                From="0.2" To="1.0" />
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.320"
+                Duration="0:0:0.6"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="Bar5Scale"
+                Storyboard.TargetProperty="ScaleY"
+                From="0.2" To="1.0" />
+        </Storyboard>
+
+        <!-- Recording dot pulse -->
+        <Storyboard x:Name="DotPulseStoryboard">
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.000"
+                Duration="0:0:0.45"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="StatusDotScale"
+                Storyboard.TargetProperty="ScaleX"
+                From="1.0" To="1.5" />
+            <DoubleAnimation
+                AutoReverse="True"
+                BeginTime="0:0:0.000"
+                Duration="0:0:0.45"
+                RepeatBehavior="Forever"
+                Storyboard.TargetName="StatusDotScale"
+                Storyboard.TargetProperty="ScaleY"
+                From="1.0" To="1.5" />
+        </Storyboard>
+
+        <!--
+            Thinking indicator: enter (Decelerate 150ms) — Gallery EasingFunction: use EaseOut for objects entering the scene.
+            Opacity animates 0→1; Visibility is set to Visible before Begin() in code-behind.
+        -->
+        <Storyboard x:Name="ShowThinkingStoryboard">
+            <DoubleAnimation
+                Storyboard.TargetName="ThinkingIndicator"
+                Storyboard.TargetProperty="Opacity"
+                From="0" To="1" Duration="0:0:0.15">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseOut" Exponent="4.5" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!--
+            Thinking indicator: exit (Accelerate 100ms) — Gallery EasingFunction: use EaseIn for objects exiting the scene.
+            Completed handler in code-behind sets Visibility=Collapsed and stops the dots storyboard.
+        -->
+        <Storyboard x:Name="HideThinkingStoryboard">
+            <DoubleAnimation
+                Storyboard.TargetName="ThinkingIndicator"
+                Storyboard.TargetProperty="Opacity"
+                From="1" To="0" Duration="0:0:0.10">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseIn" Exponent="4.5" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!--
+            Animated thinking dots — cycles "Thinking" → "Thinking." → "Thinking.." → "Thinking..."
+            every 500ms, giving the VS Code AI "thinking in progress" feel without a spinner next to text.
+        -->
+        <Storyboard x:Name="ThinkingDotsStoryboard" RepeatBehavior="Forever">
+            <ObjectAnimationUsingKeyFrames
+                Storyboard.TargetName="ThinkingDotsText"
+                Storyboard.TargetProperty="Text">
+                <DiscreteObjectKeyFrame KeyTime="0:0:0.0" Value="Thinking" />
+                <DiscreteObjectKeyFrame KeyTime="0:0:0.5" Value="Thinking." />
+                <DiscreteObjectKeyFrame KeyTime="0:0:1.0" Value="Thinking.." />
+                <DiscreteObjectKeyFrame KeyTime="0:0:1.5" Value="Thinking..." />
+            </ObjectAnimationUsingKeyFrames>
+        </Storyboard>
+
+        <!-- Assistant panel: slide in from the right (EaseOut 250ms) -->
+        <Storyboard x:Name="PanelShowStoryboard">
+            <DoubleAnimation
+                From="32" To="0"
+                Duration="0:0:0.25"
+                Storyboard.TargetName="AssistantPanelTranslate"
+                Storyboard.TargetProperty="X">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseOut" Exponent="5" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+            <DoubleAnimation
+                From="0" To="1"
+                Duration="0:0:0.2"
+                Storyboard.TargetName="AssistantPanel"
+                Storyboard.TargetProperty="Opacity">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseOut" Exponent="4" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!-- Assistant panel: fade out (EaseIn 150ms) — Completed handler collapses Visibility -->
+        <Storyboard x:Name="PanelHideStoryboard">
+            <DoubleAnimation
+                From="1" To="0"
+                Duration="0:0:0.15"
+                Storyboard.TargetName="AssistantPanel"
+                Storyboard.TargetProperty="Opacity">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseIn" Exponent="4" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+
+        <!-- ActionStatus fade-in (EaseOut 200ms) -->
+        <Storyboard x:Name="StatusFadeInStoryboard">
+            <DoubleAnimation
+                From="0" To="1"
+                Duration="0:0:0.2"
+                Storyboard.TargetName="ActionStatus"
+                Storyboard.TargetProperty="Opacity">
+                <DoubleAnimation.EasingFunction>
+                    <ExponentialEase EasingMode="EaseOut" Exponent="4" />
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+    </Page.Resources>
+
+    <Grid Padding="24,16,24,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Row 0: Status bar — dot + label, assistant toggle, API error InfoBar -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16" Spacing="8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                    <Ellipse
+                        x:Name="StatusDot"
+                        Width="8"
+                        Height="8"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AccessibilityView="Raw"
+                        Fill="{ThemeResource SystemFillColorCautionBrush}">
+                        <Ellipse.RenderTransform>
+                            <ScaleTransform x:Name="StatusDotScale" CenterX="4" CenterY="4" />
+                        </Ellipse.RenderTransform>
+                    </Ellipse>
+                    <TextBlock
+                        x:Name="StatusLabel"
+                        VerticalAlignment="Center"
+                        AutomationProperties.LiveSetting="Polite"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="Checking API…" />
+                </StackPanel>
+                <!--
+                    ToggleButton: IsChecked=True → panel visible (Checked fires ShowAssistantPanel),
+                    IsChecked=False → panel animates out (Unchecked fires HideAssistantPanel).
+                    InfoBadge: AttentionDotInfoBadgeStyle — shown when notes refresh while panel is
+                    closed. AutomationProperties.Name updated to include "new notes" when badge visible
+                    so screen readers announce the state change.
+                    Gallery pattern: PlacingInfobadgeInsideAnother.txt — inner Grid stretch, badge TopRight.
+                -->
+                <ToggleButton
+                    x:Name="AssistantToggleButton"
+                    Grid.Column="1"
+                    AutomationProperties.Name="Assistant"
+                    Checked="OnAssistantToggleChecked"
+                    HorizontalContentAlignment="Stretch"
+                    ToolTipService.ToolTip="Session assistant — Q&amp;A"
+                    Unchecked="OnAssistantToggleUnchecked"
+                    VerticalContentAlignment="Stretch">
+                    <Grid
+                        Width="Auto"
+                        Height="Auto"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch">
+                        <StackPanel
+                            Margin="8,0"
+                            HorizontalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE8BD;" />
+                            <TextBlock Text="Assistant" />
+                        </StackPanel>
+                        <InfoBadge
+                            x:Name="AssistantBadge"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Style="{StaticResource AttentionDotInfoBadgeStyle}"
+                            Visibility="Collapsed" />
+                    </Grid>
+                </ToggleButton>
+            </Grid>
+            <!--
+                InfoBar: Error severity — shown only when Whisper API health check fails.
+                IsClosable=True lets user dismiss once they've read it; code re-opens it if API
+                is still down on next health check. Severity=Error gives the red icon + color
+                that matches the status dot already shown.
+            -->
+            <InfoBar
+                x:Name="ApiErrorBar"
+                IsClosable="True"
+                IsOpen="False"
+                Message="Start the Whisper Docker container, then check the API URL in Settings."
+                Severity="Error"
+                Title="Whisper API offline" />
+        </StackPanel>
+
+        <!-- Row 1: live transcript + collapsible assistant panel — no button row here -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel
+                x:Name="IdlePlaceholder"
+                Grid.Column="0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="12">
+                <!-- Decorative placeholder icon — 56px intentional, not bound by text type ramp -->
+                <FontIcon
+                    x:Name="MicIcon"
+                    HorizontalAlignment="Center"
+                    FontSize="56"
+                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                    Glyph="&#xE720;" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Capture system audio as live transcript" />
+                <TextBox
+                    x:Name="PreContextBox"
+                    MaxWidth="400"
+                    MaxHeight="120"
+                    Margin="0,8,0,0"
+                    AcceptsReturn="True"
+                    PlaceholderText="Agenda, participants, background — Claude reads this before the session starts"
+                    TextWrapping="Wrap">
+                    <TextBox.Header>
+                        <StackPanel Margin="0,0,0,4" Orientation="Horizontal" Spacing="4">
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{ThemeResource BodyTextBlockStyle}"
+                                Text="Session context (optional)" />
+                            <components:GhostButton
+                                x:Name="ContextHistoryButton"
+                                Style="{StaticResource GhostButtonStyle}"
+                                ToolTipService.ToolTip="Recent &amp; saved prompts"
+                                Click="OnContextHistoryClicked">
+                                <FontIcon FontSize="16" Glyph="&#xE81C;" />
+                            </components:GhostButton>
+                            <components:GhostButton
+                                x:Name="SaveContextButton"
+                                Style="{StaticResource GhostButtonStyle}"
+                                ToolTipService.ToolTip="Save as preset"
+                                Click="OnSaveContextClicked">
+                                <FontIcon FontSize="16" Glyph="&#xE718;" />
+                            </components:GhostButton>
+                        </StackPanel>
+                    </TextBox.Header>
+                </TextBox>
+
+                <!--
+                    Translation chip — only visible when EnableTranslation=true in settings.
+                    Lets the user see/override the target language per session without navigating to Settings.
+                -->
+                <Border
+                    x:Name="TranslationChip"
+                    Padding="12,8"
+                    HorizontalAlignment="Center"
+                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon
+                            FontSize="14"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Glyph="&#xF2B7;" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Translate to" />
+                        <TextBlock
+                            x:Name="TranslationChipLabel"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource CaptionTextBlockStyle}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <ListView
+                x:Name="TranscriptList"
+                Grid.Column="0"
+                SelectionMode="None"
+                Visibility="Collapsed">
+                <ListView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
+                    </ItemsPanelTemplate>
+                </ListView.ItemsPanel>
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="MinHeight" Value="0" />
+                        <Setter Property="Padding" Value="0,4,0,4" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <!--
+                    Bilingual template (TranslatedSegmentView):
+                    • Translated text row — visible only when State=Translated (HasTranslation=true)
+                    • Original text row — always present; italic+dimmed while Provisional,
+                      smaller+dimmed when Translated (acts as secondary line), normal when Failed.
+                    x:Bind Mode=OneWay so INPC property-changed notifications update rows in-place
+                    without re-rendering the whole list — the core of the "interim → final" pattern.
+                    ApplyTranslation() is always called on the UI thread (DispatcherQueue) so INPC
+                    is safe here.
+                -->
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="models:TranslatedSegmentView">
+                        <StackPanel Spacing="1">
+                            <TextBlock
+                                FontSize="14"
+                                FontWeight="SemiBold"
+                                Text="{x:Bind TranslatedText, Mode=OneWay}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind TranslatedVisibility, Mode=OneWay}" />
+                            <TextBlock
+                                FontSize="{x:Bind OriginalFontSize, Mode=OneWay}"
+                                FontStyle="{x:Bind OriginalFontStyle, Mode=OneWay}"
+                                Opacity="{x:Bind OriginalOpacity, Mode=OneWay}"
+                                Text="{x:Bind OriginalText}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind OriginalVisibility, Mode=OneWay}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <!-- Assistant panel: Copilot Chat style Q&A -->
+            <Border
+                x:Name="AssistantPanel"
+                Grid.Column="1"
+                Width="360"
+                Margin="16,0,0,0"
+                Padding="0"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="{StaticResource OverlayCornerRadius}"
+                Visibility="Collapsed">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="AssistantPanelTranslate" />
+                </Border.RenderTransform>
+
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!--
+                        Panel header: title left + save icon right.
+                        BodyStrongTextBlockStyle matches the weight used by VS Code's chat panel title.
+                        GhostButton keeps the save action discoverable without competing with the
+                        primary input at the bottom.
+                    -->
+                    <Grid Grid.Row="0" Margin="12,12,8,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            Grid.Column="0"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                            Text="Ask Claude" />
+                        <components:GhostButton
+                            Grid.Column="1"
+                            AutomationProperties.Name="Clear conversation"
+                            Style="{StaticResource GhostButtonStyle}"
+                            Click="OnClearChatClicked"
+                            ToolTipService.ToolTip="Clear conversation">
+                            <FontIcon FontSize="14" Glyph="&#xE74D;" />
+                        </components:GhostButton>
+                        <components:GhostButton
+                            Grid.Column="2"
+                            AutomationProperties.Name="Save conversation"
+                            Style="{StaticResource GhostButtonStyle}"
+                            Click="OnSaveConversationClicked"
+                            ToolTipService.ToolTip="Save conversation">
+                            <FontIcon FontSize="14" Glyph="&#xE74E;" />
+                        </components:GhostButton>
+                    </Grid>
+
+                    <!--
+                        Chat messages list.
+                        ChatEmptyState overlays the same row — visible when list is empty,
+                        collapsed by code-behind (_chatMessages.CollectionChanged handler).
+                    -->
+                    <ListView
+                        x:Name="AssistantChatList"
+                        Grid.Row="1"
+                        Padding="12,0,12,0"
+                        ItemTemplateSelector="{StaticResource AssistantMessageSelector}"
+                        SelectionMode="None">
+                        <ListView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
+                            </ItemsPanelTemplate>
+                        </ListView.ItemsPanel>
+                        <ListView.ItemContainerTransitions>
+                            <TransitionCollection>
+                                <AddDeleteThemeTransition />
+                            </TransitionCollection>
+                        </ListView.ItemContainerTransitions>
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="MinHeight" Value="0" />
+                                <Setter Property="Padding" Value="0,4,0,4" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                    </ListView>
+
+                    <!--
+                        Empty state: shown until first message arrives (code-behind: _chatMessages.CollectionChanged).
+                        Chips live here — VS Code pattern: suggestions appear only when chat is empty,
+                        in the chat area itself. 2×2 wrapped layout avoids any scrollbar.
+                    -->
+                    <StackPanel
+                        x:Name="ChatEmptyState"
+                        Grid.Row="1"
+                        Margin="24,0"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="12">
+                        <!-- Decorative empty-state icon — 32px intentional, not bound by text type ramp -->
+                        <FontIcon
+                            HorizontalAlignment="Center"
+                            FontSize="32"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                            Glyph="&#xE8BD;" />
+                        <TextBlock
+                            MaxWidth="220"
+                            HorizontalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Try a suggestion or ask your own question"
+                            TextAlignment="Center"
+                            TextWrapping="Wrap" />
+                        <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
+                            <Button
+                                Content="Summarize"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="Summarize the session so far"
+                                Click="OnSuggestionClicked" />
+                            <Button
+                                Content="Action items"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="What are the action items from this session?"
+                                Click="OnSuggestionClicked" />
+                        </StackPanel>
+                        <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
+                            <Button
+                                Content="Decisions"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="What decisions were made in this session?"
+                                Click="OnSuggestionClicked" />
+                            <Button
+                                Content="Catch me up"
+                                Style="{StaticResource SuggestionChipButtonStyle}"
+                                Tag="Catch me up on the last few minutes of the session"
+                                Click="OnSuggestionClicked" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel
+                        x:Name="ThinkingIndicator"
+                        Grid.Row="2"
+                        Margin="12,6,12,0"
+                        Opacity="0"
+                        AutomationProperties.Name="Claude is thinking"
+                        AutomationProperties.LiveSetting="Assertive"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        Visibility="Collapsed">
+                        <ProgressRing
+                            Width="16"
+                            Height="16"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AccessibilityView="Raw"
+                            IsActive="True" />
+                        <TextBlock
+                            x:Name="ThinkingDotsText"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AccessibilityView="Raw"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Thinking" />
+                    </StackPanel>
+
+                    <!--
+                        AutoSuggestBox replaces the horizontal chip strip + plain TextBox.
+                        Typing filters skills by name/prompt (Google-suggest style).
+                        Empty box → all skills shown. QuerySubmitted handles Enter + QueryIcon click.
+                        SuggestionChosen shows the short Name while arrowing; QuerySubmitted uses full Prompt.
+                    -->
+                    <AutoSuggestBox
+                        x:Name="AssistantQuestionBox"
+                        Grid.Row="3"
+                        Grid.RowSpan="2"
+                        Margin="12,8,12,12"
+                        VerticalAlignment="Bottom"
+                        AutomationProperties.HelpText="Type to filter suggestions — press Enter or the send icon to submit"
+                        GotFocus="OnAssistantQuestionBoxGotFocus"
+                        PlaceholderText="Ask about the session…"
+                        QuerySubmitted="OnAssistantQuerySubmitted"
+                        SuggestionChosen="OnAssistantSuggestionChosen"
+                        TextChanged="OnAssistantSuggestTextChanged">
+                        <AutoSuggestBox.QueryIcon>
+                            <FontIcon FontSize="14" Glyph="&#xE724;" />
+                        </AutoSuggestBox.QueryIcon>
+                        <AutoSuggestBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:SessionSkill">
+                                <StackPanel Padding="0,4" Spacing="2">
+                                    <TextBlock
+                                        Style="{StaticResource BodyTextBlockStyle}"
+                                        Text="{x:Bind Name}" />
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="{x:Bind Prompt}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </AutoSuggestBox.ItemTemplate>
+                    </AutoSuggestBox>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Row 2: button bar — spans full outer-grid width so HorizontalAlignment="Center"
+             always means page center, independent of NavigationView width or AssistantPanel state -->
+        <StackPanel Grid.Row="2" Margin="0,16,0,0" HorizontalAlignment="Center" Spacing="12">
+            <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
+
+                <!-- New session: idle only, when prior transcript exists -->
+                <Button
+                    x:Name="NewSessionButton"
+                    Width="48"
+                    Height="48"
+                    AutomationProperties.Name="New session"
+                    Click="OnNewSessionClicked"
+                    ToolTipService.ToolTip="New session — clears transcript and starts a new file"
+                    Visibility="Collapsed">
+                    <FontIcon FontSize="16" Glyph="&#xE8E5;" />
+                </Button>
+
+                <!-- Main button: Start (idle) → waveform animation inside (recording) → click to stop -->
+                <Button
+                    x:Name="MainButton"
+                    Width="200"
+                    Height="48"
+                    Click="OnMainButtonClicked"
+                    Style="{StaticResource AccentButtonStyle}">
+                    <Grid>
+                        <StackPanel x:Name="StartContent" Orientation="Horizontal" Spacing="8">
+                            <FontIcon FontSize="16" Glyph="&#xE720;" />
+                            <TextBlock Text="Start" />
+                        </StackPanel>
+                        <StackPanel x:Name="WaveformInButton" Orientation="Horizontal" Spacing="4" Visibility="Collapsed">
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
+                                <Border.RenderTransform><ScaleTransform x:Name="Bar1Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
+                            </Border>
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
+                                <Border.RenderTransform><ScaleTransform x:Name="Bar2Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
+                            </Border>
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
+                                <Border.RenderTransform><ScaleTransform x:Name="Bar3Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
+                            </Border>
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
+                                <Border.RenderTransform><ScaleTransform x:Name="Bar4Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
+                            </Border>
+                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
+                                <Border.RenderTransform><ScaleTransform x:Name="Bar5Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </Button>
+
+                <!-- Pause: visible while recording or paused -->
+                <Button
+                    x:Name="PauseButton"
+                    Width="48"
+                    Height="48"
+                    AutomationProperties.Name="Pause recording"
+                    Click="OnPauseClicked"
+                    ToolTipService.ToolTip="Pause recording"
+                    Visibility="Collapsed">
+                    <FontIcon x:Name="PauseIcon" FontSize="16" Glyph="&#xE769;" />
+                </Button>
+
+                <!-- Show overlay: when overlay was dismissed during recording -->
+                <Button
+                    x:Name="ShowOverlayButton"
+                    Width="48"
+                    Height="48"
+                    AutomationProperties.Name="Show live transcript overlay"
+                    Click="OnShowOverlayClicked"
+                    ToolTipService.ToolTip="Show live transcript overlay"
+                    Visibility="Collapsed">
+                    <FontIcon FontSize="16" Glyph="&#xE890;" />
+                </Button>
+
+            </StackPanel>
+
+            <TextBlock
+                x:Name="ActionStatus"
+                Opacity="0"
+                HorizontalAlignment="Center"
+                AutomationProperties.LiveSetting="Polite"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}" />
+        </StackPanel>
+    </Grid>
+</Page>

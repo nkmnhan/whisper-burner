@@ -1,0 +1,140 @@
+using System;
+using System.Diagnostics;
+using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+using WhisperLive.Infrastructure;
+using WhisperLive.Models;
+using WhisperLive.Services.Translation.Providers;
+
+namespace WhisperLive.Services.Translation;
+
+/// <summary>Background translation pipeline. Unbounded channel (no drops), max 3 concurrent API calls.</summary>
+public sealed class TranslationService : ITranslationService, IDisposable
+{
+    private const int MaxConcurrent = 3;
+    private const int MaxRetries = 2;
+
+    private readonly ITranslationProvider _provider;
+    private readonly SemaphoreSlim _concurrencySemaphore = new(MaxConcurrent, MaxConcurrent);
+
+    // A fresh channel is created per session so that a new worker never shares a reader
+    // with a lingering worker from the previous session (SingleReader=true constraint).
+    private Channel<SubtitleSegment> _channel = Channel.CreateUnbounded<SubtitleSegment>(
+        new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+
+    private CancellationTokenSource? _sessionCts;
+    private Task? _workerTask;
+
+    public string TargetLanguage { get; }
+    public bool IsEnabled => true;
+
+    public event EventHandler<SegmentTranslationReadyEventArgs>? SegmentTranslated;
+    public event EventHandler<int>? SegmentTranslationFailed;
+
+    public TranslationService(ITranslationProvider provider, string targetLanguage)
+    {
+        _provider = provider;
+        TargetLanguage = targetLanguage;
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    public void StartSession()
+    {
+        EndSession();
+        // Fresh channel per session — prevents two concurrent readers on a SingleReader channel
+        // if the previous session's ConsumeAsync worker hasn't fully exited yet.
+        _channel = Channel.CreateUnbounded<SubtitleSegment>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+
+        _sessionCts = new CancellationTokenSource();
+        _workerTask = Task.Run(() => ConsumeAsync(_sessionCts.Token));
+        AppLogger.Info("TranslationService session started (provider={Provider}, target={Lang})",
+            _provider.Name, TargetLanguage);
+    }
+
+    public void EndSession()
+    {
+        if (_sessionCts is null) return;
+        _sessionCts.Cancel();
+        _sessionCts.Dispose();
+        _sessionCts = null;
+
+        // CTS cancel terminates ConsumeAsync and all in-flight tasks asynchronously.
+        _workerTask = null;
+
+        AppLogger.Info("TranslationService session ended");
+    }
+
+    // ── Enqueue ───────────────────────────────────────────────────────────────
+
+    public void EnqueueSegment(SubtitleSegment segment) => _channel.Writer.TryWrite(segment);
+
+    // ── Background consumer ───────────────────────────────────────────────────
+
+    private async Task ConsumeAsync(CancellationToken ct)
+    {
+        await foreach (var segment in _channel.Reader.ReadAllAsync(ct))
+            _ = TranslateWithSemaphoreAsync(segment, ct);
+    }
+
+    private async Task TranslateWithSemaphoreAsync(SubtitleSegment segment, CancellationToken ct)
+    {
+        // WaitAsync is outside the try/catch below, so catch it separately to avoid
+        // an unobserved exception when this fire-and-forget task is cancelled pre-semaphore.
+        try { await _concurrencySemaphore.WaitAsync(ct); }
+        catch (OperationCanceledException) { return; }
+
+        try
+        {
+            await TranslateWithRetryAsync(segment, ct);
+        }
+        catch (OperationCanceledException) { /* session ended — EndSession writes fallback */ }
+        catch (Exception ex)
+        {
+            AppLogger.Warning(ex, "Translation failed for segment {Id} after all retries", segment.Id);
+            // Resolve the UI row to its original text instead of leaving it "pending" forever.
+            SegmentTranslationFailed?.Invoke(this, segment.Id);
+        }
+        finally
+        {
+            _concurrencySemaphore.Release();
+        }
+    }
+
+    private async Task TranslateWithRetryAsync(SubtitleSegment segment, CancellationToken ct)
+    {
+        var delay = TimeSpan.FromSeconds(1);
+        for (var attempt = 0; attempt <= MaxRetries; attempt++)
+        {
+            try
+            {
+                var sw = Stopwatch.StartNew();
+                var translated = await _provider.TranslateAsync(segment.Text, TargetLanguage, ct);
+                sw.Stop();
+                PipelineMetrics.Instance.RecordTranslation(sw.Elapsed.TotalMilliseconds);
+                SegmentTranslated?.Invoke(this, new SegmentTranslationReadyEventArgs(segment.Id, translated));
+                return;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) when (attempt < MaxRetries)
+            {
+                AppLogger.Warning(ex, "Translation attempt {Attempt} failed, retrying in {Delay}ms",
+                    attempt + 1, delay.TotalMilliseconds);
+                await Task.Delay(delay + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 500)), ct);
+                delay = delay * 2;
+            }
+        }
+    }
+
+    // ── IDisposable ───────────────────────────────────────────────────────────
+
+    public void Dispose()
+    {
+        EndSession();
+        // _concurrencySemaphore has no OS handle (no AvailableWaitHandle used) so GC
+        // reclaim is safe. Disposing here races with Release() in fire-and-forget
+        // TranslateWithSemaphoreAsync tasks that are still in flight after EndSession().
+    }
+}

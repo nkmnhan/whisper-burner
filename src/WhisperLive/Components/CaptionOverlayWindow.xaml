@@ -1,0 +1,199 @@
+<Window
+    x:Class="WhisperLive.Components.CaptionOverlayWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:WhisperLive.Models"
+    Title="WhisperLive Caption">
+    <Grid
+        x:Name="RootGrid"
+        Background="{ThemeResource CaptionOverlayBackgroundBrush}"
+        ManipulationDelta="OnManipulationDelta"
+        ManipulationMode="TranslateX,TranslateY"
+        ManipulationStarted="OnManipulationStarted"
+        PointerEntered="OnPointerEntered"
+        PointerExited="OnPointerExited">
+
+        <!-- Dark overlay on top of acrylic — forces dark appearance in any system theme -->
+        <Rectangle AutomationProperties.AccessibilityView="Raw" Fill="{ThemeResource CaptionOverlayDarkOverlayBrush}" />
+
+        <Grid
+            x:Name="ContentRoot"
+            Margin="16,12,16,12"
+            VerticalAlignment="Bottom">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="32" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="32" />
+            </Grid.RowDefinitions>
+
+            <!-- Row 0: header — label (default) or top-bar (on hover) -->
+            <TextBlock
+                x:Name="LiveTranscriptLabel"
+                Grid.Row="0"
+                VerticalAlignment="Center"
+                FontStyle="Italic"
+                FontWeight="SemiBold"
+                Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                Style="{StaticResource BodyTextBlockStyle}"
+                Text="Live Transcript" />
+
+            <Grid
+                x:Name="TopBar"
+                Grid.Row="0"
+                Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Language badges: source chip + optional arrow + translation target chip -->
+                <StackPanel
+                    Grid.Column="0"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="4">
+                    <!--
+                        Language chips match the pause/close buttons exactly:
+                        Height=32, CornerRadius=ControlCornerRadius, Background=Transparent,
+                        BorderThickness=0 (no border at rest — same as SubtleButtonStyle pattern).
+                        Padding="8,0": horizontal breathing room; vertical filled by Height=32.
+                    -->
+                    <Border
+                        Height="32"
+                        Padding="8,0"
+                        VerticalAlignment="Center"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        CornerRadius="{StaticResource ControlCornerRadius}">
+                        <TextBlock
+                            x:Name="LanguageLabel"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                            Text="auto" />
+                    </Border>
+                    <TextBlock
+                        x:Name="LangArrow"
+                        VerticalAlignment="Center"
+                        FontSize="11"
+                        Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                        Opacity="0.6"
+                        Text="→"
+                        Visibility="Collapsed" />
+                    <Border
+                        x:Name="TranslationTargetChip"
+                        Height="32"
+                        Padding="8,0"
+                        VerticalAlignment="Center"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        CornerRadius="{StaticResource ControlCornerRadius}"
+                        Visibility="Collapsed">
+                        <TextBlock
+                            x:Name="TranslationTargetLabel"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}" />
+                    </Border>
+                </StackPanel>
+
+                <!-- Pause / Resume button -->
+                <Button
+                    x:Name="OverlayPauseButton"
+                    Grid.Column="2"
+                    Width="32"
+                    Height="32"
+                    Padding="0"
+                    AutomationProperties.Name="Pause or resume"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="OnOverlayPauseClicked"
+                    CornerRadius="{StaticResource ControlCornerRadius}"
+                    Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                    ToolTipService.ToolTip="Pause / Resume">
+                    <FontIcon x:Name="OverlayPauseIcon" FontSize="14" Glyph="&#xE769;" />
+                </Button>
+
+                <!-- Close button -->
+                <Button
+                    Grid.Column="3"
+                    Width="32"
+                    Height="32"
+                    Padding="0"
+                    AutomationProperties.Name="Hide overlay"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="OnCloseClicked"
+                    CornerRadius="{StaticResource ControlCornerRadius}"
+                    Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                    ToolTipService.ToolTip="Hide overlay">
+                    <FontIcon Glyph="&#xE711;" />
+                </Button>
+            </Grid>
+
+            <!-- Row 1: transcript list — capped slice bound via _overlayRows -->
+            <ListView
+                x:Name="CaptionsPanel"
+                Grid.Row="1"
+                Margin="0,4,0,0"
+                VerticalAlignment="Bottom"
+                SelectionMode="None"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                ScrollViewer.VerticalScrollBarVisibility="Hidden">
+                <ListView.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <ItemsStackPanel VerticalAlignment="Bottom" ItemsUpdatingScrollMode="KeepLastItemInView" />
+                    </ItemsPanelTemplate>
+                </ListView.ItemsPanel>
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="MinHeight" Value="0" />
+                        <Setter Property="Padding" Value="0,0,0,8" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="models:TranslatedSegmentView">
+                        <StackPanel Spacing="2">
+                            <TextBlock
+                                FontSize="{x:Bind OriginalFontSize, Mode=OneWay}"
+                                FontStyle="{x:Bind OriginalFontStyle, Mode=OneWay}"
+                                Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                                Opacity="{x:Bind OriginalOpacity, Mode=OneWay}"
+                                Text="{x:Bind OriginalText}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                FontSize="14"
+                                FontWeight="SemiBold"
+                                Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                                Text="{x:Bind TranslatedText, Mode=OneWay}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind TranslatedVisibility, Mode=OneWay}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <!-- Row 2: expand / collapse chevron -->
+            <Button
+                Grid.Row="2"
+                Width="32"
+                Height="32"
+                Padding="0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                AutomationProperties.Name="Expand or collapse overlay"
+                Background="Transparent"
+                BorderThickness="0"
+                Click="OnExpandClicked"
+                CornerRadius="{StaticResource ControlCornerRadius}"
+                Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                ToolTipService.ToolTip="Expand / Collapse">
+                <!-- E70E = ChevronUp (collapse) / E70D = ChevronDown (expand) -->
+                <FontIcon x:Name="ChevronIcon" FontSize="12" Glyph="&#xE70D;" />
+            </Button>
+        </Grid>
+    </Grid>
+</Window>

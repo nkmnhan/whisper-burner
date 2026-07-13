@@ -1,0 +1,81 @@
+name: whisper
+
+x-healthcheck: &healthcheck
+  test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+  interval: 10s
+  timeout: 5s
+  retries: 12
+  start_period: 120s
+
+services:
+  fast-whisper-gpu:
+    build:
+      context: .
+      args:
+        VARIANT: gpu
+    profiles:
+      - gpu
+    command: uvicorn api_server:app --host 0.0.0.0 --port 5000
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-medium}
+      - DEVICE=cuda
+      - COMPUTE_TYPE=float16
+      - BEAM_SIZE=5
+      - MODEL_CACHE=/models
+      - NUM_WORKERS=${NUM_WORKERS:-2}
+      - LOG_RESULT=${LOG_RESULT:-false}
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      - "5000:5000"
+    healthcheck: *healthcheck
+    volumes:
+      - whisper-models:/models
+      - ../videos:/app
+      - ./api_server.py:/app/api_server.py:ro
+      - ./batch_transcribe.py:/opt/batch_transcribe.py:ro
+      - ./translate_srt.py:/opt/translate_srt.py:ro
+
+  fast-whisper-cpu:
+    build:
+      context: .
+      args:
+        VARIANT: cpu
+    profiles:
+      - cpu
+    command: uvicorn api_server:app --host 0.0.0.0 --port 5000
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-medium}
+      - DEVICE=cpu
+      - COMPUTE_TYPE=int8
+      - BEAM_SIZE=1
+      - MODEL_CACHE=/models
+      - NUM_WORKERS=${NUM_WORKERS:-1}
+      - CPU_THREADS=${CPU_THREADS:-0}
+      - LOG_RESULT=${LOG_RESULT:-false}
+      - PYTHONDONTWRITEBYTECODE=1
+    ports:
+      - "5000:5000"
+    healthcheck: *healthcheck
+    volumes:
+      - whisper-models:/models
+      - ../videos:/app
+      - ./api_server.py:/app/api_server.py:ro
+      - ./batch_transcribe.py:/opt/batch_transcribe.py:ro
+      - ./translate_srt.py:/opt/translate_srt.py:ro
+
+volumes:
+  whisper-models:
+    name: whisper-models

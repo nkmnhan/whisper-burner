@@ -1,19 +1,20 @@
-# whisper-burner — Docker OpenAI Whisper GPU Subtitle Burner
+# whisper-burner — Real-time Speech Translation for Windows
 
-Batch-transcribe videos with **OpenAI Whisper** running in **Docker** (GPU via NVIDIA CUDA or CPU fallback) and permanently burn the subtitles into MP4 using **ffmpeg** — automatic speech recognition for any video format on Windows.
+**WhisperLive** is a Windows desktop app that captures your system audio, transcribes it with **OpenAI Whisper**, translates it live, and shows the result in an always-on-top subtitle overlay — for meetings, videos, streams, and calls in any language.
 
-[![Docker](https://img.shields.io/badge/Docker-ready-blue?logo=docker)](https://www.docker.com/)
+[![Windows](https://img.shields.io/badge/Windows-WinUI%203-0078D6?logo=windows)](https://learn.microsoft.com/windows/apps/winui/winui3/)
+[![.NET](https://img.shields.io/badge/.NET-9-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![Whisper](https://img.shields.io/badge/OpenAI-Whisper-green?logo=openai)](https://github.com/openai/whisper)
-[![GPU](https://img.shields.io/badge/NVIDIA-CUDA-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
+[![Docker](https://img.shields.io/badge/Docker-API%20backend-blue?logo=docker)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **Disclaimer:** This is an unofficial, community-maintained Docker wrapper around [OpenAI Whisper](https://github.com/openai/whisper). It is not affiliated with or endorsed by OpenAI. This project is maintained as a personal hobby — use it as-is, no support is guaranteed.
+> **Disclaimer:** Unofficial, community-maintained. Built on [OpenAI Whisper](https://github.com/openai/whisper) (via [faster-whisper](https://github.com/SYSTRAN/faster-whisper)); not affiliated with or endorsed by OpenAI. Maintained as a personal hobby — use as-is, no support guaranteed.
 
 ---
 
 ## ❤️ Sponsor
 
-If **whisper-burner** saves you time, please consider sponsoring to keep the project maintained and updated.
+If **whisper-burner** saves you time, please consider sponsoring to keep it maintained.
 
 <p align="center">
   <a href="https://github.com/sponsors/nkmnhan">
@@ -23,186 +24,143 @@ If **whisper-burner** saves you time, please consider sponsoring to keep the pro
 
 ---
 
+## What it does
+
+```
+System audio ──► Whisper API ──► live transcript ──► translation ──► always-on-top overlay
+ (WASAPI loopback)  (Docker)        (SRT stream)      (DeepL/Google/free)   (draggable caption box)
+```
+
+WhisperLive listens to whatever is playing on your PC, transcribes it in near real-time, optionally translates each line, and renders both the original and the translation in a floating caption box you can place over any window. Every session is saved as SRT.
+
 ## Features
 
-- GPU-accelerated transcription via NVIDIA CUDA
-- CPU fallback mode
-- Supports any video/audio format — `.wmv`, `.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.ts`, `.mp3`, `.wav`, and more
-- Subtitles burned into MP4 — no separate subtitle file needed by the player
-- Translate subtitles into any language after transcription
-- Skips already-processed files — safe to re-run
-- Double-click launchers for Windows
+- **Real-time captions** from system audio (WASAPI loopback capture — no microphone needed)
+- **Live translation** into any language — DeepL, Google Translate, or the free Docker/deep-translator backend
+- **Always-on-top overlay** — draggable, auto-sizing caption box with pause and language chips
+- **Bilingual display** — original text + translation, side by side
+- **Built-in Claude assistant** — ask questions about the live session transcript
+- **Session save** — raw, translated, and final SRT written to `~/whisper.live/sessions/`
+- Runs unpackaged, self-contained, no admin required
 
 ---
 
 ## Requirements
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- **GPU mode only**: NVIDIA GPU + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+- Windows 10 build 22621 (22H2) or later
+- .NET 9 Desktop Runtime
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) — runs the Whisper ASR/translate API
+- **GPU (optional, recommended):** NVIDIA GPU + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) for faster-than-real-time transcription
 
 ---
 
 ## Quick Start
 
-**1. Clone and build**
+Everything is driven from the interactive menu:
 
 ```powershell
 git clone https://github.com/nkmnhan/whisper-burner.git
 cd whisper-burner
-docker compose --profile gpu build
+.\whisper.cmd
 ```
 
-**2. Drop videos into the `videos/` folder**
+**1. Start the Whisper API backend** → menu **[6] Manage API** → choose CPU/GPU, model, then **Start**.
+The API runs at `http://127.0.0.1:5000` (`GET /health`, `POST /transcribe`, `POST /translate`).
 
-**3. Run**
+**2. Build & run the app** → menu **[3] Run app (debug)** or **[4] Build release**.
 
-```powershell
-# GPU (recommended)
-.\process-videos-gpu.cmd
-
-# CPU
-.\process-videos-cpu.cmd
-```
-
-Outputs saved to `videos/output/`:
-- `filename.srt` — transcript
-- `filename.mp4` — video with burned-in subtitles
+> On CPU, use the `small` model for near-real-time captions. `medium`/`large-v3` need a GPU to keep up.
 
 ---
 
-## Translate Subtitles
+## Configuration
 
-Double-click **`translate.cmd`** to launch an interactive translator.
+App settings live at `~/whisper.live/settings.json` (edit in the **Settings** page):
 
-It displays a language menu, prompts for a code, then transcribes every video in `videos/` and translates the resulting `.srt`:
+| Setting | Notes |
+|---|---|
+| `Model` | `tiny` / `base` / `small` / `medium` / `large-v3` / `turbo`. Default `small`. |
+| `ChunkDurationSeconds` | Audio chunk length sent per request. Default `5`. |
+| `Language` | Source language or `auto`. |
+| `EnableTranslation`, `TranslationProvider`, `TranslationTargetLanguage` | `docker` (free), `google`, or `deepl`. |
+| `EnableAssistant` | Claude session assistant on/off. |
 
-```
- ==========================================
-  Whisper Subtitle Translator
- ==========================================
+Backend behavior is controlled by env vars on the Docker container (see `whisper.cmd` → Manage API):
 
- Common language codes:
-
-   af  Afrikaans      ar  Arabic          bg  Bulgarian
-   ...
-   vi  Vietnamese     zh  Chinese         ...
-
- ==========================================
-
- Enter language code: vi
-
- Translating subtitles to: vi
-```
-
-Translated SRT files are saved alongside the originals in `videos/output/`:
-
-| File | Description |
-|------|-------------|
-| `filename.srt` | Original transcript |
-| `filename.vi.srt` | Translated subtitles |
-| `filename.mp4` | Video with original subtitles burned in |
-
-> Full list of codes: [ISO 639-1 language codes](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)
+| Env | Notes |
+|---|---|
+| `WHISPER_MODEL` | Model preloaded at startup. |
+| `NUM_WORKERS` | Concurrent transcriptions. GPU: 2. CPU: 1 (more just splits cores). |
+| `LOG_RESULT` | `true` streams each transcription's text to the container logs for monitoring. |
 
 ---
 
-## PowerShell Options
+## How it works
 
-```powershell
-.\process-videos.ps1 [-Model <model>] [-Language <lang>] [-Task <task>] [-TargetLang <lang>] [-OutputFormat <fmt>] [-Gpu] [-SkipBurn] [-BurnOnly]
-```
+1. **Capture** — `RecordingService` records system audio via WASAPI loopback and chunks it into in-memory WAV.
+2. **Transcribe** — `TranscriptionClient` POSTs each chunk to the Docker Whisper API (`/transcribe`).
+3. **Display** — `SubtitleService` de-duplicates and streams SRT to disk; the UI and overlay bind to `TranscriptViewModel`.
+4. **Translate** — `TranslationService` translates each segment in the background and fills it into the caption in place.
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `-Model` | `turbo` | Whisper model (`turbo`, `large-v3`) |
-| `-Language` | auto-detect | Force source language (e.g. `English`, `Japanese`) |
-| `-Task` | `transcribe` | `transcribe` keeps original language; `translate` forces English output |
-| `-TargetLang` | — | Translate the SRT into this language after transcription (e.g. `vi`, `fr`) |
-| `-OutputFormat` | `srt` | Subtitle format (`srt`, `vtt`, `txt`) |
-| `-Gpu` | off | Use GPU profile |
-| `-SkipBurn` | off | Transcribe only, skip MP4 burn |
-| `-BurnOnly` | off | Skip transcription, burn existing SRT only |
-
-**Examples**
-
-```powershell
-# Transcribe with GPU, largest model
-.\process-videos.ps1 -Gpu -Model large-v3
-
-# Force Japanese source, GPU
-.\process-videos.ps1 -Gpu -Language Japanese
-
-# Transcribe and translate SRT to Vietnamese (GPU)
-.\process-videos.ps1 -Gpu -TargetLang vi
-
-# Transcribe only, no burn
-.\process-videos.ps1 -Gpu -SkipBurn
-
-# Burn subtitles into MP4 from existing SRT, skip re-transcription
-.\process-videos.ps1 -Gpu -BurnOnly
-```
-
----
+The Docker container runs `api_server.py` (FastAPI + faster-whisper). Transcription is the heavy step; use a GPU for real-time performance.
 
 ## Whisper Models
 
-| Model | VRAM | Notes |
-|-------|------|-------|
-| `turbo` | ~8 GB | Default — fast and accurate |
-| `large-v3` | 10-15 GB | Highest accuracy |
+| Model | VRAM (GPU) | Notes |
+|-------|-----------|-------|
+| `small` | ~2 GB | Default — near real-time on CPU |
+| `medium` | ~5 GB | More accurate; GPU recommended |
+| `turbo` | ~8 GB | Fast + accurate (GPU) |
+| `large-v3` | 10–15 GB | Highest accuracy (GPU) |
 
 ---
 
-## Project Structure
+## Legacy: batch subtitle burner
+
+The project's original workflow — transcribe a folder of videos and **burn** the subtitles into MP4 with ffmpeg — is kept as a **separate legacy component**, documented on its own so it isn't confused with the real-time app:
+
+➡️ **[docs/legacy-whisper-burner.md](docs/legacy-whisper-burner.md)**
+
+It still ships in `scripts/batch/` and works, but it is no longer the focus.
+
+---
+
+## Project structure
 
 ```
 whisper-burner/
-├── Dockerfile                  # Python 3.12-slim + ffmpeg + openai-whisper
-├── docker-compose.yml          # gpu and cpu profiles
-├── process-videos.ps1          # Main batch script
-├── process-videos-gpu.cmd      # Double-click launcher (GPU)
-├── process-videos-cpu.cmd      # Double-click launcher (CPU)
-├── translate.cmd               # Translate subtitles (e.g. translate.cmd vi)
-├── translate_srt.py            # SRT translation helper (runs inside container)
-├── videos/                     # Drop source videos here
-│   └── output/                 # Generated SRT + MP4
-└── models/                     # Whisper model cache (auto-populated)
+├── whisper.cmd            # interactive launcher (app, API, batch, models)
+├── docker/
+│   ├── Dockerfile         # python:3.12-slim + ffmpeg + faster-whisper
+│   ├── docker-compose.yml # gpu / cpu profiles
+│   ├── api_server.py      # FastAPI ASR + translate API (the app's backend)
+│   ├── batch_transcribe.py
+│   └── translate_srt.py
+├── src/WhisperLive/       # WinUI 3 real-time translation app (primary product)
+├── scripts/
+│   ├── app/               # build-release.cmd, run-app.cmd, create-shortcut.cmd
+│   ├── api/               # start-whisper-{cpu,gpu}.cmd
+│   ├── batch/             # process-videos.ps1 + launchers (legacy burner)
+│   └── models/            # download-models.ps1
+├── docs/superpowers/specs/  # design specs
+├── videos/                # legacy batch input; output/ holds generated SRT + MP4
+└── models/                # Whisper model cache (auto-populated)
 ```
-
----
-
-## How It Works
-
-1. **Transcribe** — Whisper runs inside Docker and generates an `.srt` subtitle file
-2. **Translate** *(optional)* — `translate_srt.py` translates the `.srt` into the target language and saves a `filename.<lang>.srt`
-3. **Burn** — ffmpeg overlays the subtitles onto the video and outputs an `.mp4`
-
-The GPU is used during Whisper transcription (the heavy ML step). The ffmpeg burn step always runs on CPU — there is no GPU path for subtitle rendering.
 
 ---
 
 ## Troubleshooting
 
-**`EOFError: marshal data too short` during build**
-Corrupted Python bytecode in Docker cache. Rebuild with:
-```powershell
-docker compose --profile gpu build --no-cache
-```
+**Captions lag behind / stop appearing** — the backend is slower than real-time. Use `small` on CPU or switch to the GPU profile; watch `LOG_RESULT=true` logs to confirm throughput.
 
-**WMV corrupt frame warnings**
-```
-[wmv3] concealing DC/AC/MV errors in P frame
-```
-These come from the source file and are non-fatal. ffmpeg handles them automatically.
+**`docker compose` can't connect** — Docker Desktop isn't running.
 
-**Subtitles not rendering — comma in filename**
-The ffmpeg `subtitles=` filter treats commas as special characters. The script escapes them automatically.
+**API changes not taking effect** — `api_server.py` is volume-mounted; restart the container (`whisper.cmd` → Manage API → **Reset**), no rebuild needed. Rebuild only after `Dockerfile`/dependency changes.
 
 ---
 
 ## References
 
-- [OpenAI Whisper](https://github.com/openai/whisper)
-- [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-
+- [OpenAI Whisper](https://github.com/openai/whisper) · [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
+- [Windows App SDK / WinUI 3](https://learn.microsoft.com/windows/apps/winui/winui3/)
+- [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) · [Docker Desktop](https://www.docker.com/products/docker-desktop/)
