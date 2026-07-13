@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The **Docker** side (`docker/`) is the app's **ASR + translate API backend** — `api_server.py` (FastAPI + faster-whisper) exposing `/transcribe` and `/translate`, run via GPU/CPU compose profiles.
 
-> **Plan note (2026-07-13):** the project pivoted from a Docker *batch convert-and-burn* pipeline (transcribe a folder of videos and burn subtitles into MP4) to the real-time translation app above. The batch scripts in `scripts/batch/` remain as **legacy** but are no longer the focus.
+> **Plan note (2026-07-13):** the project pivoted from a Docker *batch convert-and-burn* pipeline (transcribe a folder of videos and burn subtitles into MP4) to the real-time translation app above. The batch scripts in `scripts/batch/` remain as **legacy** but are no longer the focus. The legacy pipeline is kept and documented separately for reuse in [`docs/legacy-whisper-burner.md`](docs/legacy-whisper-burner.md) — read that before touching the batch/burn code, and keep it isolated from `src/WhisperLive/`.
 
 ---
 
@@ -185,7 +185,7 @@ docker compose -f docker/docker-compose.yml --profile gpu build
 - `Dockerfile` — `python:3.12-slim`, ffmpeg, **faster-whisper**, deep-translator, FastAPI/uvicorn
 - `docker-compose.yml` — `gpu` and `cpu` profiles running `api_server.py` on port 5000; env: `WHISPER_MODEL`, `NUM_WORKERS`, `CPU_THREADS`, `LOG_RESULT`. `api_server.py` is volume-mounted (edit → Reset, no rebuild)
 - `api_server.py` — the app's backend: `GET /health`, `GET /models`, `POST /transcribe`, `POST /translate`
-- **Legacy batch:** `batch_transcribe.py` / `translate_srt.py` + `scripts/batch/process-videos.ps1` — transcribe `videos/` and burn subtitles into MP4 in `videos/output/` (still works; not the focus)
+- **Legacy batch:** `batch_transcribe.py` / `translate_srt.py` + `scripts/batch/process-videos.ps1` — transcribe `videos/` and burn subtitles into MP4 in `videos/output/` (still works; not the focus). Full reference: [`docs/legacy-whisper-burner.md`](docs/legacy-whisper-burner.md)
 
 ### WinUI 3 App (`src/WhisperLive/`)
 

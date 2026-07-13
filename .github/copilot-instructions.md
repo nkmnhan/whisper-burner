@@ -4,7 +4,7 @@
 
 1. **WhisperLive WinUI 3 app** (`src/WhisperLive/`) — real-time system-audio capture → transcription → live translation → always-on-top subtitle overlay. This is the focus.
 2. **Docker ASR/translate API backend** (`docker/api_server.py`) — FastAPI + faster-whisper serving `/transcribe` and `/translate` that the app calls.
-3. **Legacy batch pipeline** (`scripts/batch/`) — the original Whisper ASR + ffmpeg subtitle-burn workflow. Still works, but the project pivoted (2026-07-13) away from it toward the real-time app; treat it as legacy.
+3. **Legacy batch pipeline** (`scripts/batch/`) — the original Whisper ASR + ffmpeg subtitle-burn workflow. Still works, but the project pivoted (2026-07-13) away from it toward the real-time app; treat it as legacy. Kept and documented for reuse in [`docs/legacy-whisper-burner.md`](../docs/legacy-whisper-burner.md) — keep it isolated from `src/WhisperLive/`.
 
 ---
 
@@ -56,7 +56,7 @@ docker compose -f docker/docker-compose.yml --profile gpu build
 
 `docker/api_server.py` (FastAPI + faster-whisper + deep-translator) is the app's ASR/translate backend, served by uvicorn on port 5000 via the `gpu` / `cpu` compose profiles. Key env: `WHISPER_MODEL`, `NUM_WORKERS`, `CPU_THREADS`, `LOG_RESULT`. The file is volume-mounted, so edits apply on container restart.
 
-**Legacy batch:** `process-videos.ps1` orchestrates transcribe → optional `translate_srt.py` → ffmpeg subtitle burn, output to `videos/output/` (never modify that directory). No longer the project focus.
+**Legacy batch:** `process-videos.ps1` orchestrates transcribe → optional `translate_srt.py` → ffmpeg subtitle burn, output to `videos/output/` (never modify that directory). No longer the project focus — full reference in [`docs/legacy-whisper-burner.md`](../docs/legacy-whisper-burner.md).
 
 ### WinUI 3 App (`src/WhisperLive/`)
 
