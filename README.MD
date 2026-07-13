@@ -117,14 +117,11 @@ The Docker container runs `api_server.py` (FastAPI + faster-whisper). Transcript
 
 ## Legacy: batch subtitle burner
 
-The original batch pipeline — transcribe a folder of videos and **burn** the subtitles into MP4 with ffmpeg — still ships in `scripts/batch/` and remains usable, but it is **no longer the focus** of the project. The real-time app above is the primary product.
+The project's original workflow — transcribe a folder of videos and **burn** the subtitles into MP4 with ffmpeg — is kept as a **separate legacy component**, documented on its own so it isn't confused with the real-time app:
 
-```powershell
-# Drop videos into videos/, then:
-.\scripts\batch\process-videos-gpu.cmd      # or -cpu
-```
+➡️ **[docs/legacy-whisper-burner.md](docs/legacy-whisper-burner.md)**
 
-Outputs to `videos/output/`: `filename.srt` (transcript) and `filename.mp4` (burned-in subtitles). PowerShell options: `process-videos.ps1 [-Model] [-Language] [-Task] [-TargetLang] [-Gpu] [-SkipBurn] [-BurnOnly]`.
+It still ships in `scripts/batch/` and works, but it is no longer the focus.
 
 ---
 
