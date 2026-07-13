@@ -72,6 +72,8 @@ goto MENU
 :START_API
 set PROFILE=
 set WHISPER_MODEL=
+set NUM_WORKERS=
+set LOG_RESULT=
 echo  Device:
 echo    [1] CPU  (no GPU required)
 echo    [2] GPU  (requires NVIDIA + Docker NVIDIA runtime)
@@ -99,34 +101,66 @@ if "%MC%"=="5" set WHISPER_MODEL=large-v3
 if "%MC%"=="6" set WHISPER_MODEL=large-v3-turbo
 if "%WHISPER_MODEL%"=="" ( echo  Invalid choice. & pause & goto MENU )
 echo.
-echo  Action:
-echo    [1] Start   (start if not running)
-echo    [2] Stop    (stop and remove container)
-echo    [3] Recreate (stop, rebuild image, start fresh)
-echo    [4] Status  (show running containers)
+echo  Result logging (stream each transcription to the container logs)?
+echo    [1] Off  (default)
+echo    [2] On
 echo.
-set /p ACT= Select action (1-4):
+set /p LR= Select (1 or 2, default 1):
+if "%LR%"=="2" (set LOG_RESULT=true) else (set LOG_RESULT=false)
+echo.
+echo  Parallel workers (concurrent transcriptions):
+echo    [1] Default  (gpu 2 / cpu 1)
+echo    [2] 1 worker
+echo    [3] 2 workers
+echo    [4] 4 workers
+echo.
+set /p NW= Select workers (1-4, default 1):
+if "%NW%"=="2" set NUM_WORKERS=1
+if "%NW%"=="3" set NUM_WORKERS=2
+if "%NW%"=="4" set NUM_WORKERS=4
+echo.
+echo  Action:
+echo    [1] Start    (start if not running)
+echo    [2] Stop     (stop and remove container)
+echo    [3] Reset    (recreate container - picks up code + env, NO image rebuild)
+echo    [4] Rebuild  (full image rebuild, then fresh start)
+echo    [5] Status   (show running containers)
+echo    [6] Logs     (follow logs in a new window)
+echo.
+set /p ACT= Select action (1-6):
 echo.
 
+set COMPOSE=docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE%
+
 if "%ACT%"=="1" (
-    echo  Starting [%PROFILE%] model=[%WHISPER_MODEL%] ...
-    docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% up --build -d
+    echo  Starting [%PROFILE%] model=[%WHISPER_MODEL%] log_result=[%LOG_RESULT%] ...
+    %COMPOSE% up -d
     goto API_DONE
 )
 if "%ACT%"=="2" (
     echo  Stopping [%PROFILE%] ...
-    docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% down
+    %COMPOSE% down
     goto API_DONE
 )
 if "%ACT%"=="3" (
-    echo  Recreating [%PROFILE%] model=[%WHISPER_MODEL%] ...
-    docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% down
-    docker compose -f "%~dp0docker\docker-compose.yml" --profile %PROFILE% up --build -d
+    echo  Resetting [%PROFILE%] model=[%WHISPER_MODEL%] log_result=[%LOG_RESULT%] ...
+    %COMPOSE% up -d --force-recreate
     goto API_DONE
 )
 if "%ACT%"=="4" (
+    echo  Rebuilding [%PROFILE%] model=[%WHISPER_MODEL%] ...
+    %COMPOSE% down
+    %COMPOSE% up -d --build --force-recreate
+    goto API_DONE
+)
+if "%ACT%"=="5" (
     echo  Running containers:
     docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    goto API_DONE
+)
+if "%ACT%"=="6" (
+    echo  Opening logs in a new window ^(Ctrl+C to stop^)...
+    start cmd /k "%COMPOSE% logs -f"
     goto API_DONE
 )
 echo  Invalid choice.
