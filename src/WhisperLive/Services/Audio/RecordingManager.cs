@@ -28,6 +28,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
     private int _consecutiveFailures;
 
     public event EventHandler? ApiStalled;
+    public event EventHandler<float>? AudioLevelChanged;
 
     public RecordingState State { get; private set; } = RecordingState.Idle;
     public string? CurrentSessionPath => _subtitle.CurrentSessionPath;
@@ -61,6 +62,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         _transcription.ResetPrompt();
         _subtitle.StartSession();
         _subtitle.SegmentAdded += OnSubtitleSegmentAdded;
+        _recording.AudioLevelChanged += OnAudioLevelChanged;
         _ = _recording.StartAsync(options, _cts.Token);
         _consumeTask = ConsumeChunksAsync(options, _cts.Token);
 
@@ -93,6 +95,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
             AppLogger.Warning("Stop drain timed out — in-flight transcription didn't release in 5s");
 
         _subtitle.SegmentAdded -= OnSubtitleSegmentAdded;
+        _recording.AudioLevelChanged -= OnAudioLevelChanged;
         _subtitle.EndSession();
         _cts = null;
 
@@ -126,6 +129,9 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         }
         SegmentAdded?.Invoke(this, seg);
     }
+
+    private void OnAudioLevelChanged(object? sender, float rms) =>
+        AudioLevelChanged?.Invoke(this, rms);
 
     private async Task ConsumeChunksAsync(RecordingOptions options, CancellationToken ct)
     {

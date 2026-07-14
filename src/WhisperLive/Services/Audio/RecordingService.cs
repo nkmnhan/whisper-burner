@@ -25,6 +25,9 @@ public sealed class RecordingService : IRecordingService
     private volatile bool _paused;
     public bool IsPaused => _paused;
 
+    public event EventHandler<float>? AudioLevelChanged;
+    private DateTime _lastLevelFire = DateTime.MinValue;
+
     public ChannelReader<AudioChunkInfo> Chunks => _channel.Reader;
 
     public Task StartAsync(RecordingOptions options, CancellationToken ct)
@@ -44,6 +47,14 @@ public sealed class RecordingService : IRecordingService
             if (e.BytesRecorded == 0 || _paused) return;
             lock (_lock)
                 _buffer.Write(e.Buffer, 0, e.BytesRecorded);
+
+            // Fire audio level at ~20fps for waveform animation.
+            var now = DateTime.UtcNow;
+            if ((now - _lastLevelFire).TotalMilliseconds >= 50)
+            {
+                _lastLevelFire = now;
+                AudioLevelChanged?.Invoke(this, ComputeRms(e.Buffer, e.BytesRecorded, waveFormat));
+            }
         };
 
         _capture.StartRecording();
@@ -150,6 +161,39 @@ public sealed class RecordingService : IRecordingService
         _channel.Writer.TryWrite(new AudioChunkInfo(wavBytes, _chunkIndex, wavStartTime, chunkOverlap));
         _offsetSeconds += options.ChunkDurationSeconds;
         _chunkIndex++;
+    }
+
+    /// <summary>
+    /// Computes normalised RMS amplitude (0–1) from raw PCM or IEEE-float loopback buffers.
+    /// WASAPI loopback typically delivers 32-bit IEEE float; 16-bit PCM is handled as fallback.
+    /// Output is scaled so typical speech (~0.05 raw RMS) reads as ~0.3–0.6 for visible bars.
+    /// </summary>
+    private static float ComputeRms(byte[] buffer, int bytesRecorded, WaveFormat format)
+    {
+        if (bytesRecorded < 4) return 0f;
+        double sum = 0;
+        int n;
+        if (format.BitsPerSample == 32)
+        {
+            n = bytesRecorded / 4;
+            for (int i = 0; i < n * 4; i += 4)
+            {
+                double v = BitConverter.ToSingle(buffer, i);
+                sum += v * v;
+            }
+        }
+        else // 16-bit PCM fallback
+        {
+            n = bytesRecorded / 2;
+            for (int i = 0; i < n * 2; i += 2)
+            {
+                double v = (short)(buffer[i] | (buffer[i + 1] << 8)) / 32768.0;
+                sum += v * v;
+            }
+        }
+        if (n == 0) return 0f;
+        // Multiply by 5 so typical speech fills the bars nicely; clamp to 1.
+        return (float)Math.Min(1.0, Math.Sqrt(sum / n) * 5.0);
     }
 
     public void Dispose()

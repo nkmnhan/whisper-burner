@@ -31,6 +31,21 @@ public sealed partial class LiveTranscriptPage : Page
     private bool _suppressNextFocus;
     private readonly NotifyCollectionChangedEventHandler _onChatCollectionChanged;
 
+    // Real-audio waveform — 16 bars driven by RMS amplitude from the loopback capture.
+    private const int WaveBarCount = 16;
+    private readonly ScaleTransform[] _barScales = new ScaleTransform[WaveBarCount];
+    private readonly float[] _displayLevels = new float[WaveBarCount];
+
+    // W-curve weights: outer bars slightly shorter, inner bars taller — natural spectrum look.
+    private static readonly float[] WaveBarWeights =
+        [0.45f, 0.55f, 0.70f, 0.85f, 0.95f, 1.00f, 0.90f, 0.80f,
+         0.80f, 0.90f, 1.00f, 0.95f, 0.85f, 0.70f, 0.55f, 0.45f];
+
+    // Gravity decay per frame: inner bars hold peak longer, outer bars fall faster.
+    private static readonly float[] WaveBarDecay =
+        [0.80f, 0.82f, 0.84f, 0.85f, 0.86f, 0.87f, 0.87f, 0.86f,
+         0.86f, 0.87f, 0.87f, 0.86f, 0.85f, 0.84f, 0.82f, 0.80f];
+
     public LiveTranscriptPage()
     {
         InitializeComponent();
@@ -65,12 +80,14 @@ public sealed partial class LiveTranscriptPage : Page
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _settings = await AppSettings.LoadAsync();
+        BuildWaveBars();
 
         // Rebuild TranslationService with real settings; App re-wires SegmentTranslated to VM.
         CurrentApp.ApplySettings(_settings);
 
         Manager.StateChanged += OnStateChanged;
         Manager.ApiStalled += OnApiStalled;
+        Manager.AudioLevelChanged += OnAudioLevelChanged;
         CurrentApp.TranscriptViewModel.Segments.CollectionChanged += OnSegmentsChanged;
         if (App.CaptionOverlay is { } overlayOnLoad) overlayOnLoad.Hidden += OnOverlayHidden;
 
@@ -99,6 +116,7 @@ public sealed partial class LiveTranscriptPage : Page
         _suggestDebounce = null;
         Manager.StateChanged -= OnStateChanged;
         Manager.ApiStalled -= OnApiStalled;
+        Manager.AudioLevelChanged -= OnAudioLevelChanged;
         CurrentApp.TranscriptViewModel.Segments.CollectionChanged -= OnSegmentsChanged;
         if (App.CaptionOverlay is { } overlayOnUnload) overlayOnUnload.Hidden -= OnOverlayHidden;
         _chatMessages.CollectionChanged -= _onChatCollectionChanged;
@@ -184,6 +202,39 @@ public sealed partial class LiveTranscriptPage : Page
         StatusLabel.Text = label;
     }
 
+    private void BuildWaveBars()
+    {
+        WaveformInButton.Children.Clear();
+        var barBrush = (Brush)Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"];
+        for (int i = 0; i < WaveBarCount; i++)
+        {
+            var scale = new ScaleTransform { CenterY = 18, ScaleY = 0.06 };
+            _barScales[i] = scale;
+            WaveformInButton.Children.Add(new Border
+            {
+                Width = 3,
+                Height = 18,
+                CornerRadius = new CornerRadius(1.5),
+                Background = barBrush,
+                RenderTransform = scale,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+    }
+
+    private void OnAudioLevelChanged(object? sender, float rms)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            for (int i = 0; i < WaveBarCount; i++)
+            {
+                var target = rms * WaveBarWeights[i];
+                _displayLevels[i] = MathF.Max(target, _displayLevels[i] * WaveBarDecay[i]);
+                _barScales[i].ScaleY = MathF.Max(0.06f, _displayLevels[i]);
+            }
+        });
+    }
+
     private void ShowActionStatus(string text)
     {
         ActionStatus.Text = text;
@@ -214,7 +265,6 @@ public sealed partial class LiveTranscriptPage : Page
                 ShowOverlayButton.Visibility = Visibility.Collapsed;
                 NewSessionButton.Visibility = CurrentApp.TranscriptViewModel.Segments.Count > 0
                     ? Visibility.Visible : Visibility.Collapsed;
-                WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
                 AutomationProperties.SetName(MainButton, "Start recording");
                 App.CaptionOverlay?.AppWindow.Hide();
@@ -230,7 +280,6 @@ public sealed partial class LiveTranscriptPage : Page
                 PauseIcon.Glyph = "\uE769";
                 AutomationProperties.SetName(PauseButton, "Pause recording");
                 ToolTipService.SetToolTip(PauseButton, "Pause recording");
-                WaveformStoryboard.Begin();
                 DotPulseStoryboard.Begin();
                 AutomationProperties.SetName(MainButton, "Stop recording");
                 SetStatusDot("StatusDotErrorBrush", "Recording");
@@ -241,7 +290,6 @@ public sealed partial class LiveTranscriptPage : Page
                 PauseIcon.Glyph = "\uE768"; // Play (Resume)
                 AutomationProperties.SetName(PauseButton, "Resume recording");
                 ToolTipService.SetToolTip(PauseButton, "Resume recording");
-                WaveformStoryboard.Stop();
                 DotPulseStoryboard.Stop();
                 SetStatusDot("StatusDotCautionBrush", "Paused");
                 break;

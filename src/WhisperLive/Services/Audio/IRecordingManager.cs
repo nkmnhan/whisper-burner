@@ -12,6 +12,8 @@ public interface IRecordingManager
     event EventHandler<RecordingState>? StateChanged;
     event EventHandler<SubtitleSegment>? SegmentAdded;
     event EventHandler? ApiStalled;
+    // Fires ~20 times/second with normalised RMS amplitude (0.0–1.0) while recording.
+    event EventHandler<float>? AudioLevelChanged;
     IReadOnlyList<string> GetRecentSegments();
     Task StartAsync(RecordingOptions options);
     Task StopAsync();

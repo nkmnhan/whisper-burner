@@ -112,49 +112,8 @@
             ErrorTemplate="{StaticResource AssistantErrorMessageTemplate}"
             ResponseTemplate="{StaticResource AssistantResponseMessageTemplate}"
             UserTemplate="{StaticResource AssistantUserMessageTemplate}" />
-        <!-- Waveform storyboard — 5 bars staggered by 80 ms each -->
-        <Storyboard x:Name="WaveformStoryboard">
-            <DoubleAnimation
-                AutoReverse="True"
-                BeginTime="0:0:0.000"
-                Duration="0:0:0.6"
-                RepeatBehavior="Forever"
-                Storyboard.TargetName="Bar1Scale"
-                Storyboard.TargetProperty="ScaleY"
-                From="0.2" To="1.0" />
-            <DoubleAnimation
-                AutoReverse="True"
-                BeginTime="0:0:0.080"
-                Duration="0:0:0.6"
-                RepeatBehavior="Forever"
-                Storyboard.TargetName="Bar2Scale"
-                Storyboard.TargetProperty="ScaleY"
-                From="0.2" To="1.0" />
-            <DoubleAnimation
-                AutoReverse="True"
-                BeginTime="0:0:0.160"
-                Duration="0:0:0.6"
-                RepeatBehavior="Forever"
-                Storyboard.TargetName="Bar3Scale"
-                Storyboard.TargetProperty="ScaleY"
-                From="0.2" To="1.0" />
-            <DoubleAnimation
-                AutoReverse="True"
-                BeginTime="0:0:0.240"
-                Duration="0:0:0.6"
-                RepeatBehavior="Forever"
-                Storyboard.TargetName="Bar4Scale"
-                Storyboard.TargetProperty="ScaleY"
-                From="0.2" To="1.0" />
-            <DoubleAnimation
-                AutoReverse="True"
-                BeginTime="0:0:0.320"
-                Duration="0:0:0.6"
-                RepeatBehavior="Forever"
-                Storyboard.TargetName="Bar5Scale"
-                Storyboard.TargetProperty="ScaleY"
-                From="0.2" To="1.0" />
-        </Storyboard>
+        <!-- Waveform bars — 16 bars built in code-behind, driven by real RMS amplitude -->
+        <Storyboard x:Name="WaveformStoryboard" />
 
         <!-- Recording dot pulse -->
         <Storyboard x:Name="DotPulseStoryboard">
@@ -729,23 +688,8 @@
                             <FontIcon FontSize="16" Glyph="&#xE720;" />
                             <TextBlock Text="Start" />
                         </StackPanel>
-                        <StackPanel x:Name="WaveformInButton" Orientation="Horizontal" Spacing="4" Visibility="Collapsed">
-                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
-                                <Border.RenderTransform><ScaleTransform x:Name="Bar1Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
-                            </Border>
-                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
-                                <Border.RenderTransform><ScaleTransform x:Name="Bar2Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
-                            </Border>
-                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
-                                <Border.RenderTransform><ScaleTransform x:Name="Bar3Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
-                            </Border>
-                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
-                                <Border.RenderTransform><ScaleTransform x:Name="Bar4Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
-                            </Border>
-                            <Border Width="3" Height="20" Background="{ThemeResource TextOnAccentFillColorPrimaryBrush}" CornerRadius="{StaticResource ControlCornerRadius}">
-                                <Border.RenderTransform><ScaleTransform x:Name="Bar5Scale" CenterX="1.5" CenterY="20" ScaleY="0.3" /></Border.RenderTransform>
-                            </Border>
-                        </StackPanel>
+                        <StackPanel x:Name="WaveformInButton" Orientation="Horizontal" Spacing="3" Visibility="Collapsed" VerticalAlignment="Center" />
+
                     </Grid>
                 </Button>
 
