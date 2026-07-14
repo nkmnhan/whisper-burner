@@ -24,7 +24,7 @@
         -->
         <Grid
             x:Name="ContentRoot"
-            Margin="12,8,12,12"
+            Margin="12,12,12,12"
             VerticalAlignment="Bottom">
             <Grid.RowDefinitions>
                 <RowDefinition Height="28" />

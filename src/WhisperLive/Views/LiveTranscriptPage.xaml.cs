@@ -46,6 +46,16 @@ public sealed partial class LiveTranscriptPage : Page
         [0.80f, 0.82f, 0.84f, 0.85f, 0.86f, 0.87f, 0.87f, 0.86f,
          0.86f, 0.87f, 0.87f, 0.86f, 0.85f, 0.84f, 0.82f, 0.80f];
 
+    // Traveling-wave delays: outer bars read the newest RMS, inner bars read older values,
+    // so the wave appears to radiate outward from the center — each bar peaks at a different time.
+    private static readonly int[] BarDelays =
+        [7, 6, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3, 4, 5, 6, 7];
+
+    // Ring buffer of recent RMS samples so each bar can read a time-delayed value.
+    private const int RmsBufferSize = 24;
+    private readonly float[] _rmsBuffer = new float[RmsBufferSize];
+    private int _rmsHead;
+
     public LiveTranscriptPage()
     {
         InitializeComponent();
@@ -224,11 +234,20 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void OnAudioLevelChanged(object? sender, float rms)
     {
+        // Write the new sample into the ring buffer before dispatching so bars read
+        // values that are already in sync on the UI thread.
+        _rmsBuffer[_rmsHead] = rms;
+        _rmsHead = (_rmsHead + 1) % RmsBufferSize;
+
         DispatcherQueue.TryEnqueue(() =>
         {
             for (int i = 0; i < WaveBarCount; i++)
             {
-                var target = rms * WaveBarWeights[i];
+                // Each bar reads a time-delayed RMS sample: outer bars read the newest
+                // value (delay 0) and inner bars read older values (delay up to 7 frames),
+                // so the wave ripples outward from the centre rather than rising in unison.
+                int delayedIdx = (_rmsHead - 1 - BarDelays[i] + RmsBufferSize) % RmsBufferSize;
+                var target = _rmsBuffer[delayedIdx] * WaveBarWeights[i];
                 _displayLevels[i] = MathF.Max(target, _displayLevels[i] * WaveBarDecay[i]);
                 _barScales[i].ScaleY = MathF.Max(0.06f, _displayLevels[i]);
             }

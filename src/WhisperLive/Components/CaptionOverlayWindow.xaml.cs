@@ -23,8 +23,8 @@ public sealed partial class CaptionOverlayWindow : Window
     // so there is never dead space above the captions.
     private const int WindowHeightCollapsed = 200;
     private const int WindowHeightExpanded  = 360;
-    // Vertical chrome in DIPs: top-margin(8) + header-row(28) + list-margin(4) + bottom-margin(12).
-    private const int ChromeHeightDip = 52;
+    // Vertical chrome in DIPs: top-margin(12) + header-row(28) + list-margin(4) + bottom-margin(12).
+    private const int ChromeHeightDip = 56;
     private const int MaxCollapsedRows = 8;
     private const int MaxExpandedRows  = 25;
 
@@ -197,8 +197,8 @@ public sealed partial class CaptionOverlayWindow : Window
         if (ContentRoot.XamlRoot is null || ContentRoot.ActualHeight <= 0) return;
 
         var scale = ContentRoot.XamlRoot.RasterizationScale;
-        // ActualHeight excludes ContentRoot's own vertical margin (top=8, bottom=12).
-        double dipHeight = ContentRoot.ActualHeight + 20;
+        // ActualHeight excludes ContentRoot's own vertical margin (top=12, bottom=12).
+        double dipHeight = ContentRoot.ActualHeight + 24;
         int maxHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
         dipHeight = Math.Min(dipHeight, maxHeight);
 
