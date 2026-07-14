@@ -46,10 +46,12 @@ public sealed partial class LiveTranscriptPage : Page
         [0.80f, 0.82f, 0.84f, 0.85f, 0.86f, 0.87f, 0.87f, 0.86f,
          0.86f, 0.87f, 0.87f, 0.86f, 0.85f, 0.84f, 0.82f, 0.80f];
 
-    // Traveling-wave delays: outer bars read the newest RMS, inner bars read older values,
-    // so the wave appears to radiate outward from the center — each bar peaks at a different time.
-    private static readonly int[] BarDelays =
-        [7, 6, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3, 4, 5, 6, 7];
+    // Traveling-wave delays: each bar gets a random base delay and a unique oscillation
+    // frequency/phase so bars drift independently — no fixed start position, organic motion.
+    private readonly int[] _barBaseDelays = new int[WaveBarCount];
+    private readonly float[] _barOscFreqs  = new float[WaveBarCount];
+    private readonly float[] _barOscPhases = new float[WaveBarCount];
+    private int _frameCount;
 
     // Ring buffer of recent RMS samples so each bar can read a time-delayed value.
     private const int RmsBufferSize = 24;
@@ -216,8 +218,15 @@ public sealed partial class LiveTranscriptPage : Page
     {
         WaveformInButton.Children.Clear();
         var barBrush = (Brush)Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"];
+        var rng = new Random();
         for (int i = 0; i < WaveBarCount; i++)
         {
+            // Random starting delay (0–7 frames) and unique slow-oscillation frequency/phase
+            // so each bar drifts independently — wave start position is never the same.
+            _barBaseDelays[i] = rng.Next(0, 8);
+            _barOscFreqs[i]   = 0.04f + rng.NextSingle() * 0.08f; // ~0.04–0.12 rad/frame
+            _barOscPhases[i]  = rng.NextSingle() * MathF.Tau;
+
             var scale = new ScaleTransform { CenterY = 18, ScaleY = 0.06 };
             _barScales[i] = scale;
             WaveformInButton.Children.Add(new Border
@@ -234,19 +243,20 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void OnAudioLevelChanged(object? sender, float rms)
     {
-        // Write the new sample into the ring buffer before dispatching so bars read
-        // values that are already in sync on the UI thread.
         _rmsBuffer[_rmsHead] = rms;
         _rmsHead = (_rmsHead + 1) % RmsBufferSize;
+        int frame = ++_frameCount;
 
         DispatcherQueue.TryEnqueue(() =>
         {
             for (int i = 0; i < WaveBarCount; i++)
             {
-                // Each bar reads a time-delayed RMS sample: outer bars read the newest
-                // value (delay 0) and inner bars read older values (delay up to 7 frames),
-                // so the wave ripples outward from the centre rather than rising in unison.
-                int delayedIdx = (_rmsHead - 1 - BarDelays[i] + RmsBufferSize) % RmsBufferSize;
+                // Each bar's effective delay drifts sinusoidally over time using its own
+                // unique frequency and phase — bars never peak in a fixed sequence, so the
+                // wave pattern is organic and has no repeating start position.
+                float drift = MathF.Sin(frame * _barOscFreqs[i] + _barOscPhases[i]) * 4f;
+                int delay = Math.Clamp(_barBaseDelays[i] + (int)drift, 0, RmsBufferSize - 1);
+                int delayedIdx = (_rmsHead - 1 - delay + RmsBufferSize * 2) % RmsBufferSize;
                 var target = _rmsBuffer[delayedIdx] * WaveBarWeights[i];
                 _displayLevels[i] = MathF.Max(target, _displayLevels[i] * WaveBarDecay[i]);
                 _barScales[i].ScaleY = MathF.Max(0.06f, _displayLevels[i]);
