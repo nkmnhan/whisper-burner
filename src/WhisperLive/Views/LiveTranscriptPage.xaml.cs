@@ -130,7 +130,9 @@ public sealed partial class LiveTranscriptPage : Page
         _healthCheckCts = active ? new CancellationTokenSource() : null;
         if (active)
         {
-            _apiHealthy = false;
+            // Preserve the last known health state so the Start button remains enabled
+            // immediately when transitioning from a successful recording session.
+            // The first health check below corrects it if the API has since gone offline.
             _ = PollHealthAsync(_healthCheckCts!.Token);
         }
     }
@@ -140,7 +142,9 @@ public sealed partial class LiveTranscriptPage : Page
         await CheckApiHealthAsync();
         while (!ct.IsCancellationRequested)
         {
-            try { await Task.Delay(TimeSpan.FromSeconds(5), ct); }
+            // Poll at 5 s when unhealthy (fast recovery), 30 s when healthy (reduce log noise).
+            var delay = _apiHealthy ? TimeSpan.FromSeconds(30) : TimeSpan.FromSeconds(5);
+            try { await Task.Delay(delay, ct); }
             catch (OperationCanceledException) { break; }
             if (!ct.IsCancellationRequested)
                 await CheckApiHealthAsync();
@@ -317,7 +321,7 @@ public sealed partial class LiveTranscriptPage : Page
         NewSessionButton.Visibility = Visibility.Collapsed;
         ActionStatus.Text = string.Empty;
         PreContextBox.Text = _settings.DefaultSessionContext;
-        CurrentApp.SubtitleService.StartSession();
+        // SubtitleService.StartSession() is owned by RecordingManager.StartAsync — no call needed here.
     }
 
     private void OnShowOverlayClicked(object sender, RoutedEventArgs e)
