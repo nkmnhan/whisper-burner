@@ -1,4 +1,4 @@
-using Microsoft.UI.Composition;
+﻿using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -19,21 +19,23 @@ namespace WhisperLive.Components;
 public sealed partial class CaptionOverlayWindow : Window
 {
     private const int WindowWidth = 860;
-    // These are the MAX window heights (DIP). The window shrinks to fit its
-    // content below these caps so there is never dead space under the captions.
-    private const int WindowHeightCollapsed = 280;
-    private const int WindowHeightExpanded  = 440;
-    // Non-caption chrome inside the window (DIP): vertical margins (24) +
-    // header row (32) + chevron row (32) + inter-row spacing (~8).
-    private const int ChromeHeightDip = 96;
-    private const int MaxCollapsedRows = 10;
-    private const int MaxExpandedRows  = 30;
+    // MAX window heights in DIPs. ResizeToContent shrinks the window to fit content,
+    // so there is never dead space above the captions.
+    private const int WindowHeightCollapsed = 200;
+    private const int WindowHeightExpanded  = 360;
+    // Vertical chrome in DIPs: top-margin(8) + header-row(28) + list-margin(4) + bottom-margin(12).
+    private const int ChromeHeightDip = 52;
+    private const int MaxCollapsedRows = 8;
+    private const int MaxExpandedRows  = 25;
 
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
 
     private readonly ObservableCollection<TranslatedSegmentView> _overlayRows = [];
     private double _dragStartX;
@@ -126,10 +128,18 @@ public sealed partial class CaptionOverlayWindow : Window
         int roundCorners = DWMWCP_ROUND;
         DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref roundCorners, sizeof(int));
 
+        // Scale DIP constants to physical pixels for the actual display DPI.
+        // The previous code passed DIP values directly as physical pixels, which caused
+        // the window to be the wrong size at non-100% DPI (e.g. too narrow at 125%).
+        uint dpi = GetDpiForWindow(hwnd);
+        double scale = dpi / 96.0;
+        int physWidth = (int)Math.Round(WindowWidth * scale);
+        int physHeightCollapsed = (int)Math.Round(WindowHeightCollapsed * scale);
+
         var area = DisplayArea.Primary.WorkArea;
-        int x = (area.Width - WindowWidth) / 2;
-        int y = area.Height - WindowHeightCollapsed - 48;
-        AppWindow.MoveAndResize(new RectInt32(x, y, WindowWidth, WindowHeightCollapsed));
+        int x = (area.Width - physWidth) / 2;
+        int y = area.Height - physHeightCollapsed - 48;
+        AppWindow.MoveAndResize(new RectInt32(x, y, physWidth, physHeightCollapsed));
     }
 
     private void ApplyAcrylicBackdrop()
@@ -167,7 +177,9 @@ public sealed partial class CaptionOverlayWindow : Window
     private void OnExpandClicked(object sender, RoutedEventArgs e)
     {
         _isExpanded = !_isExpanded;
-        ChevronIcon.Glyph = _isExpanded ? "" : "";
+        var glyph = _isExpanded ? "\uE70E" : "\uE70D";
+        ChevronIcon.Glyph = glyph;
+        TopBarChevronIcon.Glyph = glyph;
 
         // Raise/lower the caption cap; ResyncRows + ResizeToContent then size the
         // window to whatever content actually fits.
@@ -185,8 +197,8 @@ public sealed partial class CaptionOverlayWindow : Window
         if (ContentRoot.XamlRoot is null || ContentRoot.ActualHeight <= 0) return;
 
         var scale = ContentRoot.XamlRoot.RasterizationScale;
-        // ActualHeight excludes ContentRoot's own vertical margin (12 + 12).
-        double dipHeight = ContentRoot.ActualHeight + 24;
+        // ActualHeight excludes ContentRoot's own vertical margin (top=8, bottom=12).
+        double dipHeight = ContentRoot.ActualHeight + 20;
         int maxHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
         dipHeight = Math.Min(dipHeight, maxHeight);
 
@@ -195,7 +207,7 @@ public sealed partial class CaptionOverlayWindow : Window
 
         int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;
         AppWindow.MoveAndResize(new RectInt32(
-            AppWindow.Position.X, bottomEdge - physHeight, WindowWidth, physHeight));
+            AppWindow.Position.X, bottomEdge - physHeight, AppWindow.Size.Width, physHeight));
     }
 
     private void OnCloseClicked(object sender, RoutedEventArgs e)
@@ -216,13 +228,13 @@ public sealed partial class CaptionOverlayWindow : Window
     private void OnPointerEntered(object sender, PointerRoutedEventArgs e)
     {
         TopBar.Visibility = Visibility.Visible;
-        LiveTranscriptLabel.Visibility = Visibility.Collapsed;
+        HeaderBar.Visibility = Visibility.Collapsed;
     }
 
     private void OnPointerExited(object sender, PointerRoutedEventArgs e)
     {
         TopBar.Visibility = Visibility.Collapsed;
-        LiveTranscriptLabel.Visibility = Visibility.Visible;
+        HeaderBar.Visibility = Visibility.Visible;
     }
 
     private void OnManipulationStarted(object sender, ManipulationStartedRoutedEventArgs e)

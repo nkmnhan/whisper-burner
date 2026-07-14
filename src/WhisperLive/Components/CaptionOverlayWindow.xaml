@@ -16,27 +16,62 @@
         <!-- Dark overlay on top of acrylic — forces dark appearance in any system theme -->
         <Rectangle AutomationProperties.AccessibilityView="Raw" Fill="{ThemeResource CaptionOverlayDarkOverlayBrush}" />
 
+        <!--
+            ContentRoot: 2 rows (header + captions). No dedicated chevron row.
+            Margin: 12 sides / 8 top / 12 bottom — tighter than before, consistent with 4px grid.
+            VerticalAlignment="Bottom": content hugs the bottom edge; ResizeToContent shrinks
+            the window to fit so there is never dead space above the captions.
+        -->
         <Grid
             x:Name="ContentRoot"
-            Margin="16,12,16,12"
+            Margin="12,8,12,12"
             VerticalAlignment="Bottom">
             <Grid.RowDefinitions>
-                <RowDefinition Height="32" />
+                <RowDefinition Height="28" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="32" />
             </Grid.RowDefinitions>
 
-            <!-- Row 0: header — label (default) or top-bar (on hover) -->
-            <TextBlock
-                x:Name="LiveTranscriptLabel"
-                Grid.Row="0"
-                VerticalAlignment="Center"
-                FontStyle="Italic"
-                FontWeight="SemiBold"
-                Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
-                Style="{StaticResource BodyTextBlockStyle}"
-                Text="Live Transcript" />
+            <!--
+                Row 0 — HeaderBar (default, always visible):
+                "Live Transcript" label + expand/collapse chevron on the right.
+                Chevron is discoverable at rest and doesn't require hovering.
+                E70D = ChevronDown (collapsed → expand), E70E = ChevronUp (expanded → collapse).
+            -->
+            <Grid x:Name="HeaderBar" Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    x:Name="LiveTranscriptLabel"
+                    Grid.Column="0"
+                    VerticalAlignment="Center"
+                    FontStyle="Italic"
+                    FontWeight="SemiBold"
+                    Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Text="Live Transcript" />
+                <Button
+                    Grid.Column="1"
+                    Width="28"
+                    Height="28"
+                    Padding="0"
+                    AutomationProperties.Name="Expand or collapse overlay"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="OnExpandClicked"
+                    CornerRadius="{StaticResource ControlCornerRadius}"
+                    Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                    ToolTipService.ToolTip="Expand / Collapse">
+                    <FontIcon x:Name="ChevronIcon" FontSize="11" Glyph="&#xE70D;" />
+                </Button>
+            </Grid>
 
+            <!--
+                Row 0 — TopBar (hover only, replaces HeaderBar):
+                Lang chips | spacer | expand | pause | close.
+                All buttons 28×28 — matches the 28px row height with no overflow.
+            -->
             <Grid
                 x:Name="TopBar"
                 Grid.Row="0"
@@ -44,6 +79,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
@@ -54,14 +90,8 @@
                     VerticalAlignment="Center"
                     Orientation="Horizontal"
                     Spacing="4">
-                    <!--
-                        Language chips match the pause/close buttons exactly:
-                        Height=32, CornerRadius=ControlCornerRadius, Background=Transparent,
-                        BorderThickness=0 (no border at rest — same as SubtleButtonStyle pattern).
-                        Padding="8,0": horizontal breathing room; vertical filled by Height=32.
-                    -->
                     <Border
-                        Height="32"
+                        Height="28"
                         Padding="8,0"
                         VerticalAlignment="Center"
                         Background="Transparent"
@@ -84,7 +114,7 @@
                         Visibility="Collapsed" />
                     <Border
                         x:Name="TranslationTargetChip"
-                        Height="32"
+                        Height="28"
                         Padding="8,0"
                         VerticalAlignment="Center"
                         Background="Transparent"
@@ -99,12 +129,28 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Pause / Resume button -->
+                <!-- Expand / Collapse (mirrors HeaderBar chevron) -->
+                <Button
+                    Grid.Column="2"
+                    Width="28"
+                    Height="28"
+                    Padding="0"
+                    AutomationProperties.Name="Expand or collapse overlay"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Click="OnExpandClicked"
+                    CornerRadius="{StaticResource ControlCornerRadius}"
+                    Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                    ToolTipService.ToolTip="Expand / Collapse">
+                    <FontIcon x:Name="TopBarChevronIcon" FontSize="11" Glyph="&#xE70D;" />
+                </Button>
+
+                <!-- Pause / Resume -->
                 <Button
                     x:Name="OverlayPauseButton"
-                    Grid.Column="2"
-                    Width="32"
-                    Height="32"
+                    Grid.Column="3"
+                    Width="28"
+                    Height="28"
                     Padding="0"
                     AutomationProperties.Name="Pause or resume"
                     Background="Transparent"
@@ -113,14 +159,14 @@
                     CornerRadius="{StaticResource ControlCornerRadius}"
                     Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                     ToolTipService.ToolTip="Pause / Resume">
-                    <FontIcon x:Name="OverlayPauseIcon" FontSize="14" Glyph="&#xE769;" />
+                    <FontIcon x:Name="OverlayPauseIcon" FontSize="12" Glyph="&#xE769;" />
                 </Button>
 
-                <!-- Close button -->
+                <!-- Close -->
                 <Button
-                    Grid.Column="3"
-                    Width="32"
-                    Height="32"
+                    Grid.Column="4"
+                    Width="28"
+                    Height="28"
                     Padding="0"
                     AutomationProperties.Name="Hide overlay"
                     Background="Transparent"
@@ -129,7 +175,7 @@
                     CornerRadius="{StaticResource ControlCornerRadius}"
                     Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
                     ToolTipService.ToolTip="Hide overlay">
-                    <FontIcon Glyph="&#xE711;" />
+                    <FontIcon FontSize="12" Glyph="&#xE711;" />
                 </Button>
             </Grid>
 
@@ -175,25 +221,6 @@
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
-
-            <!-- Row 2: expand / collapse chevron -->
-            <Button
-                Grid.Row="2"
-                Width="32"
-                Height="32"
-                Padding="0"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                AutomationProperties.Name="Expand or collapse overlay"
-                Background="Transparent"
-                BorderThickness="0"
-                Click="OnExpandClicked"
-                CornerRadius="{StaticResource ControlCornerRadius}"
-                Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
-                ToolTipService.ToolTip="Expand / Collapse">
-                <!-- E70E = ChevronUp (collapse) / E70D = ChevronDown (expand) -->
-                <FontIcon x:Name="ChevronIcon" FontSize="12" Glyph="&#xE70D;" />
-            </Button>
         </Grid>
     </Grid>
 </Window>
