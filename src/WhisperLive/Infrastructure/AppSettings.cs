@@ -18,7 +18,7 @@ public sealed class AppSettings
     public string ApiUrl { get; set; } = "http://127.0.0.1:5000";
     public string Language { get; set; } = "auto";
     public string Model { get; set; } = "small";
-    public int ChunkDurationSeconds { get; set; } = 5;
+    public int ChunkDurationSeconds { get; set; } = 7;
     public string Theme { get; set; } = "Default";
     public List<string> ContextFolderPaths { get; set; } = [];
     public List<string> AllowedReadPaths { get; set; } = [];

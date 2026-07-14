@@ -62,8 +62,12 @@ public sealed class TranscriptionClient : ITranscriptionClient
         AppLogger.Debug("Transcribing chunk #{Index} ({Bytes} bytes, overlap={Overlap}s)",
             chunk.ChunkIndex, chunk.WavData.Length, chunk.OverlapSeconds);
 
+        // Hard timeout per attempt: keep gaps bounded.
+        // 15 s caps each attempt → worst-case semaphore hold = 15 s →
+        // max transcript gap = chunk_size + 15 s + next_transcription ≈ 25 s (well under 30 s).
+        // 60 s was too long: a stalled API held the semaphore for 60–120 s, causing 30–130 s gaps.
         using var reqCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        reqCts.CancelAfter(TimeSpan.FromSeconds(60));
+        reqCts.CancelAfter(TimeSpan.FromSeconds(15));
         using var response = await http.PostAsync($"{options.ApiUrl}/transcribe", form, reqCts.Token);
         response.EnsureSuccessStatusCode();
 

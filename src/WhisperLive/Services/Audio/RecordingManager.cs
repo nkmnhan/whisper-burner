@@ -193,6 +193,14 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
                     return;
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+                catch (OperationCanceledException)
+                {
+                    // Per-request timeout fired (not a session cancel).
+                    // Do NOT retry — the API is stalled; a second attempt would hold the
+                    // semaphore for another 15 s, making the gap worse.
+                    AppLogger.Warning("Chunk #{Index} timed out — skipping to keep transcript gap bounded", chunk.ChunkIndex);
+                    break;
+                }
                 catch (Exception ex)
                 {
                     AppLogger.Warning(ex,
