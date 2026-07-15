@@ -15,8 +15,16 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         "whisper.live", "sessions");
 
+    // Hard cap on retained in-memory segments so a multi-hour session can't grow the list without
+    // bound. The full transcript is always on disk via the streaming SRT writer; this list only
+    // backs AllSegments/corrections. IDs are monotonic (not list-position) so trimming the front
+    // never produces a duplicate ID or breaks correction lookups (which match by ID).
+    private const int MaxRetainedSegments = 10_000;
+
     private readonly List<SubtitleSegment> _segments = [];
     private readonly object _segLock = new();
+    private int _nextId;
+    private bool _trimWarned;
     // Separate lock for the SRT writer so its synchronous disk flush (AutoFlush)
     // never blocks readers of _segments (AllSegments, insert path).
     private readonly object _writerLock = new();
@@ -35,7 +43,12 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         // not when the first audio chunk arrived. File is created lazily on first TryWrite.
         Directory.CreateDirectory(_sessionsDir);
         var sessionPath = Path.Combine(_sessionsDir, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.srt");
-        lock (_segLock) _segments.Clear();
+        lock (_segLock)
+        {
+            _segments.Clear();
+            _nextId = 0;
+            _trimWarned = false;
+        }
         lock (_writerLock) _srtWriter = new StreamingSrtWriter(() => sessionPath);
     }
 
@@ -98,8 +111,18 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
                     if (_segments[i].Start <= seg.Start) break;
                     insertIdx = i;
                 }
-                globalSeg = seg with { Text = deduped, Id = _segments.Count + 1 };
+                globalSeg = seg with { Text = deduped, Id = ++_nextId };
                 _segments.Insert(insertIdx, globalSeg);
+
+                if (_segments.Count > MaxRetainedSegments)
+                {
+                    _segments.RemoveAt(0);
+                    if (!_trimWarned)
+                    {
+                        AppLogger.Warning("Retained-segment cap ({Cap}) reached — trimming oldest from memory; full transcript remains on disk", MaxRetainedSegments);
+                        _trimWarned = true;
+                    }
+                }
             }
             WriteSrtEntry(globalSeg);
             SegmentAdded?.Invoke(this, globalSeg);
@@ -184,11 +207,16 @@ public sealed class SubtitleService : ISubtitleService, IDisposable
         List<SubtitleSegment> snapshot;
         lock (_segLock)
         {
-            foreach (var correction in corrections.OrderBy(c => c.OriginalId))
+            // Match by segment ID, not list position: IDs are monotonic and the list may have been
+            // trimmed (oldest removed) or reordered by late-arriving chunks, so position ≠ ID − 1.
+            var byId = new Dictionary<int, string>();
+            foreach (var correction in corrections)
+                byId[correction.OriginalId] = correction.CorrectedText;
+
+            for (var i = 0; i < _segments.Count; i++)
             {
-                var index = correction.OriginalId - 1;
-                if (index < 0 || index >= _segments.Count) continue;
-                _segments[index] = _segments[index] with { Text = correction.CorrectedText };
+                if (byId.TryGetValue(_segments[i].Id, out var corrected))
+                    _segments[i] = _segments[i] with { Text = corrected };
             }
             snapshot = [.._segments];
         }

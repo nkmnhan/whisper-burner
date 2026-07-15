@@ -11,6 +11,8 @@ public interface IRecordingService : IDisposable
     bool IsPaused { get; }
     // Fires ~20 times/second with normalised RMS amplitude (0.0–1.0) from the loopback buffer.
     event EventHandler<float>? AudioLevelChanged;
+    // Fires when capture ends unexpectedly (device removed/changed), not on a normal StopAsync.
+    event EventHandler<Exception?>? CaptureStopped;
     Task StartAsync(RecordingOptions options, CancellationToken ct);
     Task StopAsync();
     Task PauseAsync();

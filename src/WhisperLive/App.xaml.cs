@@ -40,6 +40,11 @@ sealed partial class App : Application
 
     private volatile AppSettings _currentSettings = new();
 
+    // ApplySettings runs a multi-step read-modify-write on the translation service and its event
+    // wiring. It is called from both the UI thread (page load) and the CLI pipe thread, so the whole
+    // sequence must be serialised — the `volatile` field alone only makes the reference read atomic.
+    private readonly object _applySettingsLock = new();
+
     // IHttpClientFactory manages handler pooling and lifetime — see RegisterHttpClients().
     // The ServiceProvider is held here to prevent the factory from being GC'd.
     private readonly IServiceProvider _serviceProvider;
@@ -67,8 +72,24 @@ sealed partial class App : Application
 
         UnhandledException += (_, e) =>
         {
-            AppLogger.Error(e.Exception, "Unhandled exception: {Message}", e.Message);
+            AppLogger.Error(e.Exception, "Unhandled UI exception: {Message}", e.Message);
             e.Handled = true;
+        };
+
+        // The UI handler above never sees exceptions raised on background threads (audio capture,
+        // fire-and-forget tasks). Log those too so a silent process death leaves a trace, and
+        // observe faulted tasks so they don't escalate.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception ex)
+                AppLogger.Error(ex, "Unhandled background exception (terminating={Terminating})", e.IsTerminating);
+            else
+                AppLogger.Error("Unhandled background exception (terminating={Terminating})", e.IsTerminating);
+        };
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            AppLogger.Error(e.Exception, "Unobserved task exception");
+            e.SetObserved();
         };
 
         _ = ClaudeCliProvider.EnsureGlobalClaudeMdAsync();
@@ -109,23 +130,42 @@ sealed partial class App : Application
 
     internal void ApplySettings(AppSettings settings)
     {
-        _currentSettings = settings;
+        lock (_applySettingsLock)
+        {
+            var previous = _currentSettings;
+            _currentSettings = settings;
 
-        var isRecording = RecordingManager.State != RecordingState.Idle;
+            // Skip the (expensive, session-disrupting) translation-service rebuild when nothing that
+            // affects it changed. Page navigation calls ApplySettings on every load; without this a
+            // Settings→back round-trip during recording would tear down and rebuild the pipeline,
+            // dropping every in-flight translation.
+            if (!ShouldRebuildTranslation(previous, settings))
+                return;
 
-        var oldService = TranslationService;
-        oldService.EndSession();
-        oldService.SegmentTranslated -= OnTranscriptSegmentTranslated;
-        oldService.SegmentTranslationFailed -= OnTranscriptSegmentTranslationFailed;
+            var isRecording = RecordingManager.State != RecordingState.Idle;
 
-        TranslationService = BuildTranslationService(settings);
-        TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
-        TranslationService.SegmentTranslationFailed += OnTranscriptSegmentTranslationFailed;
-        if (isRecording)
-            TranslationService.StartSession();
+            var oldService = TranslationService;
+            oldService.EndSession();
+            oldService.SegmentTranslated -= OnTranscriptSegmentTranslated;
+            oldService.SegmentTranslationFailed -= OnTranscriptSegmentTranslationFailed;
 
-        oldService.Dispose();
+            TranslationService = BuildTranslationService(settings);
+            TranslationService.SegmentTranslated += OnTranscriptSegmentTranslated;
+            TranslationService.SegmentTranslationFailed += OnTranscriptSegmentTranslationFailed;
+            if (isRecording)
+                TranslationService.StartSession();
+
+            oldService.Dispose();
+        }
     }
+
+    private static bool ShouldRebuildTranslation(AppSettings a, AppSettings b) =>
+        a.EnableTranslation != b.EnableTranslation ||
+        a.TranslationProvider != b.TranslationProvider ||
+        a.TranslationTargetLanguage != b.TranslationTargetLanguage ||
+        a.ApiUrl != b.ApiUrl ||
+        a.DeepLApiKey != b.DeepLApiKey ||
+        a.GoogleTranslateApiKey != b.GoogleTranslateApiKey;
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -169,6 +209,10 @@ sealed partial class App : Application
                 AppLogger.Warning("StopAsync timed out on window close — forcing shutdown");
             }
             catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                AppLogger.Warning(ex, "Error during window-close shutdown — continuing");
+            }
 
             TranscriptViewModel.FinalizeSession();
             SessionAssistant.EndSession();
@@ -212,8 +256,8 @@ sealed partial class App : Application
 
         ITranslationProvider provider = settings.TranslationProvider switch
         {
-            "google" => new GoogleTranslationProvider(_httpClientFactory, settings.GoogleTranslateApiKey),
-            "deepl"  => new DeepLTranslationProvider(_httpClientFactory, settings.DeepLApiKey),
+            "google" => new GoogleTranslationProvider(_httpClientFactory, settings.GetGoogleApiKey()),
+            "deepl"  => new DeepLTranslationProvider(_httpClientFactory, settings.GetDeepLApiKey()),
             _        => new DockerTranslationProvider(_httpClientFactory, settings.ApiUrl),
         };
 

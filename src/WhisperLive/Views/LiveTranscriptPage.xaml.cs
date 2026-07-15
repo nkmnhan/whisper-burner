@@ -99,6 +99,7 @@ public sealed partial class LiveTranscriptPage : Page
 
         Manager.StateChanged += OnStateChanged;
         Manager.ApiStalled += OnApiStalled;
+        Manager.RecordingFaulted += OnRecordingFaulted;
         Manager.AudioLevelChanged += OnAudioLevelChanged;
         CurrentApp.TranscriptViewModel.Segments.CollectionChanged += OnSegmentsChanged;
         if (App.CaptionOverlay is { } overlayOnLoad) overlayOnLoad.Hidden += OnOverlayHidden;
@@ -128,6 +129,7 @@ public sealed partial class LiveTranscriptPage : Page
         _suggestDebounce = null;
         Manager.StateChanged -= OnStateChanged;
         Manager.ApiStalled -= OnApiStalled;
+        Manager.RecordingFaulted -= OnRecordingFaulted;
         Manager.AudioLevelChanged -= OnAudioLevelChanged;
         CurrentApp.TranscriptViewModel.Segments.CollectionChanged -= OnSegmentsChanged;
         if (App.CaptionOverlay is { } overlayOnUnload) overlayOnUnload.Hidden -= OnOverlayHidden;
@@ -243,12 +245,15 @@ public sealed partial class LiveTranscriptPage : Page
 
     private void OnAudioLevelChanged(object? sender, float rms)
     {
-        _rmsBuffer[_rmsHead] = rms;
-        _rmsHead = (_rmsHead + 1) % RmsBufferSize;
-        int frame = ++_frameCount;
-
+        // Arrives on the audio capture thread. Do NOT touch the ring-buffer fields here — they are
+        // read on the UI thread inside the lambda below, so all access must stay on one thread to
+        // avoid a data race. Marshal the raw sample over and mutate everything UI-side.
         DispatcherQueue.TryEnqueue(() =>
         {
+            _rmsBuffer[_rmsHead] = rms;
+            _rmsHead = (_rmsHead + 1) % RmsBufferSize;
+            int frame = ++_frameCount;
+
             for (int i = 0; i < WaveBarCount; i++)
             {
                 // Each bar's effective delay drifts sinusoidally over time using its own
@@ -278,6 +283,16 @@ public sealed partial class LiveTranscriptPage : Page
         {
             if (Manager.State == RecordingState.Recording)
                 SetStatusDot("StatusDotCautionBrush", "API not responding — restart Docker");
+        });
+
+    private void OnRecordingFaulted(object? sender, string message) =>
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            // The manager also transitions to Idle (OnStateChanged → ApplyState), which resets the
+            // UI; here we just surface why recording stopped.
+            ShowActionStatus(message);
+            if (_settings.EnableAssistant)
+                Assistant.EndSession();
         });
 
     private void ApplyState(RecordingState state)
@@ -357,10 +372,21 @@ public sealed partial class LiveTranscriptPage : Page
                 _settings.Language,
                 _settings.EnableTranslation ? TranslationSvc.TargetLanguage : null);
 
+            try
+            {
+                await Manager.StartAsync(options);
+            }
+            catch (RecordingStartException ex)
+            {
+                // Manager already rolled back to Idle; just surface why and leave the UI restartable.
+                AppLogger.Warning(ex, "Recording failed to start");
+                ShowActionStatus(ex.Message);
+                return;
+            }
+
+            // Start the assistant session only after capture is confirmed running.
             if (_settings.EnableAssistant)
                 Assistant.StartSession(sessionContext);
-
-            await Manager.StartAsync(options);
         }
         else
         {
@@ -623,9 +649,17 @@ public sealed partial class LiveTranscriptPage : Page
     {
         if (((Button)sender).Tag is not string text) return;
 
-        var fileName = $"assistant-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.txt";
-        var path = await AssistantExport.SaveAsync(fileName, text);
-        ShowActionStatus($"Saved → {System.IO.Path.GetFileName(path)}");
+        try
+        {
+            var fileName = $"assistant-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.txt";
+            var path = await AssistantExport.SaveAsync(fileName, text);
+            ShowActionStatus($"Saved → {System.IO.Path.GetFileName(path)}");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warning(ex, "Failed to save assistant response");
+            ShowActionStatus("Save failed — check folder permissions");
+        }
     }
 
     private async void OnSaveConversationClicked(object sender, RoutedEventArgs e)
@@ -648,9 +682,17 @@ public sealed partial class LiveTranscriptPage : Page
             builder.AppendLine();
         }
 
-        var fileName = $"assistant-chat-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.txt";
-        var path = await AssistantExport.SaveAsync(fileName, builder.ToString().TrimEnd());
-        ShowActionStatus($"Saved → {System.IO.Path.GetFileName(path)}");
+        try
+        {
+            var fileName = $"assistant-chat-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.txt";
+            var path = await AssistantExport.SaveAsync(fileName, builder.ToString().TrimEnd());
+            ShowActionStatus($"Saved → {System.IO.Path.GetFileName(path)}");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warning(ex, "Failed to save assistant conversation");
+            ShowActionStatus("Save failed — check folder permissions");
+        }
     }
 
     private void ShowThinking()

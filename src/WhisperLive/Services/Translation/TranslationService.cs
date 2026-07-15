@@ -75,8 +75,12 @@ public sealed class TranslationService : ITranslationService, IDisposable
 
     private async Task ConsumeAsync(CancellationToken ct)
     {
-        await foreach (var segment in _channel.Reader.ReadAllAsync(ct))
-            _ = TranslateWithSemaphoreAsync(segment, ct);
+        try
+        {
+            await foreach (var segment in _channel.Reader.ReadAllAsync(ct))
+                _ = TranslateWithSemaphoreAsync(segment, ct);
+        }
+        catch (OperationCanceledException) { /* session ended — expected on EndSession */ }
     }
 
     private async Task TranslateWithSemaphoreAsync(SubtitleSegment segment, CancellationToken ct)

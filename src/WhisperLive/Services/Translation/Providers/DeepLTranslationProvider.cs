@@ -51,7 +51,8 @@ public sealed class DeepLTranslationProvider : ITranslationProvider
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<DeepLResponse>(_jsonOptions, ct);
-        return result?.Translations?[0]?.Text ?? text;
+        var translations = result?.Translations;
+        return translations is { Length: > 0 } ? translations[0].Text : text;
     }
 
     // Map ISO 639-1 → DeepL codes (uppercase; some need regional variant).

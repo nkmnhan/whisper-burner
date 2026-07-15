@@ -41,7 +41,8 @@ public sealed class GoogleTranslationProvider : ITranslationProvider
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<GoogleResponse>(ct);
-        return result?.Data?.Translations?[0]?.TranslatedText ?? text;
+        var translations = result?.Data?.Translations;
+        return translations is { Length: > 0 } ? translations[0].TranslatedText : text;
     }
 
     private record GoogleResponse(

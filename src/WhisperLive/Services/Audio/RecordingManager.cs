@@ -28,9 +28,13 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
     private int _consecutiveFailures;
 
     public event EventHandler? ApiStalled;
+    public event EventHandler<string>? RecordingFaulted;
     public event EventHandler<float>? AudioLevelChanged;
 
-    public RecordingState State { get; private set; } = RecordingState.Idle;
+    // Backed by a volatile int (an auto-property cannot be volatile). State is written on the caller
+    // thread and read from the UI and CLI-pipe threads; the volatile guarantees visibility.
+    private volatile int _state = (int)RecordingState.Idle;
+    public RecordingState State => (RecordingState)_state;
     public string? CurrentSessionPath => _subtitle.CurrentSessionPath;
 
     public event EventHandler<RecordingState>? StateChanged;
@@ -51,23 +55,54 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
         lock (_segLock) return new List<string>(_recentSegments);
     }
 
-    public Task StartAsync(RecordingOptions options)
+    public async Task StartAsync(RecordingOptions options)
     {
-        if (State != RecordingState.Idle) return Task.CompletedTask;
+        if (State != RecordingState.Idle) return;
 
         lock (_segLock) _recentSegments.Clear();
         Interlocked.Exchange(ref _consecutiveFailures, 0);
         PipelineMetrics.Instance.Reset();
         _cts = new CancellationTokenSource();
         _transcription.ResetPrompt();
-        _subtitle.StartSession();
-        _subtitle.SegmentAdded += OnSubtitleSegmentAdded;
-        _recording.AudioLevelChanged += OnAudioLevelChanged;
-        _ = _recording.StartAsync(options, _cts.Token);
-        _consumeTask = ConsumeChunksAsync(options, _cts.Token);
+
+        try
+        {
+            _subtitle.StartSession();                          // can throw: disk/permission
+            await _recording.StartAsync(options, _cts.Token);  // can throw: no/disabled audio device
+
+            // Subscribe only AFTER capture has actually started, so a failed start followed by a
+            // retry never double-subscribes (which previously duplicated every segment N times).
+            _subtitle.SegmentAdded += OnSubtitleSegmentAdded;
+            _recording.AudioLevelChanged += OnAudioLevelChanged;
+            _recording.CaptureStopped += OnCaptureStopped;
+            _consumeTask = ConsumeChunksAsync(options, _cts.Token);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error(ex, "Failed to start recording — rolling back to Idle");
+            _subtitle.SegmentAdded -= OnSubtitleSegmentAdded;
+            _recording.AudioLevelChanged -= OnAudioLevelChanged;
+            _recording.CaptureStopped -= OnCaptureStopped;
+            try { _cts?.Cancel(); } catch { }
+            _cts?.Dispose();
+            _cts = null;
+            try { await _recording.StopAsync(); } catch { }
+            _subtitle.EndSession();
+            SetState(RecordingState.Idle);
+            throw new RecordingStartException(
+                "Could not start recording. Check that an audio playback device is enabled.", ex);
+        }
 
         SetState(RecordingState.Recording);
-        return Task.CompletedTask;
+    }
+
+    // Capture died mid-session (device unplugged/switched). End the session cleanly and surface a
+    // message so the UI doesn't keep showing a live "Recording" state against a dead pipeline.
+    private void OnCaptureStopped(object? sender, Exception? ex)
+    {
+        if (State == RecordingState.Idle) return;
+        RecordingFaulted?.Invoke(this, "Audio capture stopped — the playback device was changed or disconnected.");
+        _ = StopAsync();
     }
 
     public async Task StopAsync()
@@ -96,6 +131,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
 
         _subtitle.SegmentAdded -= OnSubtitleSegmentAdded;
         _recording.AudioLevelChanged -= OnAudioLevelChanged;
+        _recording.CaptureStopped -= OnCaptureStopped;
         _subtitle.EndSession();
         _cts = null;
 
@@ -244,7 +280,7 @@ public sealed class RecordingManager : IRecordingManager, IDisposable
 
     private void SetState(RecordingState state)
     {
-        State = state;
+        _state = (int)state;
         StateChanged?.Invoke(this, state);
     }
 
