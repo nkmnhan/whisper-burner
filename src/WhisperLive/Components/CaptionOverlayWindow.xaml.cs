@@ -41,6 +41,7 @@ public sealed partial class CaptionOverlayWindow : Window
     private double _dragStartX;
     private double _dragStartY;
     private bool _isExpanded;
+    private bool _resizeQueued;
     private DesktopAcrylicController? _acrylicController;
     private SystemBackdropConfiguration? _backdropConfig;
 
@@ -59,7 +60,9 @@ public sealed partial class CaptionOverlayWindow : Window
 
         // Window follows its content height (bottom-anchored), so few lines
         // never leave a gap and many lines grow the box up to the cap.
-        ContentRoot.SizeChanged += (_, _) => ResizeToContent();
+        // Coalesce bursts of SizeChanged (rapid caption additions fire several per frame) into a
+        // single resize so we don't thrash the AppWindow.MoveAndResize P/Invoke + work-area query.
+        ContentRoot.SizeChanged += (_, _) => QueueResize();
 
         var allSegments = ((App)Application.Current).TranscriptViewModel.Segments;
         allSegments.CollectionChanged += OnSegmentsChanged;
@@ -192,6 +195,19 @@ public sealed partial class CaptionOverlayWindow : Window
         CaptionsPanel.MaxHeight = (_isExpanded ? WindowHeightExpanded : WindowHeightCollapsed) - ChromeHeightDip;
         ResyncRows();
         ResizeToContent();
+    }
+
+    // Debounces ResizeToContent to at most once per dispatcher turn, collapsing a burst of
+    // SizeChanged events into a single window move/resize.
+    private void QueueResize()
+    {
+        if (_resizeQueued) return;
+        _resizeQueued = true;
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            _resizeQueued = false;
+            ResizeToContent();
+        });
     }
 
     /// <summary>

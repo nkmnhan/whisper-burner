@@ -1,7 +1,7 @@
 using Microsoft.UI.Dispatching;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
 using WhisperLive.Infrastructure;
 using WhisperLive.Models;
 
@@ -20,6 +20,11 @@ public sealed class TranscriptViewModel
     private readonly Func<bool> _isTranslationEnabled;
 
     public ObservableCollection<TranslatedSegmentView> Segments { get; } = [];
+
+    // Id → row index for O(1) translation callbacks. Translations arrive at ~3 concurrent for the
+    // whole session; a linear FirstOrDefault over up to 500 rows on each was needless work.
+    // All access is on the UI thread (every mutation below runs inside _dq.TryEnqueue).
+    private readonly Dictionary<int, TranslatedSegmentView> _byId = [];
 
     public TranscriptViewModel(DispatcherQueue dq, Func<bool> isTranslationEnabled)
     {
@@ -41,9 +46,13 @@ public sealed class TranscriptViewModel
                 insertIdx = i;
             }
             Segments.Insert(insertIdx, view);
+            _byId[seg.Id] = view;
 
             while (Segments.Count > MaxSegments)
+            {
+                _byId.Remove(Segments[0].Original.Id);
                 Segments.RemoveAt(0);
+            }
             if (!_isTranslationEnabled())
                 view.MarkPassthrough();
         });
@@ -51,8 +60,7 @@ public sealed class TranscriptViewModel
     public void OnSegmentTranslated(int segmentId, string translatedText) =>
         _dq.TryEnqueue(() =>
         {
-            var view = Segments.FirstOrDefault(v => v.Original.Id == segmentId);
-            if (view is null)
+            if (!_byId.TryGetValue(segmentId, out var view))
             {
                 AppLogger.Debug("Translation for segment {Id} had no matching row (scrolled off or session changed)", segmentId);
                 return;
@@ -66,7 +74,9 @@ public sealed class TranscriptViewModel
     /// </summary>
     public void OnSegmentTranslationFailed(int segmentId) =>
         _dq.TryEnqueue(() =>
-            Segments.FirstOrDefault(v => v.Original.Id == segmentId)?.MarkFailed());
+        {
+            if (_byId.TryGetValue(segmentId, out var view)) view.MarkFailed();
+        });
 
     /// <summary>
     /// Called when the recording session ends. Any segment still in
@@ -85,5 +95,9 @@ public sealed class TranscriptViewModel
         });
 
     public void Clear() =>
-        _dq.TryEnqueue(() => Segments.Clear());
+        _dq.TryEnqueue(() =>
+        {
+            Segments.Clear();
+            _byId.Clear();
+        });
 }
