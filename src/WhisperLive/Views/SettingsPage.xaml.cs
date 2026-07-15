@@ -50,8 +50,8 @@ public sealed partial class SettingsPage : Page
         SelectComboItem(TranslationProviderBox, _settings.TranslationProvider is "docker" or "whisper"
             ? "docker (free)" : _settings.TranslationProvider);
         EnableTranslationToggle.IsOn = _settings.EnableTranslation;
-        DeepLApiKeyBox.Text = _settings.DeepLApiKey;
-        GoogleApiKeyBox.Text = _settings.GoogleTranslateApiKey;
+        DeepLApiKeyBox.Password = _settings.GetDeepLApiKey();
+        GoogleApiKeyBox.Password = _settings.GetGoogleApiKey();
         ApplyProviderVisibility(_settings.TranslationProvider);
         SelectThemeCombo(_settings.Theme);
         EnableAssistantToggle.IsOn = _settings.EnableAssistant;
@@ -85,7 +85,15 @@ public sealed partial class SettingsPage : Page
     private void OnApiUrlChanged(object sender, TextChangedEventArgs e)
     {
         if (!_loaded) return;
-        _settings.ApiUrl = ApiUrlBox.Text.Trim();
+        var url = ApiUrlBox.Text.Trim();
+        // Reject malformed input rather than persist a value that later gets concatenated into
+        // request URLs. Audio chunks are POSTed to this host, so a bad/hostile value matters.
+        if (!AppSettings.IsValidApiUrl(url))
+        {
+            AppLogger.Warning("Ignoring invalid API URL: {Url}", url);
+            return;
+        }
+        _settings.ApiUrl = url;
         _ = _settings.SaveAsync();
     }
 
@@ -195,17 +203,17 @@ public sealed partial class SettingsPage : Page
         GoogleApiKeyCard.Visibility       = provider == "google" ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void OnDeepLApiKeyChanged(object sender, TextChangedEventArgs e)
+    private void OnDeepLApiKeyChanged(object sender, RoutedEventArgs e)
     {
         if (!_loaded) return;
-        _settings.DeepLApiKey = DeepLApiKeyBox.Text.Trim();
+        _settings.SetDeepLApiKey(DeepLApiKeyBox.Password.Trim());
         _ = _settings.SaveAsync();
     }
 
-    private void OnGoogleApiKeyChanged(object sender, TextChangedEventArgs e)
+    private void OnGoogleApiKeyChanged(object sender, RoutedEventArgs e)
     {
         if (!_loaded) return;
-        _settings.GoogleTranslateApiKey = GoogleApiKeyBox.Text.Trim();
+        _settings.SetGoogleApiKey(GoogleApiKeyBox.Password.Trim());
         _ = _settings.SaveAsync();
     }
 

@@ -126,21 +126,21 @@
                         x:Name="DockerProviderInfoCard"
                         Description="Translates via the fast-whisper API using deep-translator — no API key required. Start the API server first."
                         Visibility="Collapsed" />
-                    <controls:SettingsCard x:Name="DeepLApiKeyCard" Description="DeepL API key (free tier: deepl.com/pro-api)" Header="DeepL API key">
-                        <TextBox
+                    <controls:SettingsCard x:Name="DeepLApiKeyCard" Description="DeepL API key (free tier: deepl.com/pro-api). Stored encrypted with Windows DPAPI." Header="DeepL API key">
+                        <PasswordBox
                             x:Name="DeepLApiKeyBox"
                             Width="260"
                             HorizontalAlignment="Right"
                             PlaceholderText="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx"
-                            TextChanged="OnDeepLApiKeyChanged" />
+                            PasswordChanged="OnDeepLApiKeyChanged" />
                     </controls:SettingsCard>
-                    <controls:SettingsCard x:Name="GoogleApiKeyCard" Description="Google Cloud Translate API key (cloud.google.com/translate)" Header="Google API key">
-                        <TextBox
+                    <controls:SettingsCard x:Name="GoogleApiKeyCard" Description="Google Cloud Translate API key (cloud.google.com/translate). Stored encrypted with Windows DPAPI." Header="Google API key">
+                        <PasswordBox
                             x:Name="GoogleApiKeyBox"
                             Width="260"
                             HorizontalAlignment="Right"
                             PlaceholderText="AIza..."
-                            TextChanged="OnGoogleApiKeyChanged" />
+                            PasswordChanged="OnGoogleApiKeyChanged" />
                     </controls:SettingsCard>
                 </controls:SettingsExpander.Items>
             </controls:SettingsExpander>

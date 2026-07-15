@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.IO.Pipes;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -48,12 +50,7 @@ public sealed class CliPipeServer : IDisposable
         {
             try
             {
-                var pipe = new NamedPipeServerStream(
-                    PipeName,
-                    PipeDirection.InOut,
-                    maxNumberOfServerInstances: 1,
-                    transmissionMode: PipeTransmissionMode.Byte,
-                    options: PipeOptions.Asynchronous);
+                var pipe = CreateSecuredPipe();
 
                 await pipe.WaitForConnectionAsync(ct);
                 // Sequential: await the handler so the pipe is fully disposed
@@ -63,6 +60,27 @@ public sealed class CliPipeServer : IDisposable
             catch (OperationCanceledException) { break; }
             catch (Exception ex) { AppLogger.Warning(ex, "CLI pipe accept error"); }
         }
+    }
+
+    // The default pipe DACL lets any local process connect and issue commands (start capturing
+    // system audio, mutate settings). Restrict access to the current user's SID only.
+    private static NamedPipeServerStream CreateSecuredPipe()
+    {
+        var security = new PipeSecurity();
+        using var identity = WindowsIdentity.GetCurrent();
+        var owner = identity.User
+            ?? throw new InvalidOperationException("Cannot resolve current user SID for pipe ACL.");
+        security.AddAccessRule(new PipeAccessRule(owner, PipeAccessRights.FullControl, AccessControlType.Allow));
+
+        return NamedPipeServerStreamAcl.Create(
+            PipeName,
+            PipeDirection.InOut,
+            maxNumberOfServerInstances: 1,
+            transmissionMode: PipeTransmissionMode.Byte,
+            options: PipeOptions.Asynchronous,
+            inBufferSize: 0,
+            outBufferSize: 0,
+            pipeSecurity: security);
     }
 
     private async Task HandleClientAsync(NamedPipeServerStream pipe, CancellationToken ct)
@@ -118,7 +136,14 @@ public sealed class CliPipeServer : IDisposable
             ChunkDurationSeconds: req.GetInt("chunk") ?? s.ChunkDurationSeconds,
             ApiUrl:               s.ApiUrl);
 
-        await _manager.StartAsync(options);
+        try
+        {
+            await _manager.StartAsync(options);
+        }
+        catch (RecordingStartException ex)
+        {
+            return CliResponse.Fail(ex.Message);
+        }
         return CliResponse.Success(new { state = _manager.State.ToString(), options });
     }
 
@@ -151,7 +176,10 @@ public sealed class CliPipeServer : IDisposable
         if (_manager.State != RecordingState.Idle)
             return CliResponse.Fail("Cannot change settings while recording — stop first");
 
-        var s = _getSettings();
+        // Clone before mutating: _getSettings() returns the live shared instance that the assistant
+        // and view models read from other threads. Patch a private copy, then publish it atomically
+        // via _applySettings so readers never observe a half-mutated object.
+        var s = _getSettings().Clone();
 
         // Patch only the fields present in the request args
         if (req.Get("model")              is { } m)   s.Model = m;

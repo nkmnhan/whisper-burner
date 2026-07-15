@@ -57,6 +57,10 @@ public sealed class ClaudeCliProvider : IAiProvider
 
     // ── Shared subprocess execution ───────────────────────────────────────────
 
+    // Hard ceiling on a single CLI turn. Without it, a hung `claude` (network stall, auth prompt,
+    // wedged child) leaves the assistant's "thinking" state stuck forever with no way to recover.
+    private static readonly TimeSpan ProcessTimeout = TimeSpan.FromMinutes(2);
+
     internal static async Task<string> RunProcessAsync(
         List<string> args, string prompt, CancellationToken ct)
     {
@@ -90,10 +94,20 @@ public sealed class ClaudeCliProvider : IAiProvider
 
         using (process)
         {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(ProcessTimeout);
+            var procCt = timeoutCts.Token;
+
+            // Start draining stdout/stderr BEFORE writing stdin. If the child emits enough output
+            // to fill the OS pipe buffer while we're still blocked writing the prompt, both sides
+            // deadlock; reading concurrently prevents that.
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(procCt);
+            var stderrTask = process.StandardError.ReadToEndAsync(procCt);
+
             var stdinFailed = false;
             try
             {
-                await process.StandardInput.WriteAsync(prompt);
+                await process.StandardInput.WriteAsync(prompt.AsMemory(), procCt);
                 process.StandardInput.Close();
             }
             catch (IOException)
@@ -102,15 +116,16 @@ public sealed class ClaudeCliProvider : IAiProvider
                 try { process.StandardInput.Close(); } catch { }
             }
 
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
-            var stderrTask = process.StandardError.ReadToEndAsync(ct);
             try
             {
-                await process.WaitForExitAsync(ct);
+                await process.WaitForExitAsync(procCt);
             }
             catch (OperationCanceledException)
             {
                 try { process.Kill(entireProcessTree: true); } catch { }
+                // Distinguish a genuine caller cancel from our own timeout so the UI can tell them apart.
+                if (!ct.IsCancellationRequested)
+                    throw new TimeoutException($"Claude Code did not respond within {ProcessTimeout.TotalMinutes:0} minutes.");
                 throw;
             }
             var stdout = await stdoutTask;
@@ -256,25 +271,36 @@ public sealed class ClaudeCliProvider : IAiProvider
         private static string? BuildAllowedTools(AiCallContext? context)
         {
             // Threat model: adversarial audio could inject instructions into the transcript that
-            // Claude then acts on. Tool access is therefore scoped to ~/whisper.live/ by default.
-            // AllowedReadPaths defaults to [] in AppSettings, so the default blast radius of a
-            // prompt-injection attack is limited to session SRTs, notes, and settings — no broader
-            // filesystem access unless the user explicitly adds paths in Settings.
+            // Claude then acts on. Tool access is therefore scoped to the two subfolders that hold
+            // legitimate session content — sessions/ (transcript SRTs) and session-active/ (per-session
+            // CLAUDE.md). Crucially this EXCLUDES ~/whisper.live/settings.json, so a prompt-injection
+            // payload cannot read stored credentials even before DPAPI protection is considered.
             var dataDir = AppDataFolder.Replace('\\', '/');
-            var patterns = new List<string>
+            var patterns = new List<string>();
+            foreach (var sub in new[] { "sessions", "session-active" })
             {
-                $"Read({dataDir}/**)",
-                $"Grep({dataDir}/**)",
-                $"Glob({dataDir}/**)",
-            };
+                patterns.Add($"Read({dataDir}/{sub}/**)");
+                patterns.Add($"Grep({dataDir}/{sub}/**)");
+                patterns.Add($"Glob({dataDir}/{sub}/**)");
+            }
 
             foreach (var p in context?.AllowedReadPaths ?? [])
             {
+                // The allowedTools spec is a comma-joined CSV of Tool(pattern) entries. A path
+                // containing ',', '(' or ')' would break out of its Read(...) entry and inject an
+                // arbitrary new tool grant (e.g. Bash(...)). There is no escaping in the spec, so
+                // reject any such path outright rather than risk widening Claude's permissions.
+                if (string.IsNullOrWhiteSpace(p)) continue;
+                if (p.IndexOfAny([',', '(', ')']) >= 0)
+                {
+                    AppLogger.Warning("Skipping allowed-read path with unsafe characters (,()): {Path}", p);
+                    continue;
+                }
                 var fwd = p.Replace('\\', '/');
                 patterns.Add(Directory.Exists(p) ? $"Read({fwd}/**)" : $"Read({fwd})");
             }
 
-            return string.Join(",", patterns);
+            return patterns.Count > 0 ? string.Join(",", patterns) : null;
         }
 
         public void Dispose()
