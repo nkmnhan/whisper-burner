@@ -97,6 +97,12 @@ public sealed partial class CaptionOverlayWindow : Window
                 _overlayRows.Add(item);
             while (_overlayRows.Count > max)
                 _overlayRows.RemoveAt(0);
+
+            // KeepLastItemInView is unreliable under rapid additions — scroll explicitly.
+            if (_overlayRows.Count > 0)
+                DispatcherQueue.TryEnqueue(
+                    Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                    () => CaptionsPanel.ScrollIntoView(_overlayRows[^1]));
         }
     }
 
@@ -260,12 +266,6 @@ public sealed partial class CaptionOverlayWindow : Window
         var scale = RootGrid.XamlRoot?.RasterizationScale ?? 1.0;
         int newX = (int)(_dragStartX + e.Cumulative.Translation.X * scale);
         int newY = (int)(_dragStartY + e.Cumulative.Translation.Y * scale);
-
-        // Clamp to work area so the window can't be dragged off-screen.
-        var workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
-        newX = Math.Clamp(newX, workArea.X, workArea.X + workArea.Width - AppWindow.Size.Width);
-        newY = Math.Clamp(newY, workArea.Y, workArea.Y + workArea.Height - AppWindow.Size.Height);
-
         AppWindow.Move(new PointInt32(newX, newY));
     }
 }
