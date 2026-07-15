@@ -23,8 +23,8 @@ public sealed partial class CaptionOverlayWindow : Window
     // so there is never dead space above the captions.
     private const int WindowHeightCollapsed = 200;
     private const int WindowHeightExpanded  = 360;
-    // Vertical chrome in DIPs: top-margin(12) + header-row(28) + list-margin(4) + bottom-margin(12).
-    private const int ChromeHeightDip = 56;
+    // Vertical chrome in DIPs: top-margin(12) + top-padding(8) + header-row(28) + list-margin(4) + bottom-margin(12).
+    private const int ChromeHeightDip = 64;
     private const int MaxCollapsedRows = 8;
     private const int MaxExpandedRows  = 25;
 
@@ -191,13 +191,14 @@ public sealed partial class CaptionOverlayWindow : Window
     /// <summary>
     /// Resizes the window to fit its content height (clamped to the current cap),
     /// keeping the bottom edge fixed so the overlay hugs its anchor with no gap.
+    /// The top edge is clamped to the work area so the window never grows off-screen.
     /// </summary>
     private void ResizeToContent()
     {
         if (ContentRoot.XamlRoot is null || ContentRoot.ActualHeight <= 0) return;
 
         var scale = ContentRoot.XamlRoot.RasterizationScale;
-        // ActualHeight excludes ContentRoot's own vertical margin (top=12, bottom=12).
+        // ActualHeight includes ContentRoot's Padding but excludes its Margin (top=12, bottom=12).
         double dipHeight = ContentRoot.ActualHeight + 24;
         int maxHeight = _isExpanded ? WindowHeightExpanded : WindowHeightCollapsed;
         dipHeight = Math.Min(dipHeight, maxHeight);
@@ -206,8 +207,18 @@ public sealed partial class CaptionOverlayWindow : Window
         if (physHeight == AppWindow.Size.Height) return;
 
         int bottomEdge = AppWindow.Position.Y + AppWindow.Size.Height;
+        int newTop = bottomEdge - physHeight;
+
+        // Clamp top to work area so the window never grows above the screen boundary.
+        var workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        if (newTop < workArea.Y)
+        {
+            newTop = workArea.Y;
+            physHeight = bottomEdge - newTop;
+        }
+
         AppWindow.MoveAndResize(new RectInt32(
-            AppWindow.Position.X, bottomEdge - physHeight, AppWindow.Size.Width, physHeight));
+            AppWindow.Position.X, newTop, AppWindow.Size.Width, physHeight));
     }
 
     private void OnCloseClicked(object sender, RoutedEventArgs e)
@@ -249,6 +260,12 @@ public sealed partial class CaptionOverlayWindow : Window
         var scale = RootGrid.XamlRoot?.RasterizationScale ?? 1.0;
         int newX = (int)(_dragStartX + e.Cumulative.Translation.X * scale);
         int newY = (int)(_dragStartY + e.Cumulative.Translation.Y * scale);
+
+        // Clamp to work area so the window can't be dragged off-screen.
+        var workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        newX = Math.Clamp(newX, workArea.X, workArea.X + workArea.Width - AppWindow.Size.Width);
+        newY = Math.Clamp(newY, workArea.Y, workArea.Y + workArea.Height - AppWindow.Size.Height);
+
         AppWindow.Move(new PointInt32(newX, newY));
     }
 }

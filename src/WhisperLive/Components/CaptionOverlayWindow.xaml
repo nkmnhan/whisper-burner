@@ -18,13 +18,15 @@
 
         <!--
             ContentRoot: 2 rows (header + captions). No dedicated chevron row.
-            Margin: 12 sides / 8 top / 12 bottom — tighter than before, consistent with 4px grid.
+            Margin: 12 all sides. Padding: 8px top gives the header row clearance from
+            ContentRoot's top edge so button hover highlights are never clipped.
             VerticalAlignment="Bottom": content hugs the bottom edge; ResizeToContent shrinks
             the window to fit so there is never dead space above the captions.
         -->
         <Grid
             x:Name="ContentRoot"
             Margin="12,12,12,12"
+            Padding="0,8,0,0"
             VerticalAlignment="Bottom">
             <Grid.RowDefinitions>
                 <RowDefinition Height="28" />
@@ -141,6 +143,7 @@
                     Click="OnExpandClicked"
                     CornerRadius="{StaticResource ControlCornerRadius}"
                     Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                    ToolTipService.Placement="Bottom"
                     ToolTipService.ToolTip="Expand / Collapse">
                     <FontIcon x:Name="TopBarChevronIcon" FontSize="11" Glyph="&#xE70D;" />
                 </Button>
@@ -158,6 +161,7 @@
                     Click="OnOverlayPauseClicked"
                     CornerRadius="{StaticResource ControlCornerRadius}"
                     Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                    ToolTipService.Placement="Bottom"
                     ToolTipService.ToolTip="Pause / Resume">
                     <FontIcon x:Name="OverlayPauseIcon" FontSize="12" Glyph="&#xE769;" />
                 </Button>
@@ -174,6 +178,7 @@
                     Click="OnCloseClicked"
                     CornerRadius="{StaticResource ControlCornerRadius}"
                     Foreground="{ThemeResource CaptionOverlayTextForegroundBrush}"
+                    ToolTipService.Placement="Bottom"
                     ToolTipService.ToolTip="Hide overlay">
                     <FontIcon FontSize="12" Glyph="&#xE711;" />
                 </Button>
